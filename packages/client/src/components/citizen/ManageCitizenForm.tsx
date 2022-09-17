@@ -172,7 +172,7 @@ export function ManageCitizenForm({
               />
             </FormField>
 
-            {SOCIAL_SECURITY_NUMBERS ? (
+            {/* {SOCIAL_SECURITY_NUMBERS ? (
               <FormField
                 errorMessage={errors.socialSecurityNumber}
                 label={t("socialSecurityNumber")}
@@ -183,7 +183,7 @@ export function ManageCitizenForm({
                   name="socialSecurityNumber"
                 />
               </FormField>
-            ) : null}
+            ) : null} */}
           </FormRow>
 
           <FormRow>
