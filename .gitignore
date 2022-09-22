@@ -35,6 +35,4 @@ test.mjs
 
 # Sentry
 .sentryclirc
-
-
 *.code-workspace
