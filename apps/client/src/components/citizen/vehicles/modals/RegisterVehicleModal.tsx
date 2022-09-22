@@ -141,13 +141,13 @@ export function RegisterVehicleModal({ vehicle, onClose, onCreate, onUpdate }: P
               />
             </FormField>
 
-            <FormField optional errorMessage={errors.vinNumber} label={tVehicle("vinNumber")}>
+            {/* <FormField optional errorMessage={errors.vinNumber} label={tVehicle("vinNumber")}>
               <Input
                 value={values.vinNumber.toUpperCase()}
                 name="vinNumber"
                 onChange={handleChange}
               />
-            </FormField>
+            </FormField> */}
 
             {CUSTOM_TEXTFIELD_VALUES ? (
               <FormField errorMessage={errors.model} label={tVehicle("model")}>
