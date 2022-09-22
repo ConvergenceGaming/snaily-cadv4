@@ -143,14 +143,23 @@ export function RegisterVehicleModal({ vehicle, onClose, onCreate, onUpdate }: P
       <Formik validate={validate} onSubmit={onSubmit} initialValues={INITIAL_VALUES}>
         {({ handleChange, setFieldValue, setValues, errors, values, isValid }) => (
           <Form>
-            <TextField
-              errorMessage={errors.plate}
-              label={tVehicle("plate")}
-              onChange={(value) => setFieldValue("plate", value.toUpperCase())}
-              name="plate"
-              value={values.plate.toUpperCase()}
-              maxLength={maxPlateLength}
-            />
+            <FormField errorMessage={errors.plate} label={tVehicle("plate")}>
+              <Input
+                onChange={handleChange}
+                name="plate"
+                value={values.plate.toUpperCase()}
+                max={maxPlateLength}
+                maxLength={maxPlateLength}
+              />
+            </FormField>
+
+            {/* <FormField optional errorMessage={errors.vinNumber} label={tVehicle("vinNumber")}>
+              <Input
+                value={values.vinNumber.toUpperCase()}
+                name="vinNumber"
+                onChange={handleChange}
+              />
+            </FormField> */}
 
             {CUSTOM_TEXTFIELD_VALUES ? (
               <FormField errorMessage={errors.model} label={tVehicle("model")}>
