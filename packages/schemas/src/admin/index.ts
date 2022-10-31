@@ -115,6 +115,7 @@ export const UPDATE_USER_SCHEMA = z.object({
   isSupervisor: z.boolean(),
   steamId: z.string().max(255),
   discordId: z.string().max(255),
+  // fivemLicense: z.string().max(255),
 });
 
 export const PERMISSIONS_SCHEMA = z.record(z.string());

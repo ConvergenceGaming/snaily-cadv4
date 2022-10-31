@@ -49,6 +49,12 @@ export function AccountInfoTab() {
                 <Input disabled defaultValue={String(values.discordId)} name="discordId" />
               </FormField>
 
+              <FormField label="Fivem License">
+                <Input disabled defaultValue={String(values.fivemLicense)} name="fivemLicense" />
+              </FormField>
+            </FormRow>
+
+            <FormRow>
               <FormField label="Steam id" errorMessage={errors.steamId}>
                 <Input disabled defaultValue={String(values.steamId)} name="steamId" />
               </FormField>
