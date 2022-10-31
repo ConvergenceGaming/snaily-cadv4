@@ -213,6 +213,16 @@ const FEATURES_LIST: Record<Feature, FeatureItem> = {
     name: "Warrant Status Approval",
     description: "When enabled, this will require supervisors to approve 'active' warrants.",
   },
+  DIVISIONS: {
+    name: "Divisions",
+    description:
+      "When enabled, this will require officers and EMS-FD deputies to provide their division(s).",
+  },
+  TONES: {
+    name: "Tones",
+    description:
+      "When enabled, this will allow Dispatch to create temporary messages for LEO and EMS/FD.",
+  },
 };
 
 export function CADFeaturesTab() {
