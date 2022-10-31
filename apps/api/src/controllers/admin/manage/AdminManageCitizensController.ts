@@ -118,7 +118,12 @@ export class AdminManageCitizensController {
     const citizen = await prisma.citizen[functionName]({
       include: citizenInclude,
       where: {
-        OR: [{ user: { discordId: id } }, { user: { fivemLicense: id } }, { id }],
+        OR: [
+          { user: { fivemLicense: id } },
+          { user: { discordId: id } },
+          { user: { steamId: id } },
+          { id },
+        ],
       },
     });
 

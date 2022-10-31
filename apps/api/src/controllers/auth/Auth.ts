@@ -146,6 +146,16 @@ export class AuthController {
       throw new ExtendedBadRequest({ username: "userAlreadyExists" });
     }
 
+    const fivemExisting = await prisma.user.findFirst({
+      where: {
+        fivemLicense: { equals: data.fivemLicense, mode: "insensitive" },
+      },
+    });
+
+    if (fivemExisting) {
+      throw new ExtendedBadRequest({ fivemLicense: "licenseAlreadyExists" });
+    }
+
     const preCad = await prisma.cad.findFirst({
       select: { features: true, registrationCode: true },
     });
@@ -172,10 +182,12 @@ export class AuthController {
     const salt = genSaltSync();
 
     const password = hashSync(data.password, salt);
+    // const fivemLicense = data.fivemLicense;
 
     const user = await prisma.user.create({
       data: {
         username: data.username,
+        fivemLicense: data.fivemLicense,
         password,
       },
     });

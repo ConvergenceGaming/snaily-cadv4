@@ -27,6 +27,7 @@ import { useGoogleReCaptcha } from "react-google-recaptcha-v3";
 
 const INITIAL_VALUES = {
   username: "",
+  fivemLicense: "",
   password: "",
   confirmPassword: "",
   registrationCode: "",
@@ -120,6 +121,10 @@ export default function Register({ cad }: Props) {
 
               <FormField errorMessage={errors.username} label={t("username")}>
                 <Input type="text" name="username" onChange={handleChange} />
+              </FormField>
+
+              <FormField errorMessage={errors.fivemLicense} label={t("fivemLicense")}>
+                <Input required type="text" name="fivemLicense" onChange={handleChange} />
               </FormField>
 
               <FormField errorMessage={errors.password} label={t("password")}>
