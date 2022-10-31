@@ -238,6 +238,7 @@ model User {
   locale                   String?
   sessions                 UserSession[]
   toAddDefaultPermissions  ToAddDefaultPermissions[]
+  fivemLicense             String?
 
   // relational data
   citizens             Citizen[]
