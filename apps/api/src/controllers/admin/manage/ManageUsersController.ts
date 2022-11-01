@@ -255,6 +255,7 @@ export class ManageUsersController {
         steamId: data.steamId,
         rank: user.rank === Rank.OWNER ? Rank.OWNER : Rank[data.rank as Rank],
         discordId: data.discordId,
+        fivemLicense: data.fivemLicense,
       },
       select: manageUsersSelect(false),
     });

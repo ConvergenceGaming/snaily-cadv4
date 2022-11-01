@@ -77,6 +77,7 @@ export default function ManageCitizens(props: Props) {
     isTaxi: user.isTaxi,
     steamId: user.steamId ?? "",
     discordId: user.discordId ?? "",
+    fivemLicense: user.fivemLicense ?? "",
     useOldPerms: false,
   };
 
@@ -150,12 +151,18 @@ export default function ManageCitizens(props: Props) {
               </SettingsFormField>
 
               <FormRow>
-                <FormField optional errorMessage={errors.steamId} label="Steam ID">
-                  <Input name="steamId" onChange={handleChange} value={values.steamId} />
+                <FormField optional errorMessage={errors.fivemLicense} label="Fivem License">
+                  <Input name="fivemLicense" onChange={handleChange} value={values.fivemLicense} />
                 </FormField>
 
                 <FormField optional errorMessage={errors.discordId} label="Discord ID">
                   <Input name="discordId" onChange={handleChange} value={values.discordId} />
+                </FormField>
+              </FormRow>
+
+              <FormRow>
+                <FormField optional errorMessage={errors.steamId} label="Steam ID">
+                  <Input name="steamId" onChange={handleChange} value={values.steamId} />
                 </FormField>
               </FormRow>
 
