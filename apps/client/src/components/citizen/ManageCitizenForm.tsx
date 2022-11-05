@@ -1,10 +1,8 @@
 import * as React from "react";
 import Link from "next/link";
-import { Button } from "components/Button";
+import { DatePickerField, Loader, Input, Button, TextField } from "@snailycad/ui";
 import { FormRow } from "components/form/FormRow";
 import { FormField } from "components/form/FormField";
-import { Input } from "components/form/inputs/Input";
-import { Loader } from "components/Loader";
 import { Select } from "components/form/Select";
 import { ImageSelectInput, validateFile } from "components/form/inputs/ImageSelectInput";
 import { CREATE_CITIZEN_SCHEMA } from "@snailycad/schemas";
@@ -14,13 +12,14 @@ import { handleValidate } from "lib/handleValidate";
 import { Form, Formik, FormikHelpers } from "formik";
 import type { User, Citizen } from "@snailycad/types";
 import { useTranslations } from "next-intl";
-import { Textarea } from "components/form/Textarea";
 import { useFeatureEnabled } from "hooks/useFeatureEnabled";
 import { InputSuggestions } from "components/form/inputs/InputSuggestions";
 import {
   createDefaultLicensesValues,
   ManageLicensesFormFields,
 } from "./licenses/ManageLicensesFormFields";
+import parseISO from "date-fns/parseISO";
+import { AddressPostalSelect } from "components/form/select/PostalSelect";
 
 interface Props {
   citizen: (Citizen & { user?: User | null }) | null;
@@ -69,9 +68,7 @@ export function ManageCitizenForm({
     name: citizen?.name ?? "",
     surname: citizen?.surname ?? "",
     dateOfBirth:
-      citizen && isDate(citizen.dateOfBirth)
-        ? new Date(citizen.dateOfBirth.toString()).toISOString().slice(0, 10)
-        : new Date().toDateString(),
+      typeof citizen?.dateOfBirth === "string" ? parseISO(citizen.dateOfBirth) : undefined,
     gender: citizen?.genderId ?? "",
     ethnicity: citizen?.ethnicityId ?? "",
     weight: citizen?.weight ?? "",
@@ -107,7 +104,7 @@ export function ManageCitizenForm({
 
   return (
     <Formik validate={validate} onSubmit={handleSubmit} initialValues={INITIAL_VALUES}>
-      {({ handleChange, setValues, values, errors, isValid }) => (
+      {({ handleChange, setValues, setFieldValue, values, errors, isValid }) => (
         <Form>
           {allowEditingUser ? (
             <FormField errorMessage={errors.userId} label="User">
@@ -122,7 +119,7 @@ export function ManageCitizenForm({
                   name: "username",
                   onChange: handleChange,
                 }}
-                onSuggestionClick={(suggestion) => {
+                onSuggestionPress={(suggestion) => {
                   setValues({ ...values, userId: suggestion.id, username: suggestion.username });
                 }}
                 Component={({ suggestion }) => <p className="flex ">{suggestion.username}</p>}
@@ -133,43 +130,38 @@ export function ManageCitizenForm({
           <ImageSelectInput image={image} setImage={setImage} />
 
           <FormRow>
-            <FormField errorMessage={errors.name} label={t("name")}>
-              <Input
-                value={values.name}
-                onChange={handleChange}
-                name="name"
-                disabled={isNamesFieldDisabled}
-              />
-            </FormField>
+            <TextField
+              errorMessage={errors.name}
+              label={t("name")}
+              value={values.name}
+              onChange={(value) => setFieldValue("name", value)}
+              name="name"
+              isDisabled={isNamesFieldDisabled}
+            />
 
-            <FormField errorMessage={errors.surname} label={t("surname")}>
-              <Input
-                value={values.surname}
-                onChange={handleChange}
-                name="surname"
-                disabled={isNamesFieldDisabled}
-              />
-            </FormField>
+            <TextField
+              errorMessage={errors.surname}
+              label={t("surname")}
+              value={values.surname}
+              onChange={(value) => setFieldValue("surname", value)}
+              name="surname"
+              isDisabled={isNamesFieldDisabled}
+            />
           </FormRow>
 
           <FormRow flexLike={!SOCIAL_SECURITY_NUMBERS}>
-            <FormField
-              className="w-full"
+            <DatePickerField
               errorMessage={errors.dateOfBirth as string}
+              value={values.dateOfBirth}
+              onChange={(value) => value && setFieldValue("dateOfBirth", value.toDate("UTC"))}
               label={t("dateOfBirth")}
-            >
-              <Input
-                type="date"
-                value={values.dateOfBirth}
-                onChange={handleChange}
-                name="dateOfBirth"
-              />
-            </FormField>
+            />
 
             {/* {SOCIAL_SECURITY_NUMBERS ? (
               <FormField
                 errorMessage={errors.socialSecurityNumber}
                 label={t("socialSecurityNumber")}
+                optional
               >
                 <Input
                   value={values.socialSecurityNumber}
@@ -207,51 +199,71 @@ export function ManageCitizenForm({
           </FormRow>
 
           <FormRow>
-            <FormField errorMessage={errors.hairColor} label={t("hairColor")}>
-              <Input value={values.hairColor} onChange={handleChange} name="hairColor" />
-            </FormField>
+            <TextField
+              errorMessage={errors.hairColor}
+              label={t("hairColor")}
+              value={values.hairColor}
+              onChange={(value) => setFieldValue("hairColor", value)}
+              name="hairColor"
+            />
 
-            <FormField errorMessage={errors.eyeColor} label={t("eyeColor")}>
-              <Input value={values.eyeColor} onChange={handleChange} name="eyeColor" />
-            </FormField>
+            <TextField
+              errorMessage={errors.eyeColor}
+              label={t("eyeColor")}
+              value={values.eyeColor}
+              onChange={(value) => setFieldValue("eyeColor", value)}
+              name="eyeColor"
+            />
           </FormRow>
 
           <FormRow>
-            <FormField errorMessage={errors.weight} label={`${t("weight")} ${weightPrefix}`}>
-              <Input value={values.weight} onChange={handleChange} name="weight" />
-            </FormField>
+            <TextField
+              errorMessage={errors.weight}
+              label={`${t("weight")} ${weightPrefix}`}
+              value={values.weight}
+              onChange={(value) => setFieldValue("weight", value)}
+              name="weight"
+            />
 
-            <FormField errorMessage={errors.height} label={`${t("height")} ${heightPrefix}`}>
-              <Input value={values.height} onChange={handleChange} name="height" />
-            </FormField>
+            <TextField
+              errorMessage={errors.height}
+              label={`${t("height")} ${heightPrefix}`}
+              value={values.height}
+              onChange={(value) => setFieldValue("height", value)}
+              name="height"
+            />
           </FormRow>
 
-          <FormRow flexLike>
-            <FormField className="w-full" errorMessage={errors.address} label={t("address")}>
-              <Input value={values.address} onChange={handleChange} name="address" />
-            </FormField>
+          <AddressPostalSelect />
 
-            <FormField optional errorMessage={errors.postal} label={common("postal")}>
-              <Input
-                className="min-w-[300px]"
-                name="postal"
-                onChange={handleChange}
-                value={values.postal}
-              />
-            </FormField>
-          </FormRow>
+          <TextField
+            isOptional
+            errorMessage={errors.phoneNumber}
+            label={t("phoneNumber")}
+            value={values.phoneNumber}
+            onChange={(value) => setFieldValue("phoneNumber", value)}
+            name="phoneNumber"
+          />
 
-          <FormField optional errorMessage={errors.phoneNumber} label={t("phoneNumber")}>
-            <Input value={values.phoneNumber} onChange={handleChange} name="phoneNumber" />
-          </FormField>
+          <TextField
+            isTextarea
+            isOptional
+            errorMessage={errors.occupation}
+            label={t("occupation")}
+            name="occupation"
+            onChange={(value) => setFieldValue("occupation", value)}
+            value={values.occupation}
+          />
 
-          <FormField optional errorMessage={errors.occupation} label={t("occupation")}>
-            <Textarea name="occupation" onChange={handleChange} value={values.occupation} />
-          </FormField>
-
-          <FormField optional errorMessage={errors.additionalInfo} label={t("additionalInfo")}>
-            <Textarea name="additionalInfo" onChange={handleChange} value={values.additionalInfo} />
-          </FormField>
+          <TextField
+            isTextarea
+            isOptional
+            errorMessage={errors.additionalInfo}
+            label={t("additionalInfo")}
+            name="additionalInfo"
+            onChange={(value) => setFieldValue("additionalInfo", value)}
+            value={values.additionalInfo}
+          />
 
           {showLicenseFields && ALLOW_CITIZEN_UPDATE_LICENSE ? (
             <FormRow flexLike className="mt-5">
@@ -260,10 +272,8 @@ export function ManageCitizenForm({
           ) : null}
 
           <div className="flex items-center justify-end">
-            <Link href={citizen ? cancelURL : "/citizen"}>
-              <a href={citizen ? cancelURL : "/citizen"} className="mr-2 underline">
-                {common("cancel")}
-              </a>
+            <Link href={citizen ? cancelURL : "/citizen"} className="mr-2 underline">
+              {common("cancel")}
             </Link>
 
             <Button
@@ -279,15 +289,4 @@ export function ManageCitizenForm({
       )}
     </Formik>
   );
-}
-
-export function isDate(value: string | null | Date): value is Date {
-  if (!value) return false;
-
-  try {
-    const date = new Date(value);
-    return !!date;
-  } catch {
-    return false;
-  }
 }
