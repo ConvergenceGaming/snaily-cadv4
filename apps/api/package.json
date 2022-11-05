@@ -1,6 +1,6 @@
 {
   "name": "@snailycad/api",
-  "version": "1.30.0",
+  "version": "1.31.0",
   "scripts": {
     "watch": "docker compose up",
     "dev": "yarn  prisma generate && yarn nodemon --watch \"src/**/*.ts\" --ignore \"node_modules/**/*\" --exec yarn ts-node -r tsconfig-paths/register src/main.ts",
@@ -13,7 +13,7 @@
     "test": "yarn vitest run"
   },
   "devDependencies": {
-    "@swc/core": "^1.3.11",
+    "@swc/core": "^1.3.14",
     "@swc/helpers": "^0.4.12",
     "@types/bcrypt": "^5.0.0",
     "@types/compression": "^1.7.2",
@@ -24,10 +24,10 @@
     "@types/glob": "^8.0.0",
     "@types/jsonwebtoken": "8.5.9",
     "@types/multer": "^1.4.7",
-    "@types/node": "^18.11.8",
+    "@types/node": "^18.11.9",
     "@types/qrcode": "^1.5.0",
     "@types/sharp": "^0.31.0",
-    "esbuild": "^0.15.12",
+    "esbuild": "^0.15.13",
     "esbuild-register": "^3.3.3",
     "multer": "^1.4.5-lts.1",
     "regenerator-runtime": "^0.13.10",
@@ -35,19 +35,19 @@
     "tsconfig-paths": "^4.1.0",
     "typescript": "^4.8.4",
     "vite": "^3.2.2",
-    "vitest": "^0.24.4"
+    "vitest": "^0.24.5"
   },
   "dependencies": {
     "@discordjs/rest": "^1.3.0",
     "@prisma/client": "^4.5.0",
-    "@sentry/node": "^7.17.3",
-    "@sentry/tracing": "^7.17.3",
+    "@sentry/node": "^7.17.4",
+    "@sentry/tracing": "^7.17.4",
     "@snaily-cad/image-data-uri": "^3.1.0",
-    "@snailycad/config": "1.30.0",
-    "@snailycad/permissions": "1.30.0",
-    "@snailycad/schemas": "1.30.0",
-    "@snailycad/types": "1.30.0",
-    "@snailycad/utils": "1.30.0",
+    "@snailycad/config": "1.31.0",
+    "@snailycad/permissions": "1.31.0",
+    "@snailycad/schemas": "1.31.0",
+    "@snailycad/types": "1.31.0",
+    "@snailycad/utils": "1.31.0",
     "@tsed/common": "^7.2.3",
     "@tsed/components-scan": "^7.2.3",
     "@tsed/core": "^7.2.3",
@@ -74,7 +74,7 @@
     "otplib": "^12.0.1",
     "prisma": "^4.5.0",
     "qrcode": "^1.5.1",
-    "sharp": "^0.31.1",
+    "sharp": "^0.31.2",
     "socket.io": "^4.5.3",
     "undici": "^5.12.0"
   }
