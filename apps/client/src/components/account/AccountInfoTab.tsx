@@ -62,7 +62,7 @@ export function AccountInfoTab() {
                 name="discordId"
               />
 
-              <TextField 
+              <TextField
                 label="Fivem License"
                 errorMessage={errors.fivemLicense}
                 isDisabled

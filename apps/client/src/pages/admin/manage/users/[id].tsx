@@ -155,7 +155,7 @@ export default function ManageCitizens(props: Props) {
               </SettingsFormField>
 
               <FormRow>
-                <TextField 
+                <TextField
                   isOptional
                   label="Fivem License"
                   name="fivemLicense"
