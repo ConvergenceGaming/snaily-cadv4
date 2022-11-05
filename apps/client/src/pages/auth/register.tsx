@@ -122,7 +122,7 @@ function Register({ cad }: Props) {
               />
 
               <TextField
-                required
+                isRequired
                 type="text"
                 errorMessage={errors.fivemLicense}
                 label={t("fivemLicense")}

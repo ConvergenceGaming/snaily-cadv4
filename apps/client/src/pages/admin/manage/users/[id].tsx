@@ -175,9 +175,14 @@ export default function ManageCitizens(props: Props) {
               </FormRow>
 
               <FormRow>
-                <FormField optional errorMessage={errors.steamId} label="Steam ID">
-                  <Input name="steamId" onChange={handleChange} value={values.steamId} />
-                </FormField>
+                <TextField
+                  isOptional
+                  label="Steam ID"
+                  name="steamId"
+                  onChange={(value) => setFieldValue("steamId", value)}
+                  value={values.steamId}
+                  errorMessage={errors.steamId}
+                />
               </FormRow>
 
               <div className="flex justify-end mt-3">
