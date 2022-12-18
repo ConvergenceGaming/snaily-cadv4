@@ -77,6 +77,7 @@ export const citizenSearchIncludeOrSelect = (
               include: leoProperties,
             },
             seizedItems: true,
+            courtEntry: { include: { dates: true } },
             violations: {
               include: {
                 penalCode: {
@@ -99,6 +100,7 @@ export const citizenSearchIncludeOrSelect = (
       name: true,
       surname: true,
       imageId: true,
+      imageBlurData: true,
       officers: { select: { department: { select: { isConfidential: true } } } },
       id: true,
       socialSecurityNumber: true,
@@ -185,12 +187,13 @@ export class LeoSearchController {
   })
   async searchWeapon(
     @BodyParams("serialNumber") serialNumber: string,
+    @QueryParams("includeMany", Boolean) includeMany = false,
   ): Promise<APITypes.PostLeoSearchWeaponData> {
     if (!serialNumber || serialNumber.length < 3) {
       return null;
     }
 
-    const weapon = await prisma.weapon.findFirst({
+    const data = {
       where: {
         serialNumber: {
           startsWith: serialNumber,
@@ -198,7 +201,14 @@ export class LeoSearchController {
         },
       },
       include: weaponsInclude,
-    });
+    } as const;
+
+    if (includeMany) {
+      const weapons = await prisma.weapon.findMany(data);
+      return appendCustomFields(weapons, CustomFieldCategory.WEAPON);
+    }
+
+    const weapon = await prisma.weapon.findFirst(data);
 
     if (!weapon) {
       throw new NotFound("weaponNotFound");
@@ -214,7 +224,7 @@ export class LeoSearchController {
     permissions: [Permissions.Leo, Permissions.Dispatch],
   })
   async searchVehicle(
-    @BodyParams("plateOrVin") plateOrVin: string,
+    @BodyParams("plateOrVin", String) plateOrVin: string,
     @QueryParams("includeMany", Boolean) includeMany: boolean,
   ): Promise<APITypes.PostLeoSearchVehicleData> {
     if (!plateOrVin || plateOrVin.length < 3) {

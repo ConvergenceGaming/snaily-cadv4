@@ -1,12 +1,13 @@
-import { User, WhitelistStatus } from "@prisma/client";
+import { ExpungementRequestStatus, Feature, User, WhitelistStatus } from "@prisma/client";
 import { BodyParams, Context, PathParams, UseBeforeEach } from "@tsed/common";
 import { Controller } from "@tsed/di";
 import { BadRequest, NotFound } from "@tsed/exceptions";
-import { ContentType, Get, Post } from "@tsed/schema";
+import { ContentType, Delete, Get, Post } from "@tsed/schema";
 import { citizenInclude } from "controllers/citizen/CitizenController";
 import { prisma } from "lib/prisma";
 import { IsAuth } from "middlewares/IsAuth";
 import type * as APITypes from "@snailycad/types/api";
+import { IsFeatureEnabled } from "middlewares/is-enabled";
 
 export const expungementRequestInclude = {
   citizen: true,
@@ -17,6 +18,7 @@ export const expungementRequestInclude = {
 @Controller("/expungement-requests")
 @UseBeforeEach(IsAuth)
 @ContentType("application/json")
+@IsFeatureEnabled({ feature: Feature.COURTHOUSE })
 export class ExpungementRequestsController {
   @Get("/")
   async getRequestPerUser(
@@ -47,6 +49,28 @@ export class ExpungementRequestsController {
     }
 
     return citizen;
+  }
+
+  @Delete("/:citizenId/:expungementRequestId")
+  async cancelExpungementRequest(
+    @Context("user") user: User,
+    @PathParams("citizenId") citizenId: string,
+    @PathParams("expungementRequestId") expungementRequestId: string,
+  ): Promise<any> {
+    const citizen = await prisma.citizen.findFirst({
+      where: { id: citizenId, userId: user.id },
+    });
+
+    if (!citizen) {
+      throw new NotFound("citizenNotFound");
+    }
+
+    await prisma.expungementRequest.update({
+      where: { id: expungementRequestId },
+      data: { status: ExpungementRequestStatus.CANCELED },
+    });
+
+    return true;
   }
 
   @Post("/:citizenId")

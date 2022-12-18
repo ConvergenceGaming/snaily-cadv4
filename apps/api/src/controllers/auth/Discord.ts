@@ -16,13 +16,16 @@ import { updateMemberRolesLogin } from "lib/discord/auth";
 import { ContentType, Description } from "@tsed/schema";
 import { isFeatureEnabled } from "lib/cad";
 import { setUserTokenCookies } from "lib/auth/setUserTokenCookies";
+import { getAPIUrl } from "@snailycad/utils/api-url";
+import { IsFeatureEnabled } from "middlewares/is-enabled";
 
-const callbackUrl = makeCallbackURL(findUrl());
+const callbackUrl = makeCallbackURL(getAPIUrl());
 const DISCORD_CLIENT_ID = process.env["DISCORD_CLIENT_ID"];
 const DISCORD_CLIENT_SECRET = process.env["DISCORD_CLIENT_SECRET"];
 
 @Controller("/auth/discord")
 @ContentType("application/json")
+@IsFeatureEnabled({ feature: Feature.DISCORD_AUTH })
 export class DiscordAuth {
   @Get("/")
   @Description("Redirect to Discord OAuth2 URL")
@@ -39,7 +42,7 @@ export class DiscordAuth {
     url.searchParams.append("redirect_uri", callbackUrl);
     url.searchParams.append("prompt", "consent");
     url.searchParams.append("response_type", "code");
-    url.searchParams.append("scope", encodeURIComponent("identify"));
+    url.searchParams.append("scope", "identify role_connections.write");
 
     return res.redirect(url.toString());
   }
@@ -232,6 +235,20 @@ async function getDiscordData(code: string): Promise<APIUser | null> {
 
   const data = (await response.body.json()) as RESTPostOAuth2AccessTokenResult;
   const accessToken = data.access_token;
+
+  const roleConnectionURL = `https://discord.com/api/v10/users/@me/applications/${DISCORD_CLIENT_ID}/role-connection`;
+  await request(roleConnectionURL, {
+    method: "PUT",
+    body: JSON.stringify({
+      platform_name: "SnailyCAD",
+      metadata: { cad_connected: 1 },
+    }),
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+  }).catch(() => null);
+
   const meData = await request(`${DISCORD_API_URL}/users/@me`, {
     method: "GET",
     headers: {
@@ -242,17 +259,6 @@ async function getDiscordData(code: string): Promise<APIUser | null> {
     .catch(() => null);
 
   return meData;
-}
-
-export function findUrl() {
-  const envUrl = process.env.NEXT_PUBLIC_PROD_ORIGIN ?? "http://localhost:8080/v1";
-  const includesDockerContainerName = envUrl === "http://api:8080/v1";
-
-  if (includesDockerContainerName) {
-    return "http://localhost:8080/v1";
-  }
-
-  return envUrl;
 }
 
 export function findRedirectURL() {
