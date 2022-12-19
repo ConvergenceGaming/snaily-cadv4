@@ -13,7 +13,7 @@ import { useGenerateCallsign } from "hooks/useGenerateCallsign";
 import { classNames } from "lib/classNames";
 import { makeUnitName } from "lib/utils";
 import { useTranslations } from "next-intl";
-import { useDispatchState } from "state/dispatch/dispatch-state";
+import { useDispatchState } from "state/dispatch/dispatchState";
 import { DndActions } from "types/DndActions";
 
 interface Props {
@@ -27,8 +27,7 @@ interface Props {
 
 export function InvolvedUnitsColumn({ handleAssignUnassignToIncident, incident }: Props) {
   const common = useTranslations("Common");
-  const setDraggingUnit = useDispatchState((state) => state.setDraggingUnit);
-
+  const dispatchState = useDispatchState();
   const { generateCallsign } = useGenerateCallsign();
   const { hasActiveDispatchers } = useActiveDispatchers();
 
@@ -57,7 +56,7 @@ export function InvolvedUnitsColumn({ handleAssignUnassignToIncident, incident }
               <Draggable
                 canDrag={canDrag}
                 onDrag={(isDragging) => {
-                  setDraggingUnit(isDragging ? "incident" : null);
+                  dispatchState.setDraggingUnit(isDragging ? "incident" : null);
                 }}
                 key={unit.id}
                 item={{ incident, unit }}
@@ -66,7 +65,7 @@ export function InvolvedUnitsColumn({ handleAssignUnassignToIncident, incident }
                 {() => {
                   const comma = idx + 1 === incident.unitsInvolved.length ? "" : ", ";
                   return (
-                    <span
+                    <p
                       className={classNames(
                         "text-base",
                         canDrag ? "!cursor-move" : "cursor-default",
@@ -74,7 +73,7 @@ export function InvolvedUnitsColumn({ handleAssignUnassignToIncident, incident }
                     >
                       {makeAssignedUnit(unit)}
                       {comma}
-                    </span>
+                    </p>
                   );
                 }}
               </Draggable>

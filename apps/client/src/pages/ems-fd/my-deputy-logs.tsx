@@ -46,7 +46,6 @@ export default function MyDeputyLogs({ logs: data }: Props) {
 
   const asyncTable = useAsyncTable({
     fetchOptions: {
-      pageSize: 25,
       onResponse: (json: GetMyDeputiesLogsData) => ({
         data: json.logs,
         totalCount: json.totalCount,
@@ -81,13 +80,8 @@ export default function MyDeputyLogs({ logs: data }: Props) {
             <FormField label="Group By Deputy">
               <Select
                 isClearable
-                onChange={(e) => {
-                  asyncTable.setFilters((prev) => ({
-                    ...prev,
-                    deputyId: e.target.value,
-                  }));
-                }}
-                value={asyncTable.filters?.deputyId ?? null}
+                onChange={(e) => asyncTable.search.setExtraParams({ deputyId: e.target.value })}
+                value={asyncTable.search.extraParams.deputyId}
                 values={Object.entries(deputyNames).map(([id, name]) => ({
                   label: name as string,
                   value: id,

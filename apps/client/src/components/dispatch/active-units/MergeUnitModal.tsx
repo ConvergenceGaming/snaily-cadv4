@@ -1,3 +1,4 @@
+import * as React from "react";
 import type { Officer } from "@snailycad/types";
 import { Loader, Button } from "@snailycad/ui";
 import { FormField } from "components/form/FormField";
@@ -12,9 +13,8 @@ import { useActiveOfficers } from "hooks/realtime/useActiveOfficers";
 import { isUnitOfficer } from "@snailycad/utils/typeguards";
 import { useGenerateCallsign } from "hooks/useGenerateCallsign";
 import { makeUnitName } from "lib/utils";
-import { useLeoState } from "state/leo-state";
+import { useLeoState } from "state/leoState";
 import type { PostDispatchStatusMergeOfficers } from "@snailycad/types/api";
-import shallow from "zustand/shallow";
 
 interface Props {
   isDispatch: boolean;
@@ -23,13 +23,7 @@ interface Props {
 }
 
 export function MergeUnitModal({ unit, isDispatch, onClose }: Props) {
-  const { activeOfficer, setActiveOfficer } = useLeoState(
-    (state) => ({
-      activeOfficer: state.activeOfficer,
-      setActiveOfficer: state.setActiveOfficer,
-    }),
-    shallow,
-  );
+  const { activeOfficer, setActiveOfficer } = useLeoState();
   const { isOpen, closeModal } = useModal();
   const { activeOfficers, setActiveOfficers } = useActiveOfficers();
   const { state, execute } = useFetch();

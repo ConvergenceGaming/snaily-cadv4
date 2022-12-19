@@ -1,5 +1,6 @@
 import * as React from "react";
-import { Loader, Button, AsyncListSearchField, Item } from "@snailycad/ui";
+import { Loader, Button } from "@snailycad/ui";
+import { FormField } from "components/form/FormField";
 import { Modal } from "components/modal/Modal";
 import { useModal } from "state/modalState";
 import { Form, Formik } from "formik";
@@ -8,6 +9,7 @@ import { ModalIds } from "types/ModalIds";
 import { useTranslations } from "use-intl";
 import { Table, useTableState } from "components/shared/Table";
 import { formatCitizenAddress } from "lib/utils";
+import { InputSuggestions } from "components/form/inputs/InputSuggestions";
 import type { PostDispatchAddressSearchData } from "@snailycad/types/api";
 
 export function AddressSearchModal() {
@@ -49,7 +51,6 @@ export function AddressSearchModal() {
   }
 
   const INITIAL_VALUES = {
-    searchValue: "",
     address: "",
   };
 
@@ -61,39 +62,31 @@ export function AddressSearchModal() {
       className="w-[800px]"
     >
       <Formik initialValues={INITIAL_VALUES} onSubmit={onSubmit}>
-        {({ setValues, errors, values, isValid }) => (
+        {({ handleChange, setFieldValue, errors, values, isValid }) => (
           <Form>
-            <AsyncListSearchField<AddressSearchResult[number]>
-              allowsCustomValue
-              autoFocus
-              setValues={({ localValue, node }) => {
-                const searchValue =
-                  typeof localValue !== "undefined" ? { searchValue: localValue } : {};
-                const address = node ? { address: node.key as string } : {};
-
-                if (node) {
-                  setResults([node.value]);
-                }
-
-                setValues({ ...values, ...searchValue, ...address });
-              }}
-              localValue={values.searchValue}
-              errorMessage={errors.address}
-              label={t("enterAddress")}
-              selectedKey={values.address}
-              fetchOptions={{
-                apiPath: "/search/address",
-                method: "POST",
-                bodyKey: "address",
-                filterTextRequired: true,
-              }}
-            >
-              {(item) => (
-                <Item key={item.address} textValue={item.address}>
-                  {item.address} ({item.name} {item.surname})
-                </Item>
-              )}
-            </AsyncListSearchField>
+            <FormField errorMessage={errors.address} label={t("enterAddress")}>
+              <InputSuggestions<AddressSearchResult[number]>
+                onSuggestionPress={(suggestion) => {
+                  setFieldValue("address", suggestion.address);
+                  setResults([suggestion]);
+                }}
+                Component={({ suggestion }) => (
+                  <div className="flex items-center">
+                    {suggestion.address} ({suggestion.name} {suggestion.surname})
+                  </div>
+                )}
+                options={{
+                  apiPath: "/search/address",
+                  method: "POST",
+                  dataKey: "address",
+                }}
+                inputProps={{
+                  value: values.address,
+                  name: "address",
+                  onChange: handleChange,
+                }}
+              />
+            </FormField>
 
             {typeof results === "boolean" ? <p>{t("noResults")}</p> : null}
 
@@ -102,7 +95,7 @@ export function AddressSearchModal() {
                 <h3 className="text-2xl font-semibold">{t("results")}</h3>
 
                 <Table
-                  features={{ isWithinCardOrModal: true }}
+                  features={{ isWithinCard: true }}
                   tableState={tableState}
                   data={results.map((result) => ({
                     id: result.id,

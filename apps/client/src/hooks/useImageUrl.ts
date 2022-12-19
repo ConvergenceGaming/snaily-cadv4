@@ -1,4 +1,4 @@
-import { getAPIUrl } from "@snailycad/utils/api-url";
+import { getAPIUrl } from "lib/fetch/getAPIUrl";
 import { IMAGES_REGEX } from "@snailycad/config";
 
 type ImageURLTypes = "citizens" | "users" | "bleeter" | "units" | "cad" | "values";

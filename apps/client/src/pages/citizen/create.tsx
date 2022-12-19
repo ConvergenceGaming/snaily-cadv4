@@ -1,3 +1,4 @@
+import * as React from "react";
 import { useRouter } from "next/router";
 import { useTranslations } from "use-intl";
 import { Layout } from "components/Layout";
@@ -26,7 +27,7 @@ export default function CreateCitizen() {
     data: any;
     helpers: any;
   }) {
-    const { json, error } = await execute<PostCitizensData>({
+    const { json } = await execute<PostCitizensData>({
       path: "/citizen",
       method: "POST",
       helpers,
@@ -47,11 +48,6 @@ export default function CreateCitizen() {
       },
     });
 
-    const errors = ["dateLargerThanNow", "nameAlreadyTaken", "invalidImageType"];
-    if (errors.includes(error as string)) {
-      helpers.setCurrentStep(0);
-    }
-
     if (json?.id) {
       if (formData) {
         await execute<PostCitizenImageByIdData>({
@@ -59,9 +55,6 @@ export default function CreateCitizen() {
           method: "POST",
           data: formData,
           helpers,
-          headers: {
-            "content-type": "multipart/form-data",
-          },
         });
       }
 
@@ -79,17 +72,7 @@ export default function CreateCitizen() {
 
       <Title>{t("createCitizen")}</Title>
 
-      <ManageCitizenForm
-        onSubmit={onSubmit}
-        citizen={null}
-        state={state}
-        formFeatures={{
-          "edit-name": true,
-          "license-fields": true,
-          "officer-creation": true,
-          "previous-records": true,
-        }}
-      />
+      <ManageCitizenForm onSubmit={onSubmit} citizen={null} state={state} showLicenseFields />
     </Layout>
   );
 }
@@ -105,7 +88,7 @@ export const getServerSideProps: GetServerSideProps = async ({ locale, req }) =>
       values,
       session: user,
       messages: {
-        ...(await getTranslations(["citizen", "leo", "ems-fd", "common"], user?.locale ?? locale)),
+        ...(await getTranslations(["citizen", "common"], user?.locale ?? locale)),
       },
     },
   };

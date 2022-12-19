@@ -1,3 +1,4 @@
+import * as React from "react";
 import { Modal } from "components/modal/Modal";
 import { useModal } from "state/modalState";
 import useFetch from "lib/useFetch";
@@ -6,7 +7,7 @@ import { ModalIds } from "types/ModalIds";
 import { ManageCitizenForm } from "components/citizen/ManageCitizenForm";
 import { Loader } from "@snailycad/ui";
 import type { SelectValue } from "components/form/Select";
-import { useNameSearch } from "state/search/name-search-state";
+import { useNameSearch } from "state/search/nameSearchState";
 import { useLoadValuesClientSide } from "hooks/useLoadValuesClientSide";
 import { ValueType } from "@snailycad/types";
 import { useFeatureEnabled } from "hooks/useFeatureEnabled";
@@ -14,19 +15,12 @@ import type {
   PostCitizenImageByIdData,
   PostSearchActionsCreateCitizen,
 } from "@snailycad/types/api";
-import shallow from "zustand/shallow";
 
 export function CreateCitizenModal() {
   const { isOpen, closeModal } = useModal();
   const t = useTranslations("Leo");
   const { state, execute } = useFetch();
-  const { setCurrentResult, setResults } = useNameSearch(
-    (state) => ({
-      setCurrentResult: state.setCurrentResult,
-      setResults: state.setResults,
-    }),
-    shallow,
-  );
+  const { setCurrentResult, setResults } = useNameSearch();
   const { CREATE_USER_CITIZEN_LEO } = useFeatureEnabled();
   const { isLoading } = useLoadValuesClientSide({
     enabled: CREATE_USER_CITIZEN_LEO,
@@ -46,7 +40,7 @@ export function CreateCitizenModal() {
     data: any;
     helpers: any;
   }) {
-    const { json, error } = await execute<PostSearchActionsCreateCitizen>({
+    const { json } = await execute<PostSearchActionsCreateCitizen>({
       path: "/search/actions/citizen",
       method: "POST",
       helpers,
@@ -66,11 +60,6 @@ export function CreateCitizenModal() {
           : data.firearmLicenseCategory,
       },
     });
-
-    const errors = ["dateLargerThanNow", "nameAlreadyTaken", "invalidImageType"];
-    if (errors.includes(error as string)) {
-      helpers.setCurrentStep(0);
-    }
 
     if (json.id) {
       let imageJson;
@@ -105,13 +94,7 @@ export function CreateCitizenModal() {
           <Loader className="w-14 h-14 border-[3px]" />
         </div>
       ) : (
-        <ManageCitizenForm
-          cancelURL="#"
-          formFeatures={{ "edit-name": true }}
-          onSubmit={onSubmit}
-          citizen={null}
-          state={state}
-        />
+        <ManageCitizenForm onSubmit={onSubmit} citizen={null} state={state} />
       )}
     </Modal>
   );

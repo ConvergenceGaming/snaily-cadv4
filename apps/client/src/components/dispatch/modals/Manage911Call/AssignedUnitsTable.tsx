@@ -2,9 +2,9 @@ import * as React from "react";
 import { Table, useTableState } from "components/shared/Table";
 import { useGenerateCallsign } from "hooks/useGenerateCallsign";
 import { makeUnitName } from "lib/utils";
-import type { Full911Call } from "state/dispatch/dispatch-state";
+import type { Full911Call } from "state/dispatch/dispatchState";
 import useFetch from "lib/useFetch";
-import { useCall911State } from "state/dispatch/call-911-state";
+import { useCall911State } from "state/dispatch/call911State";
 import type { PUT911CallAssignedUnit } from "@snailycad/types/api";
 import { useAuth } from "context/AuthContext";
 import { AssignedUnit, StatusViewMode } from "@snailycad/types";
@@ -14,7 +14,6 @@ import { useModal } from "state/modalState";
 import { ModalIds } from "types/ModalIds";
 import { AddUnitToCallModal } from "./AddUnitToCallModal";
 import { FullDate } from "components/shared/FullDate";
-import { generateContrastColor } from "lib/table/get-contrasting-text-color";
 
 interface Props {
   isDisabled: boolean;
@@ -81,7 +80,7 @@ export function AssignedUnitsTable({ isDisabled }: Props) {
 
       <div className="max-h-[35rem] overflow-y-auto">
         <Table
-          features={{ isWithinCardOrModal: true }}
+          features={{ isWithinCard: true }}
           tableState={tableState}
           data={assignedUnits
             .sort((a) => (a.isPrimary ? -1 : 1))
@@ -93,12 +92,7 @@ export function AssignedUnitsTable({ isDisabled }: Props) {
               const useDot = user?.statusViewMode === StatusViewMode.DOT_COLOR;
 
               return {
-                rowProps: {
-                  style: {
-                    background: !useDot && color ? color : undefined,
-                    color: !useDot && color ? generateContrastColor(color) : undefined,
-                  },
-                },
+                rowProps: { style: { background: !useDot ? color ?? undefined : undefined } },
                 id: unit.id,
                 unit: callsignAndName,
                 status: (

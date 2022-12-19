@@ -9,25 +9,22 @@ import { Title } from "components/shared/Title";
 import { Rank, Weapon } from "@snailycad/types";
 import { Table, useTableState } from "components/shared/Table";
 import { FullDate } from "components/shared/FullDate";
-import { Button } from "@snailycad/ui";
+import { Button, Loader, TextField } from "@snailycad/ui";
 import { ImportModal } from "components/admin/import/ImportModal";
 import { ModalIds } from "types/ModalIds";
 import { useModal } from "state/modalState";
-import { useAsyncTable } from "hooks/shared/table/use-async-table";
+import { useAsyncTable } from "hooks/shared/table/useAsyncTable";
 import type { GetImportWeaponsData, PostImportWeaponsData } from "@snailycad/types/api";
 import { AlertModal } from "components/modal/AlertModal";
 import { Permissions, usePermission } from "hooks/usePermission";
 import useFetch from "lib/useFetch";
 import { useTemporaryItem } from "hooks/shared/useTemporaryItem";
-import { SearchArea } from "components/shared/search/search-area";
 
 interface Props {
   data: GetImportWeaponsData;
 }
 
 export default function ImportWeaponsPage({ data }: Props) {
-  const [search, setSearch] = React.useState("");
-
   const t = useTranslations("Management");
   const common = useTranslations("Common");
   const wep = useTranslations("Weapons");
@@ -37,7 +34,6 @@ export default function ImportWeaponsPage({ data }: Props) {
   const hasDeletePermissions = hasPermissions([Permissions.DeleteRegisteredWeapons], true);
 
   const asyncTable = useAsyncTable({
-    search,
     fetchOptions: {
       onResponse: (json: GetImportWeaponsData) => ({
         totalCount: json.totalCount,
@@ -49,7 +45,7 @@ export default function ImportWeaponsPage({ data }: Props) {
     totalCount: data.totalCount,
   });
   const tableState = useTableState({ pagination: asyncTable.pagination });
-  const [tempWeapon, weaponState] = useTemporaryItem(asyncTable.items);
+  const [tempWeapon, weaponState] = useTemporaryItem(asyncTable.data);
 
   function handleDeleteClick(weapon: Weapon) {
     weaponState.setTempId(weapon.id);
@@ -65,7 +61,7 @@ export default function ImportWeaponsPage({ data }: Props) {
     });
 
     if (typeof json === "boolean" && json) {
-      asyncTable.remove(tempWeapon.id);
+      asyncTable.setData((prevData) => prevData.filter((v) => v.id !== tempWeapon.id));
       weaponState.setTempId(null);
       closeModal(ModalIds.AlertDeleteWeapon);
     }
@@ -88,19 +84,35 @@ export default function ImportWeaponsPage({ data }: Props) {
         </div>
 
         <p className="my-2 mt-5 text-neutral-700 dark:text-gray-400 max-w-2xl">
-          {t("importWeaponsDescription")}
+          Here you can mass-import weapons that are registered to a citizen. In the table below you
+          can also view all registered weapons.
         </p>
       </header>
 
-      <SearchArea
-        search={{ search, setSearch }}
-        asyncTable={asyncTable}
-        totalCount={data.totalCount}
-      />
+      <TextField
+        label={common("search")}
+        className="w-full relative"
+        name="search"
+        onChange={(value) => asyncTable.search.setSearch(value)}
+        value={asyncTable.search.search}
+        placeholder="Serial Number, Model, ..."
+      >
+        {asyncTable.search.state === "loading" ? (
+          <span className="absolute top-[2.4rem] right-2.5">
+            <Loader />
+          </span>
+        ) : null}
+      </TextField>
+
+      {asyncTable.search.search && asyncTable.pagination.totalDataCount !== data.totalCount ? (
+        <p className="italic text-base font-semibold">
+          Showing {asyncTable.pagination.totalDataCount} result(s)
+        </p>
+      ) : null}
 
       <Table
         tableState={tableState}
-        data={asyncTable.items.map((weapon) => ({
+        data={asyncTable.data.map((weapon) => ({
           id: weapon.id,
           model: weapon.model.value.value,
           registrationStatus: weapon.registrationStatus.value,
@@ -124,7 +136,9 @@ export default function ImportWeaponsPage({ data }: Props) {
       />
 
       <ImportModal<PostImportWeaponsData>
-        onImport={(weapons) => asyncTable.append(...weapons)}
+        onImport={(weapons) => {
+          asyncTable.setData((p) => [...weapons, ...p]);
+        }}
         id={ModalIds.ImportWeapons}
         url="/admin/import/weapons/file"
       />

@@ -9,25 +9,22 @@ import { Title } from "components/shared/Title";
 import { Rank, RegisteredVehicle } from "@snailycad/types";
 import { Table, useTableState } from "components/shared/Table";
 import { FullDate } from "components/shared/FullDate";
-import { Button } from "@snailycad/ui";
+import { Button, Loader, TextField } from "@snailycad/ui";
 import { ImportModal } from "components/admin/import/ImportModal";
 import { ModalIds } from "types/ModalIds";
 import { useModal } from "state/modalState";
-import { useAsyncTable } from "hooks/shared/table/use-async-table";
+import { useAsyncTable } from "hooks/shared/table/useAsyncTable";
 import type { GetImportVehiclesData, PostImportVehiclesData } from "@snailycad/types/api";
 import { AlertModal } from "components/modal/AlertModal";
 import useFetch from "lib/useFetch";
 import { useTemporaryItem } from "hooks/shared/useTemporaryItem";
 import { Permissions, usePermission } from "hooks/usePermission";
-import { SearchArea } from "components/shared/search/search-area";
 
 interface Props {
   data: GetImportVehiclesData;
 }
 
 export default function ImportVehiclesPage({ data }: Props) {
-  const [search, setSearch] = React.useState("");
-
   const t = useTranslations("Management");
   const common = useTranslations("Common");
   const veh = useTranslations("Vehicles");
@@ -48,7 +45,7 @@ export default function ImportVehiclesPage({ data }: Props) {
     totalCount: data.totalCount,
   });
   const tableState = useTableState({ pagination: asyncTable.pagination });
-  const [tempVehicle, vehicleState] = useTemporaryItem(asyncTable.items);
+  const [tempVehicle, vehicleState] = useTemporaryItem(asyncTable.data);
 
   function handleDeleteClick(vehicle: RegisteredVehicle) {
     vehicleState.setTempId(vehicle.id);
@@ -64,7 +61,7 @@ export default function ImportVehiclesPage({ data }: Props) {
     });
 
     if (typeof json === "boolean" && json) {
-      asyncTable.remove(tempVehicle.id);
+      asyncTable.setData((prevData) => prevData.filter((v) => v.id !== tempVehicle.id));
       vehicleState.setTempId(null);
       closeModal(ModalIds.AlertDeleteWeapon);
     }
@@ -87,19 +84,35 @@ export default function ImportVehiclesPage({ data }: Props) {
         </div>
 
         <p className="my-2 mt-5 text-neutral-700 dark:text-gray-400 max-w-2xl">
-          {t("importVehiclesDescription")}
+          Here you can mass-import vehicles that are registered to a citizen. In the table below you
+          can also view all registered vehicles.
         </p>
       </header>
 
-      <SearchArea
-        search={{ search, setSearch }}
-        asyncTable={asyncTable}
-        totalCount={data.totalCount}
-      />
+      <TextField
+        label={common("search")}
+        className="w-full relative"
+        name="search"
+        onChange={(value) => asyncTable.search.setSearch(value)}
+        value={asyncTable.search.search}
+        placeholder="Plate, Model, Color, ..."
+      >
+        {asyncTable.search.state === "loading" ? (
+          <span className="absolute top-[2.4rem] right-2.5">
+            <Loader />
+          </span>
+        ) : null}
+      </TextField>
+
+      {asyncTable.search.search && asyncTable.pagination.totalDataCount !== data.totalCount ? (
+        <p className="italic text-base font-semibold">
+          Showing {asyncTable.pagination.totalDataCount} result(s)
+        </p>
+      ) : null}
 
       <Table
         tableState={tableState}
-        data={asyncTable.items.map((vehicle) => ({
+        data={asyncTable.data.map((vehicle) => ({
           id: vehicle.id,
           plate: vehicle.plate,
           model: vehicle.model.value.value,
@@ -128,7 +141,7 @@ export default function ImportVehiclesPage({ data }: Props) {
 
       <ImportModal<PostImportVehiclesData>
         onImport={(vehicles) => {
-          asyncTable.append(...vehicles);
+          asyncTable.setData((p) => [...vehicles, ...p]);
         }}
         id={ModalIds.ImportVehicles}
         url="/admin/import/vehicles/file"

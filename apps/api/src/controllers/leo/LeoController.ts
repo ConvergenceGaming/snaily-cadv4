@@ -8,16 +8,14 @@ import { IsAuth } from "middlewares/IsAuth";
 import { ActiveOfficer } from "middlewares/ActiveOfficer";
 import { Socket } from "services/SocketService";
 import { combinedUnitProperties, leoProperties } from "lib/leo/activeOfficer";
-import { cad, ShouldDoType, User } from "@prisma/client";
+import { ShouldDoType, User } from "@prisma/client";
 import { validateSchema } from "lib/validateSchema";
 import { Permissions, UsePermissions } from "middlewares/UsePermissions";
 import { getInactivityFilter } from "lib/leo/utils";
 import { findUnit } from "lib/leo/findUnit";
 import { filterInactiveUnits, setInactiveUnitsOffDuty } from "lib/leo/setInactiveUnitsOffDuty";
-import { CombinedLeoUnit, Officer, MiscCadSettings, Feature } from "@snailycad/types";
+import type { CombinedLeoUnit, Officer, MiscCadSettings } from "@snailycad/types";
 import type * as APITypes from "@snailycad/types/api";
-import { IsFeatureEnabled } from "middlewares/is-enabled";
-import { handlePanicButtonPressed } from "lib/leo/send-panic-button-webhook";
 
 @Controller("/leo")
 @UseBeforeEach(IsAuth)
@@ -81,14 +79,12 @@ export class LeoController {
 
   @Post("/panic-button")
   @Description("Set the panic button for an officer by their id")
-  @IsFeatureEnabled({ feature: Feature.PANIC_BUTTON })
   @UsePermissions({
     fallback: (u) => u.isLeo,
     permissions: [Permissions.Leo],
   })
   async panicButton(
     @Context("user") user: User,
-    @Context("cad") cad: cad & { miscCadSettings: MiscCadSettings },
     @BodyParams("officerId") officerId: string,
   ): Promise<APITypes.PostLeoTogglePanicButtonData> {
     let type: "officer" | "combinedLeoUnit" = "officer";
@@ -151,8 +147,12 @@ export class LeoController {
          */
         // @ts-expect-error the properties used are the same.
         officer = await prisma[type].update({
-          where: { id: officer.id },
-          data: { statusId: code.id },
+          where: {
+            id: officer.id,
+          },
+          data: {
+            statusId: code.id,
+          },
           include: type === "officer" ? leoProperties : combinedUnitProperties,
         });
       }
@@ -163,13 +163,7 @@ export class LeoController {
     }
 
     await this.socket.emitUpdateOfficerStatus();
-    handlePanicButtonPressed({
-      force: panicType === "ON",
-      cad,
-      socket: this.socket,
-      status: officer.status,
-      unit: officer,
-    });
+    this.socket.emitPanicButtonLeo(officer, panicType);
 
     return officer;
   }

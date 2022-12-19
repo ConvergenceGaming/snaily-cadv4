@@ -4,13 +4,13 @@ import { Layout } from "components/Layout";
 import { getSessionUser } from "lib/auth";
 import { getTranslations } from "lib/getTranslation";
 import type { GetServerSideProps } from "next";
-import { ActiveCalls } from "components/dispatch/active-calls/active-calls";
-import { useDispatchState } from "state/dispatch/dispatch-state";
-import { ActiveBolos } from "components/active-bolos/active-bolos";
+import { ActiveCalls } from "components/dispatch/active-calls/ActiveCalls";
+import { useDispatchState } from "state/dispatch/dispatchState";
+import { ActiveBolos } from "components/active-bolos/ActiveBolos";
 import { DispatchModalButtons } from "components/dispatch/ModalButtons";
 import { useTranslations } from "use-intl";
-import { ActiveOfficers } from "components/dispatch/active-officers";
-import { ActiveDeputies } from "components/dispatch/active-deputies";
+import { ActiveOfficers } from "components/dispatch/ActiveOfficers";
+import { ActiveDeputies } from "components/dispatch/ActiveDeputies";
 import { requestAll } from "lib/utils";
 import { useSignal100 } from "hooks/shared/useSignal100";
 import { usePanicButton } from "hooks/shared/usePanicButton";
@@ -23,11 +23,11 @@ import { Permissions } from "@snailycad/permissions";
 import { useLoadValuesClientSide } from "hooks/useLoadValuesClientSide";
 import type { Get911CallsData, GetBolosData, GetDispatchData } from "@snailycad/types/api";
 import { UtilityPanel } from "components/shared/UtilityPanel";
-import { useCall911State } from "state/dispatch/call-911-state";
+import { useCall911State } from "state/dispatch/call911State";
 import { DndProvider } from "components/shared/dnd/DndProvider";
 
 const ActiveIncidents = dynamic(async () => {
-  return (await import("components/dispatch/active-incidents")).ActiveIncidents;
+  return (await import("components/dispatch/ActiveIncidents")).ActiveIncidents;
 });
 
 const Modals = {
@@ -42,7 +42,7 @@ const Modals = {
     return (await import("components/leo/modals/VehicleSearchModal")).VehicleSearchModal;
   }),
   WeaponSearchModal: dynamic(async () => {
-    return (await import("components/leo/modals/weapon-search-modal")).WeaponSearchModal;
+    return (await import("components/leo/modals/WeaponSearchModal")).WeaponSearchModal;
   }),
   NotepadModal: dynamic(async () => {
     return (await import("components/shared/NotepadModal")).NotepadModal;
@@ -77,12 +77,12 @@ export default function DispatchDashboard(props: DispatchPageProps) {
   });
 
   const state = useDispatchState();
-  const set911Calls = useCall911State((state) => state.setCalls);
+  const call911State = useCall911State();
   const t = useTranslations("Leo");
   const signal100 = useSignal100();
   const panic = usePanicButton();
 
-  const { CALLS_911, ACTIVE_INCIDENTS } = useFeatureEnabled();
+  const { ACTIVE_INCIDENTS } = useFeatureEnabled();
   const { isOpen } = useModal();
 
   const activeOfficers = React.useMemo(
@@ -96,7 +96,7 @@ export default function DispatchDashboard(props: DispatchPageProps) {
   );
 
   React.useEffect(() => {
-    set911Calls(props.calls.calls);
+    call911State.setCalls(props.calls.calls);
     state.setBolos(props.bolos);
     state.setAllOfficers(props.officers);
 
@@ -133,9 +133,9 @@ export default function DispatchDashboard(props: DispatchPageProps) {
             </div>
           </div>
           <div className="mt-3">
-            {CALLS_911 ? <ActiveCalls initialData={props.calls} /> : null}
-            {ACTIVE_INCIDENTS ? <ActiveIncidents /> : null}
+            <ActiveCalls initialData={props.calls} />
             <ActiveBolos initialBolos={props.bolos} />
+            {ACTIVE_INCIDENTS ? <ActiveIncidents /> : null}
           </div>
         </DndProvider>
       </div>

@@ -6,6 +6,7 @@ init({
   tracesSampleRate: 1.0,
   attachStacktrace: true,
   integrations(integrations) {
-    return [...integrations, new BrowserTracing()];
+    integrations = [...integrations, new BrowserTracing()];
+    return integrations.filter((integration) => integration.name !== "Breadcrumbs");
   },
 });

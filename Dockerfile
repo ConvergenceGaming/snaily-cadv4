@@ -1,6 +1,5 @@
 #build
 FROM node:18 as build
-
 ARG BUILD_CONTEXT
 
 WORKDIR /app
@@ -17,6 +16,7 @@ COPY ./packages /app/packages
 COPY ./scripts /app/scripts
 COPY . /app/
 
+
 WORKDIR /app
 
 RUN yarn set version stable
@@ -29,4 +29,5 @@ COPY ./apps/$BUILD_CONTEXT apps/$BUILD_CONTEXT
 
 RUN yarn run turbo build
 
-CMD yarn workspace @snailycad/$BUILD_CONTEXT start
+
+CMD ["yarn", "start"]

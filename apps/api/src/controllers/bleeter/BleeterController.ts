@@ -20,14 +20,11 @@ import { validateSchema } from "lib/validateSchema";
 import { ExtendedBadRequest } from "src/exceptions/ExtendedBadRequest";
 import type { User } from "@prisma/client";
 import type * as APITypes from "@snailycad/types/api";
-import { getImageWebPPath } from "utils/images/image";
-import { Feature, IsFeatureEnabled } from "middlewares/is-enabled";
-import generateBlurPlaceholder from "utils/images/generate-image-blur-data";
+import { getImageWebPPath } from "utils/image";
 
 @UseBeforeEach(IsAuth)
 @Controller("/bleeter")
 @ContentType("application/json")
-@IsFeatureEnabled({ feature: Feature.BLEETER })
 export class BleeterController {
   @Get("/")
   @Description("Get **all** bleeter posts, ordered by `createdAt`")
@@ -137,16 +134,12 @@ export class BleeterController {
       throw new ExtendedBadRequest({ image: "invalidImageType" });
     }
 
-    const image = await getImageWebPPath({
-      buffer: file.buffer,
-      pathType: "bleeter",
-      id: `${post.id}-${file.originalname.split(".")[0]}`,
-    });
+    const image = await getImageWebPPath({ buffer: file.buffer, pathType: "bleeter", id: post.id });
 
     const [data] = await Promise.all([
       prisma.bleeterPost.update({
         where: { id: post.id },
-        data: { imageId: image.fileName, imageBlurData: await generateBlurPlaceholder(image) },
+        data: { imageId: image.fileName },
         select: { imageId: true },
       }),
       fs.writeFile(image.path, image.buffer),

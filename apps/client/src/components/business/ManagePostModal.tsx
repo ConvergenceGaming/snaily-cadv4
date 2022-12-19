@@ -4,15 +4,14 @@ import { Modal } from "components/modal/Modal";
 import { useModal } from "state/modalState";
 import { Form, Formik } from "formik";
 import useFetch from "lib/useFetch";
-import { useBusinessState } from "state/business-state";
+import { useBusinessState } from "state/businessState";
 import { ModalIds } from "types/ModalIds";
 import { useTranslations } from "use-intl";
 import { CREATE_COMPANY_POST_SCHEMA } from "@snailycad/schemas";
 import { handleValidate } from "lib/handleValidate";
 import type { BusinessPost } from "@snailycad/types";
-import { dataToSlate, Editor } from "components/editor/editor";
+import { dataToSlate, Editor } from "components/editor/Editor";
 import type { PostBusinessPostsData, PutBusinessPostsData } from "@snailycad/types/api";
-import shallow from "zustand/shallow";
 
 interface Props {
   onCreate(post: BusinessPost): void;
@@ -22,13 +21,7 @@ interface Props {
 }
 
 export function ManageBusinessPostModal({ onClose, onCreate, onUpdate, post }: Props) {
-  const { currentBusiness, currentEmployee } = useBusinessState(
-    (state) => ({
-      currentBusiness: state.currentBusiness,
-      currentEmployee: state.currentEmployee,
-    }),
-    shallow,
-  );
+  const { currentBusiness, currentEmployee } = useBusinessState();
   const { isOpen, closeModal } = useModal();
   const { state, execute } = useFetch();
   const common = useTranslations("Common");

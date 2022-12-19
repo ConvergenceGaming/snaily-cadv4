@@ -1,8 +1,9 @@
+import * as React from "react";
 import { useTranslations } from "use-intl";
 import { TabsContent } from "components/shared/TabList";
 import { Button } from "@snailycad/ui";
 import { useAuth } from "context/AuthContext";
-import { getAPIUrl } from "@snailycad/utils/api-url";
+import { getAPIUrl } from "lib/fetch/getAPIUrl";
 import useFetch from "lib/useFetch";
 import { useFeatureEnabled } from "hooks/useFeatureEnabled";
 

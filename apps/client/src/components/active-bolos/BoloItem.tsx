@@ -8,7 +8,7 @@ import { usePermission } from "hooks/usePermission";
 import { makeUnitName } from "lib/utils";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/router";
-import { useLeoState } from "state/leo-state";
+import { useLeoState } from "state/leoState";
 
 const STOLEN_TEXT = "stolen" as const;
 interface BoloItemProps {
@@ -21,7 +21,7 @@ interface BoloItemProps {
 export function BoloItem({ idx, bolo, handleDelete, handleEdit }: BoloItemProps) {
   const t = useTranslations();
   const common = useTranslations("Common");
-  const activeOfficer = useLeoState((state) => state.activeOfficer);
+  const { activeOfficer } = useLeoState();
   const { pathname } = useRouter();
   const { hasActiveDispatchers } = useActiveDispatchers();
   const { hasPermissions } = usePermission();

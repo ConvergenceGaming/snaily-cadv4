@@ -3,7 +3,6 @@ import { Select } from "components/form/Select";
 import { useFormikContext } from "formik";
 import dynamic from "next/dynamic";
 import {
-  EmergencyVehicleValue,
   QualificationValue,
   ShouldDoType,
   StatusValue,
@@ -52,9 +51,7 @@ export function useDefaultDepartments() {
     label: v.value.value,
   }));
 
-  function makeDefaultDepartments(
-    value: StatusValue | QualificationValue | EmergencyVehicleValue | Value | null,
-  ) {
+  function makeDefaultDepartments(value: StatusValue | QualificationValue | Value | null) {
     if (!value) return [];
     const departments =
       ("officerRankDepartments" in value

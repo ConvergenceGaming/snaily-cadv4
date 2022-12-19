@@ -1,9 +1,8 @@
-import {
+import type {
   Prisma,
   LicenseExam,
   DriversLicenseCategoryValue,
   LicenseExamType,
-  Feature,
 } from "@prisma/client";
 import { LicenseExamPassType, LicenseExamStatus } from "@snailycad/types";
 import { LICENSE_EXAM_SCHEMA } from "@snailycad/schemas";
@@ -16,7 +15,6 @@ import { IsAuth } from "middlewares/IsAuth";
 import { UsePermissions, Permissions } from "middlewares/UsePermissions";
 import { manyToManyHelper } from "utils/manyToMany";
 import type * as APITypes from "@snailycad/types/api";
-import { IsFeatureEnabled } from "middlewares/is-enabled";
 
 const licenseExamIncludes = {
   citizen: true,
@@ -27,7 +25,6 @@ const licenseExamIncludes = {
 @Controller("/leo/license-exams")
 @UseBeforeEach(IsAuth)
 @ContentType("application/json")
-@IsFeatureEnabled({ feature: Feature.LICENSE_EXAMS })
 export class LicenseExamsController {
   @Get("/")
   @UsePermissions({

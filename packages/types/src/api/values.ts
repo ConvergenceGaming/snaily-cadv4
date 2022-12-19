@@ -9,14 +9,8 @@ import type { PenalCodeGroup, AnyValue } from "../index.js";
 export type GetValuesData<Value extends AnyValue = AnyValue> = {
   values: Value[];
   type: Prisma.ValueType;
-  totalCount: number;
+  groups?: PenalCodeGroup[];
 }[];
-
-/**
- * @method GET
- * @route /admin/values/:path/export
- */
-export type GetValuesExportData<Value extends AnyValue = AnyValue> = Value[];
 
 /**
  * @method GET
@@ -24,8 +18,8 @@ export type GetValuesExportData<Value extends AnyValue = AnyValue> = Value[];
  */
 export type GetValuesPenalCodesData = {
   type: "PENAL_CODE";
+  groups: PenalCodeGroup[];
   values: (Types.PenalCode & { group: PenalCodeGroup | null })[];
-  totalCount: number;
 }[];
 
 /**
@@ -38,16 +32,13 @@ export type PostValuesData<Value extends AnyValue = AnyValue> = Value;
  * @method DELETE
  * @route /admin/values/:path/bulk-delete
  */
-export interface DeleteValuesBulkData {
-  failedIds: string[];
-  success: number;
-}
+export type DeleteValuesBulkData = boolean;
 
 /**
  * @method DELETE
  * @route /admin/values/:path/:id
  */
-export type DeleteValueByIdData = boolean | string;
+export type DeleteValueByIdData = boolean;
 
 /**
  * @method PATCH

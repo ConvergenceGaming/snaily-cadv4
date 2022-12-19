@@ -1,5 +1,5 @@
 import { Button } from "@snailycad/ui";
-import { ActiveOfficer, useLeoState } from "state/leo-state";
+import { ActiveOfficer, useLeoState } from "state/leoState";
 import { Rank, ShouldDoType } from "@snailycad/types";
 import { useTranslations } from "use-intl";
 import { useGenerateCallsign } from "hooks/useGenerateCallsign";
@@ -19,7 +19,6 @@ import Image from "next/image";
 import { useMounted } from "@casper124578/useful";
 import { usePermission } from "hooks/usePermission";
 import { defaultPermissions } from "@snailycad/permissions";
-import { useValues } from "context/ValuesContext";
 
 const buttons: modalButtons.ModalButton[] = [
   modalButtons.switchDivision,
@@ -55,11 +54,6 @@ export function ModalButtons({ initialActiveOfficer }: { initialActiveOfficer: A
   const { TONES, PANIC_BUTTON } = useFeatureEnabled();
   const { makeImageUrl } = useImageUrl();
 
-  const { codes10 } = useValues();
-  const panicButtonCode = codes10.values.find(
-    (code) => code.shouldDo === ShouldDoType.PANIC_BUTTON,
-  );
-
   async function handlePanic() {
     if (!activeOfficer) return;
 
@@ -85,7 +79,7 @@ export function ModalButtons({ initialActiveOfficer }: { initialActiveOfficer: A
 
   return (
     <div className="py-2">
-      {nameAndCallsign && activeOfficer ? (
+      {!isButtonDisabled && activeOfficer ? (
         <p className="text-lg">
           <span className="font-semibold">{t("Leo.activeOfficer")}: </span>
 
@@ -117,7 +111,7 @@ export function ModalButtons({ initialActiveOfficer }: { initialActiveOfficer: A
           );
         })}
 
-        {PANIC_BUTTON && panicButtonCode ? (
+        {PANIC_BUTTON ? (
           <Button
             id="panicButton"
             disabled={state === "loading" || isButtonDisabled}

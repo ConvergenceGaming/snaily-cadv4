@@ -6,15 +6,15 @@ import { StatusesArea } from "components/shared/StatusesArea";
 import { getSessionUser } from "lib/auth";
 import { getTranslations } from "lib/getTranslation";
 import type { GetServerSideProps } from "next";
-import { useLeoState } from "state/leo-state";
+import { useLeoState } from "state/leoState";
 import { Rank, Record, RecordType, ValueType } from "@snailycad/types";
-import { ActiveCalls } from "components/dispatch/active-calls/active-calls";
-import { useDispatchState } from "state/dispatch/dispatch-state";
+import { ActiveCalls } from "components/dispatch/active-calls/ActiveCalls";
+import { useDispatchState } from "state/dispatch/dispatchState";
 import { ModalButtons } from "components/leo/ModalButtons";
-import { ActiveBolos } from "components/active-bolos/active-bolos";
+import { ActiveBolos } from "components/active-bolos/ActiveBolos";
 import { requestAll } from "lib/utils";
-import { ActiveOfficers } from "components/dispatch/active-officers";
-import { ActiveDeputies } from "components/dispatch/active-deputies";
+import { ActiveOfficers } from "components/dispatch/ActiveOfficers";
+import { ActiveDeputies } from "components/dispatch/ActiveDeputies";
 import { ActiveWarrants } from "components/leo/active-warrants/ActiveWarrants";
 import { useSignal100 } from "hooks/shared/useSignal100";
 import { usePanicButton } from "hooks/shared/usePanicButton";
@@ -23,7 +23,7 @@ import { UtilityPanel } from "components/shared/UtilityPanel";
 import { useModal } from "state/modalState";
 import { ModalIds } from "types/ModalIds";
 import { defaultPermissions, Permissions } from "@snailycad/permissions";
-import { useNameSearch } from "state/search/name-search-state";
+import { useNameSearch } from "state/search/nameSearchState";
 import { useFeatureEnabled } from "hooks/useFeatureEnabled";
 import { useTones } from "hooks/global/useTones";
 import { useLoadValuesClientSide } from "hooks/useLoadValuesClientSide";
@@ -36,63 +36,36 @@ import type {
   GetMyOfficersData,
 } from "@snailycad/types/api";
 import { CreateWarrantModal } from "components/leo/modals/CreateWarrantModal";
-import { useCall911State } from "state/dispatch/call-911-state";
+import { useCall911State } from "state/dispatch/call911State";
 import { DndProvider } from "components/shared/dnd/DndProvider";
 import { usePermission } from "hooks/usePermission";
-import shallow from "zustand/shallow";
 
 const Modals = {
-  CreateWarrantModal: dynamic(
-    async () => {
-      return (await import("components/leo/modals/CreateWarrantModal")).CreateWarrantModal;
-    },
-    { ssr: false },
-  ),
-  CustomFieldSearch: dynamic(
-    async () => {
-      return (await import("components/leo/modals/CustomFieldSearch/CustomFieldSearch"))
-        .CustomFieldSearch;
-    },
-    { ssr: false },
-  ),
-  NameSearchModal: dynamic(
-    async () => {
-      return (await import("components/leo/modals/NameSearchModal/NameSearchModal"))
-        .NameSearchModal;
-    },
-    { ssr: false },
-  ),
-  VehicleSearchModal: dynamic(
-    async () => {
-      return (await import("components/leo/modals/VehicleSearchModal")).VehicleSearchModal;
-    },
-    { ssr: false },
-  ),
-  WeaponSearchModal: dynamic(
-    async () => {
-      return (await import("components/leo/modals/weapon-search-modal")).WeaponSearchModal;
-    },
-    { ssr: false },
-  ),
-  NotepadModal: dynamic(
-    async () => {
-      return (await import("components/shared/NotepadModal")).NotepadModal;
-    },
-    { ssr: false },
-  ),
-  SelectOfficerModal: dynamic(
-    async () => {
-      return (await import("components/leo/modals/select-officer-modal")).SelectOfficerModal;
-    },
-    { ssr: false },
-  ),
-  ManageRecordModal: dynamic(
-    async () => {
-      return (await import("components/leo/modals/manage-record/manage-record-modal"))
-        .ManageRecordModal;
-    },
-    { ssr: false },
-  ),
+  CreateWarrantModal: dynamic(async () => {
+    return (await import("components/leo/modals/CreateWarrantModal")).CreateWarrantModal;
+  }),
+  CustomFieldSearch: dynamic(async () => {
+    return (await import("components/leo/modals/CustomFieldSearch/CustomFieldSearch"))
+      .CustomFieldSearch;
+  }),
+  NameSearchModal: dynamic(async () => {
+    return (await import("components/leo/modals/NameSearchModal/NameSearchModal")).NameSearchModal;
+  }),
+  VehicleSearchModal: dynamic(async () => {
+    return (await import("components/leo/modals/VehicleSearchModal")).VehicleSearchModal;
+  }),
+  WeaponSearchModal: dynamic(async () => {
+    return (await import("components/leo/modals/WeaponSearchModal")).WeaponSearchModal;
+  }),
+  NotepadModal: dynamic(async () => {
+    return (await import("components/shared/NotepadModal")).NotepadModal;
+  }),
+  SelectOfficerModal: dynamic(async () => {
+    return (await import("components/leo/modals/SelectOfficerModal")).SelectOfficerModal;
+  }),
+  ManageRecordModal: dynamic(async () => {
+    return (await import("components/leo/modals/ManageRecordModal")).ManageRecordModal;
+  }),
   SwitchDivisionCallsignModal: dynamic(async () => {
     return (await import("components/leo/modals/SwitchDivisionCallsignModal"))
       .SwitchDivisionCallsignModal;
@@ -132,7 +105,7 @@ export default function OfficerDashboard({
 
   const leoState = useLeoState();
   const dispatchState = useDispatchState();
-  const set911Calls = useCall911State((state) => state.setCalls);
+  const call911State = useCall911State();
   const t = useTranslations("Leo");
   const signal100 = useSignal100();
   const tones = useTones("leo");
@@ -145,13 +118,7 @@ export default function OfficerDashboard({
     (u) => u.rank !== Rank.USER,
   );
 
-  const { currentResult, setCurrentResult } = useNameSearch(
-    (state) => ({
-      currentResult: state.currentResult,
-      setCurrentResult: state.setCurrentResult,
-    }),
-    shallow,
-  );
+  const { currentResult, setCurrentResult } = useNameSearch();
 
   function handleRecordCreate(data: Record) {
     if (!currentResult || currentResult.isConfidential) return;
@@ -165,7 +132,7 @@ export default function OfficerDashboard({
   React.useEffect(() => {
     leoState.setActiveOfficer(activeOfficer);
 
-    set911Calls(calls.calls);
+    call911State.setCalls(calls.calls);
     dispatchState.setBolos(bolos);
 
     dispatchState.setActiveDeputies(activeDeputies);
@@ -275,7 +242,7 @@ export const getServerSideProps: GetServerSideProps<Props> = async ({ req, local
       values,
       messages: {
         ...(await getTranslations(
-          ["citizen", "leo", "truck-logs", "ems-fd", "calls", "common", "courthouse"],
+          ["citizen", "leo", "truck-logs", "ems-fd", "calls", "common"],
           user?.locale ?? locale,
         )),
       },

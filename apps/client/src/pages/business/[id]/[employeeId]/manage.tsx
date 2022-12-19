@@ -5,7 +5,7 @@ import { Layout } from "components/Layout";
 import { getSessionUser } from "lib/auth";
 import { getTranslations } from "lib/getTranslation";
 
-import { FullBusiness, FullEmployee, useBusinessState } from "state/business-state";
+import { FullBusiness, FullEmployee, useBusinessState } from "state/businessState";
 import { useTranslations } from "use-intl";
 import { TabList } from "components/shared/TabList";
 import { EmployeeAsEnum } from "@snailycad/types";
@@ -14,7 +14,6 @@ import { requestAll } from "lib/utils";
 import { Title } from "components/shared/Title";
 import { EmployeesTab } from "components/business/manage/EmployeesTab";
 import { BreadcrumbItem, Breadcrumbs } from "@snailycad/ui";
-import shallow from "zustand/shallow";
 
 interface Props {
   employee: FullEmployee | null;
@@ -34,28 +33,15 @@ const VehiclesTab = dynamic(
 );
 
 export default function BusinessId(props: Props) {
-  const businessActions = useBusinessState((state) => ({
-    setCurrentBusiness: state.setCurrentBusiness,
-    setCurrentEmployee: state.setCurrentEmployee,
-  }));
-
-  const { currentBusiness, currentEmployee } = useBusinessState(
-    (state) => ({
-      currentBusiness: state.currentBusiness,
-      currentEmployee: state.currentEmployee,
-      posts: state.posts,
-    }),
-    shallow,
-  );
-
+  const { currentBusiness, currentEmployee, ...state } = useBusinessState();
   const common = useTranslations("Common");
   const t = useTranslations("Business");
 
   React.useEffect(() => {
-    businessActions.setCurrentBusiness(props.business);
-    businessActions.setCurrentEmployee(props.employee);
+    state.setCurrentBusiness(props.business);
+    state.setCurrentEmployee(props.employee);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [props]);
+  }, [props, state.setCurrentEmployee, state.setCurrentBusiness]);
 
   if (!currentBusiness || !currentEmployee) {
     return null;

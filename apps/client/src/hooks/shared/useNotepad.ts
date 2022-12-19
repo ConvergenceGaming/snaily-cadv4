@@ -1,8 +1,7 @@
-import { dataToSlate, DEFAULT_EDITOR_DATA } from "components/editor/editor";
+import { dataToSlate, DEFAULT_EDITOR_DATA } from "components/editor/Editor";
 import { useRouter } from "next/router";
 import * as React from "react";
 import type { Descendant } from "slate";
-import { storageFactory } from "storage-factory";
 
 const routeIds: Record<string, string> = {
   "/officer": "snaily-cad-notepad-officer-data",
@@ -17,27 +16,23 @@ export function useNotepad() {
   const routeId = routeIds[router.pathname];
 
   const [value, setValue] = React.useState<Descendant[]>([]);
-  const _storageFactory = React.useMemo(() => {
-    // if (typeof window === "undefined")
-    return storageFactory(() => localStorage);
-  }, []);
 
   React.useEffect(() => {
     if (!routeId) return;
     if (typeof window === "undefined") return;
 
-    const localRaw = _storageFactory.getItem(routeId);
+    const localRaw = "localStorage" in window && window.localStorage.getItem(routeId);
     const local = dataToSlate({
       descriptionData: localRaw ? JSON.parse(localRaw) : DEFAULT_EDITOR_DATA,
     });
     setValue(local);
-  }, [_storageFactory, routeId]);
+  }, [routeId]);
 
   function setLocal(value: Descendant[]) {
     if (!routeId) return;
 
     setValue(value);
-    _storageFactory.setItem(routeId, JSON.stringify(value));
+    window.localStorage.setItem(routeId, JSON.stringify(value));
   }
 
   return [value, setLocal] as const;

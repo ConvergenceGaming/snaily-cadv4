@@ -1,6 +1,6 @@
 {
   "name": "@snailycad/permissions",
-  "version": "1.38.0",
+  "version": "1.31.0",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
@@ -26,10 +26,10 @@
     "test": "yarn vitest run"
   },
   "devDependencies": {
-    "tsup": "^6.5.0",
-    "typescript": "^4.9.4",
-    "vite": "^4.0.0",
-    "vitest": "^0.25.6"
+    "tsup": "^6.3.0",
+    "typescript": "^4.8.4",
+    "vite": "^3.2.2",
+    "vitest": "^0.24.4"
   },
   "dependencies": {
     "zod": "^3.19.1"
@@ -42,7 +42,6 @@
     "bundle": false,
     "platform": "node",
     "target": "node16",
-    "treeshake": true,
     "silent": true,
     "format": [
       "cjs",

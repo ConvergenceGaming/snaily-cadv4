@@ -12,10 +12,7 @@ export type PostEmsFdMedicalRecordsSearchData =
       medicalRecords: Types.MedicalRecord[];
       isConfidential: false;
     })
-  | (Pick<
-      Prisma.Citizen,
-      "id" | "name" | "surname" | "imageId" | "imageBlurData" | "socialSecurityNumber"
-    > & {
+  | (Pick<Prisma.Citizen, "id" | "name" | "surname" | "imageId" | "socialSecurityNumber"> & {
       isConfidential: true;
     });
 
@@ -45,10 +42,7 @@ export type PostLeoSearchCitizenData = (
       notes: Types.Note[];
       Record: Types.Record[];
     })
-  | (Pick<
-      Types.Citizen,
-      "id" | "name" | "surname" | "imageId" | "imageBlurData" | "socialSecurityNumber"
-    > & {
+  | (Pick<Types.Citizen, "id" | "name" | "surname" | "imageId" | "socialSecurityNumber"> & {
       isConfidential: true;
     })
 )[];

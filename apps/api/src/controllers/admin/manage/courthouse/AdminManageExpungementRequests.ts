@@ -21,7 +21,6 @@ export class AdminManageExpungementRequests {
   })
   async getRequests(): Promise<APITypes.GetManageExpungementRequests> {
     const requests = await prisma.expungementRequest.findMany({
-      where: { status: ExpungementRequestStatus.PENDING },
       include: expungementRequestInclude,
     });
 
@@ -69,7 +68,9 @@ export class AdminManageExpungementRequests {
 
     const updated = await prisma.expungementRequest.update({
       where: { id },
-      data: { status: type },
+      data: {
+        status: type,
+      },
     });
 
     return updated;

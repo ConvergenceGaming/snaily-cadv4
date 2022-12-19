@@ -6,8 +6,13 @@ import { useModal } from "state/modalState";
 import { ModalIds } from "types/ModalIds";
 import { useTranslations } from "next-intl";
 import { Form, Formik, FormikHelpers } from "formik";
+import { FormField } from "components/form/FormField";
+import { useFeatureEnabled } from "hooks/useFeatureEnabled";
+import { useImageUrl } from "hooks/useImageUrl";
+import { InputSuggestions } from "components/form/inputs/InputSuggestions";
+import type { NameSearchResult } from "state/search/nameSearchState";
 import type { DeleteReleaseJailedCitizenData } from "@snailycad/types/api";
-import { CitizenSuggestionsField } from "components/shared/CitizenSuggestionsField";
+import Image from "next/image";
 
 interface Props {
   citizen: (BaseCitizen & { recordId: string }) | null;
@@ -27,6 +32,8 @@ const TYPES = Object.keys(ReleaseType).map((key) => ({
 export function ReleaseCitizenModal({ onSuccess, citizen }: Props) {
   const t = useTranslations("Leo");
   const common = useTranslations("Common");
+  const { SOCIAL_SECURITY_NUMBERS } = useFeatureEnabled();
+  const { makeImageUrl } = useImageUrl();
 
   const { isOpen, closeModal } = useModal();
   const { state, execute } = useFetch();
@@ -65,7 +72,7 @@ export function ReleaseCitizenModal({ onSuccess, citizen }: Props) {
       <p className="my-3">{t("releaseCitizen")}</p>
 
       <Formik onSubmit={onSubmit} initialValues={INITIAL_VALUES}>
-        {({ setFieldValue, errors, values, isValid }) => (
+        {({ handleChange, setFieldValue, setValues, errors, values, isValid }) => (
           <Form>
             <SelectField
               label={common("type")}
@@ -77,14 +84,48 @@ export function ReleaseCitizenModal({ onSuccess, citizen }: Props) {
             />
 
             {values.type === ReleaseType.BAIL_POSTED ? (
-              <CitizenSuggestionsField
-                allowsCustomValue
-                autoFocus
-                label={t("bailPostedBy")}
-                fromAuthUserOnly
-                labelFieldName="releasedByName"
-                valueFieldName="releasedById"
-              />
+              <FormField errorMessage={errors.releasedById} label={t("bailPostedBy")}>
+                <InputSuggestions<NameSearchResult>
+                  onSuggestionPress={(suggestion) => {
+                    setValues({
+                      ...values,
+                      releasedById: suggestion.id,
+                      releasedByName: `${suggestion.name} ${suggestion.surname}`,
+                    });
+                  }}
+                  Component={({ suggestion }) => (
+                    <div className="flex items-center">
+                      {suggestion.imageId ? (
+                        <Image
+                          className="rounded-md w-[30px] h-[30px] object-cover mr-2"
+                          draggable={false}
+                          src={makeImageUrl("citizens", suggestion.imageId)!}
+                          loading="lazy"
+                          width={30}
+                          height={30}
+                          alt={`${suggestion.name} ${suggestion.surname}`}
+                        />
+                      ) : null}
+                      <p>
+                        {suggestion.name} {suggestion.surname}{" "}
+                        {SOCIAL_SECURITY_NUMBERS && suggestion.socialSecurityNumber ? (
+                          <>(SSN: {suggestion.socialSecurityNumber})</>
+                        ) : null}
+                      </p>
+                    </div>
+                  )}
+                  options={{
+                    apiPath: "/search/name",
+                    method: "POST",
+                    dataKey: "name",
+                  }}
+                  inputProps={{
+                    value: values.releasedByName,
+                    name: "releasedByName",
+                    onChange: handleChange,
+                  }}
+                />
+              </FormField>
             ) : null}
 
             <footer className="flex justify-end mt-5">

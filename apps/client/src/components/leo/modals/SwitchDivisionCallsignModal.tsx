@@ -9,20 +9,13 @@ import { handleValidate } from "lib/handleValidate";
 import useFetch from "lib/useFetch";
 import { ModalIds } from "types/ModalIds";
 import { useTranslations } from "use-intl";
-import { useLeoState } from "state/leo-state";
+import { useLeoState } from "state/leoState";
 import { useGenerateCallsign } from "hooks/useGenerateCallsign";
 import { isUnitCombined } from "@snailycad/utils";
 import type { PutLeoCallsignData } from "@snailycad/types/api";
-import shallow from "zustand/shallow";
 
 export function SwitchDivisionCallsignModal() {
-  const { activeOfficer, setActiveOfficer } = useLeoState(
-    (state) => ({
-      activeOfficer: state.activeOfficer,
-      setActiveOfficer: state.setActiveOfficer,
-    }),
-    shallow,
-  );
+  const { activeOfficer, setActiveOfficer } = useLeoState();
   const { isOpen, closeModal } = useModal();
   const common = useTranslations("Common");
   const t = useTranslations("Leo");

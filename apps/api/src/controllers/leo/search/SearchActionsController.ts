@@ -360,7 +360,7 @@ export class SearchActionsController {
       });
 
       if (existing) {
-        throw new ExtendedBadRequest({ name: "nameAlreadyTaken" }, "nameAlreadyTaken");
+        throw new ExtendedBadRequest({ name: "nameAlreadyTaken" });
       }
     }
 
@@ -377,7 +377,7 @@ export class SearchActionsController {
     const defaultLicenseValueId = defaultLicenseValue?.id ?? null;
 
     const citizen = await prisma.citizen.create({
-      data: await citizenObjectFromData({
+      data: citizenObjectFromData({
         data,
         defaultLicenseValueId,
         cad,

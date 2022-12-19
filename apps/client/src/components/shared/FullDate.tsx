@@ -1,5 +1,6 @@
 import { useMounted } from "@casper124578/useful";
-import { useIntl } from "use-intl";
+import format from "date-fns/format";
+import { formatDate } from "lib/utils";
 import { HoverCardProps, HoverCard } from "./HoverCard";
 
 interface Props extends Omit<HoverCardProps, "trigger" | "children"> {
@@ -10,15 +11,11 @@ interface Props extends Omit<HoverCardProps, "trigger" | "children"> {
 
 export function FullDate({ children, onlyDate, isDateOfBirth, ...rest }: Props) {
   const isMounted = useMounted();
-  const { formatDateTime } = useIntl();
+  const hmsString = onlyDate ? "" : "HH:mm:ss";
 
   const isCorrectDate = isValidDate(children);
   if (!isCorrectDate) {
     return <span>Invalid Date</span>;
-  }
-
-  if (!isMounted) {
-    return null;
   }
 
   let date = new Date(children).getTime();
@@ -26,22 +23,16 @@ export function FullDate({ children, onlyDate, isDateOfBirth, ...rest }: Props) 
     date = date + 5 * 60 * 60 * 1000;
   }
 
+  const formatted = format(new Date(date), `EEEE, MMMM dd, yyyy ${hmsString}`);
+  const trigger = formatDate(children, { onlyDate: onlyDate ?? false });
+
   return (
     <HoverCard
       openDelay={100}
-      trigger={
-        <span className="z-30">
-          {formatDateTime(date, {
-            dateStyle: "medium",
-            timeStyle: onlyDate ? undefined : "medium",
-          })}
-        </span>
-      }
+      trigger={<span className="z-30">{isMounted ? trigger : null}</span>}
       {...rest}
     >
-      <span className="font-semibold">
-        {formatDateTime(date, { dateStyle: "full", timeStyle: onlyDate ? undefined : "medium" })}
-      </span>
+      <span className="font-semibold">{formatted}</span>
     </HoverCard>
   );
 }

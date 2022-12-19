@@ -77,7 +77,6 @@ export const DEPARTMENT_SCHEMA = BASE_VALUE_SCHEMA.extend({
   whitelisted: z.boolean().optional(),
   defaultOfficerRankId: z.string().nullable().optional(),
   isConfidential: z.boolean().nullable().optional(),
-  extraFields: z.any().nullable().optional(),
 });
 
 export const DEPARTMENT_ARR = z.array(DEPARTMENT_SCHEMA).min(1);
@@ -133,14 +132,3 @@ export const CALL_TYPE_SCHEMA = BASE_VALUE_SCHEMA.extend({
 });
 
 export const CALL_TYPE_ARR = z.array(CALL_TYPE_SCHEMA).min(1);
-
-/**
- * emergency vehicles
- */
-
-export const EMERGENCY_VEHICLE_SCHEMA = BASE_VALUE_SCHEMA.extend({
-  departments: z.array(z.string()).min(1),
-  divisions: z.array(z.string()).min(1),
-});
-
-export const EMERGENCY_VEHICLE_ARR = z.array(EMERGENCY_VEHICLE_SCHEMA).min(1);

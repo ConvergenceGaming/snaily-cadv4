@@ -136,11 +136,6 @@ export class AuthController {
       }
     }
 
-    const nonDiscordUserUsernameRegex = /^([a-z_.\d]+)*[a-z\d]+$/i;
-    if (!nonDiscordUserUsernameRegex.test(data.username)) {
-      throw new ExtendedBadRequest({ username: "Invalid" });
-    }
-
     const existing = await prisma.user.findFirst({
       where: {
         username: { equals: data.username, mode: "insensitive" },

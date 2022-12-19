@@ -18,10 +18,10 @@ import { useAuth } from "context/AuthContext";
 import { TableActionsAlignment } from "@snailycad/types";
 import { orderColumnsByTableActionsAlignment } from "lib/table/orderColumnsByTableActionsAlignment";
 import { rankItem } from "@tanstack/match-sorter-utils";
-import type { useTableState } from "hooks/shared/table/use-table-state";
+import type { useTableState } from "hooks/shared/table/useTableState";
 import { ReactSortable } from "react-sortablejs";
 import { useMounted } from "@casper124578/useful";
-import { createTableDragDropColumn } from "lib/table/create-table-dnd-column";
+import { createTableDragDropColumn } from "lib/table/dndArrowHook";
 import { createTableCheckboxColumn } from "./IndeterminateCheckbox";
 
 export const DRAGGABLE_TABLE_HANDLE = "__TABLE_HANDLE__";
@@ -31,13 +31,13 @@ export type _RowData = RowData & {
 
 interface Props<TData extends _RowData> {
   data: TData[];
-  columns: (AccessorKeyColumnDef<TData, keyof TData> | null)[];
+  columns: (AccessorKeyColumnDef<TData> | null)[];
 
   tableState: ReturnType<typeof useTableState>;
   containerProps?: { style?: React.CSSProperties; className?: string };
 
   features?: {
-    isWithinCardOrModal?: boolean;
+    isWithinCard?: boolean;
     dragAndDrop?: boolean;
     rowSelection?: boolean;
   };
@@ -56,7 +56,7 @@ export function Table<TData extends _RowData>({
   const pageCount = Math.ceil(dataLength / tableState.pagination.pageSize);
 
   const tableActionsAlignment = user?.tableActionsAlignment ?? TableActionsAlignment.LEFT;
-  const stickyBgColor = features?.isWithinCardOrModal
+  const stickyBgColor = features?.isWithinCard
     ? "bg-gray-100 dark:bg-tertiary"
     : "dark:bg-primary bg-white";
 
@@ -168,9 +168,7 @@ export function Table<TData extends _RowData>({
         </ReactSortable>
       </table>
 
-      {dataLength <= visibleTableRows.length ? null : (
-        <TablePagination isLoading={tableState.pagination.isLoading} table={table} />
-      )}
+      {dataLength <= visibleTableRows.length ? null : <TablePagination table={table} />}
     </div>
   );
 }

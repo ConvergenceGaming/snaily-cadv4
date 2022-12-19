@@ -8,7 +8,7 @@
     },
     "create-images-domain": {
       "dependsOn": ["^create-images-domain"],
-      "outputs": ["next.config.mjs"],
+      "outputs": ["next.config.js"],
       "cache": false
     },
     "validate-locales": {

@@ -1,3 +1,4 @@
+import * as React from "react";
 import type { CustomRole, User } from "@snailycad/types";
 import { Modal } from "components/modal/Modal";
 import { useModal } from "state/modalState";

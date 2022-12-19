@@ -4,7 +4,6 @@ import { useRoleplayStopped } from "hooks/global/useRoleplayStopped";
 import { Nav } from "./nav/Nav";
 import { useHasPermissionForLayout } from "hooks/auth/useHasPermissionForLayout";
 import { useSocketError } from "hooks/global/useSocketError";
-import { useSocket } from "@casper124578/use-socket.io";
 
 export interface LayoutProps {
   children: React.ReactNode;
@@ -13,8 +12,6 @@ export interface LayoutProps {
   hideAlerts?: boolean;
   navMaxWidth?: string;
 }
-
-let connectedToSocket = false;
 
 export function Layout({
   hideAlerts,
@@ -26,17 +23,6 @@ export function Layout({
   const { Component, audio, roleplayStopped } = useRoleplayStopped();
   const { SocketErrorComponent, showError } = useSocketError();
   const { forbidden, Loader } = useHasPermissionForLayout(permissions);
-  const socket = useSocket();
-
-  React.useEffect(() => {
-    if (connectedToSocket) return;
-
-    connectedToSocket = true;
-
-    if (!socket?.connected) {
-      socket?.connect();
-    }
-  }, [socket?.connected]); // eslint-disable-line
 
   if (forbidden) {
     return <Loader />;

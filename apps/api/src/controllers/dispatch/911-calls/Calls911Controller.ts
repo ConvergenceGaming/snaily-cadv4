@@ -40,7 +40,6 @@ import {
 } from "controllers/leo/incidents/IncidentController";
 import type { z } from "zod";
 import { getNextActiveCallId } from "lib/calls/getNextActiveCall";
-import { Feature, IsFeatureEnabled } from "middlewares/is-enabled";
 
 export const callInclude = {
   position: true,
@@ -57,7 +56,6 @@ export const callInclude = {
 @Controller("/911-calls")
 @UseBeforeEach(IsAuth)
 @ContentType("application/json")
-@IsFeatureEnabled({ feature: Feature.CALLS_911 })
 export class Calls911Controller {
   private socket: Socket;
   constructor(socket: Socket) {
@@ -240,7 +238,7 @@ export class Calls911Controller {
     @Context("user") user: User,
     @Context("cad") cad: cad & { miscCadSettings: MiscCadSettings },
   ): Promise<APITypes.Put911CallByIdData> {
-    const data = validateSchema(CALL_911_SCHEMA.partial(), body);
+    const data = validateSchema(CALL_911_SCHEMA, body);
     const maxAssignmentsToCalls = cad.miscCadSettings.maxAssignmentsToCalls ?? Infinity;
 
     const call = await prisma.call911.findUnique({
@@ -340,10 +338,7 @@ export class Calls911Controller {
     });
 
     const normalizedCall = officerOrDeputyToUnit(updated);
-    this.socket.emitUpdate911Call({
-      ...normalizedCall,
-      notifyAssignedUnits: data.notifyAssignedUnits,
-    });
+    this.socket.emitUpdate911Call(normalizedCall);
 
     return normalizedCall;
   }
@@ -630,7 +625,7 @@ export class Calls911Controller {
 
   // creates the webhook structure that will get sent to Discord.
   private createWebhookData(call: Call911): { embeds: APIEmbed[] } {
-    const caller = call.name || "Unknown";
+    const caller = call.name;
     const location = `${call.location} ${call.postal ? call.postal : ""}`;
     const description = call.description || "Could not render description via Discord";
 

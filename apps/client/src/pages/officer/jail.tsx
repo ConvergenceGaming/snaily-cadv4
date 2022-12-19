@@ -18,7 +18,7 @@ import { FullDate } from "components/shared/FullDate";
 import { usePermission, Permissions } from "hooks/usePermission";
 import { useFeatureEnabled } from "hooks/useFeatureEnabled";
 import { NameSearchModal } from "components/leo/modals/NameSearchModal/NameSearchModal";
-import { useAsyncTable } from "hooks/shared/table/use-async-table";
+import { useAsyncTable } from "hooks/shared/table/useAsyncTable";
 import type { GetJailedCitizensData } from "@snailycad/types/api";
 import { useLoadValuesClientSide } from "hooks/useLoadValuesClientSide";
 
@@ -58,8 +58,12 @@ export default function Jail({ data }: Props) {
     null,
   );
 
-  function handleSuccess(releasedCitizenData: BaseCitizen & { Record: Record[] }) {
-    asyncTable.update(releasedCitizenData.id, releasedCitizenData);
+  function handleSuccess(citizen: BaseCitizen & { Record: Record[] }) {
+    const newData = [...asyncTable.data];
+    const idx = newData.findIndex((v) => v.id === citizen.id);
+    newData[idx] = citizen;
+
+    asyncTable.setData(newData);
 
     setTempCitizen(null);
     closeModal(ModalIds.AlertReleaseCitizen);
@@ -89,7 +93,7 @@ export default function Jail({ data }: Props) {
       ) : (
         <Table
           tableState={tableState}
-          data={asyncTable.items.map((item) => {
+          data={asyncTable.data.map((item) => {
             const [record] = item.Record.sort((a, b) =>
               compareDesc(new Date(a.createdAt), new Date(b.createdAt)),
             ).filter((v) => v.type === "ARREST_REPORT");

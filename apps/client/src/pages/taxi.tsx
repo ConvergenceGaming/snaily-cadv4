@@ -25,11 +25,7 @@ export default function Taxi(props: Props) {
   const t = useTranslations("Calls");
 
   useListener(SocketEvents.CreateTaxiCall, (data: TaxiCall) => {
-    const isAlreadyInCalls = calls.some((v) => v.id === data.id);
-
-    if (!isAlreadyInCalls) {
-      setCalls((p) => [...p, data]);
-    }
+    setCalls((p) => [...p, data]);
   });
 
   useListener(SocketEvents.EndTaxiCall, handleCallEnd);

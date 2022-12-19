@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useTranslations } from "use-intl";
-import { Button } from "@snailycad/ui";
+import { Loader, Button, TextField } from "@snailycad/ui";
 import type { RegisteredVehicle } from "@snailycad/types";
 import { RegisterVehicleModal } from "./modals/RegisterVehicleModal";
 import { ModalIds } from "types/ModalIds";
@@ -12,15 +12,12 @@ import { FullDate } from "components/shared/FullDate";
 import { Status } from "components/shared/Status";
 import { useFeatureEnabled } from "hooks/useFeatureEnabled";
 import { TransferVehicleModal } from "./modals/TransferVehicleModal";
-import { useAsyncTable } from "hooks/shared/table/use-async-table";
+import { useAsyncTable } from "hooks/shared/table/useAsyncTable";
 import { useCitizen } from "context/CitizenContext";
 import type { DeleteCitizenVehicleData, GetCitizenVehiclesData } from "@snailycad/types/api";
 import { useTemporaryItem } from "hooks/shared/useTemporaryItem";
-import { SearchArea } from "components/shared/search/search-area";
 
 export function VehiclesCard(props: { vehicles: RegisteredVehicle[] }) {
-  const [search, setSearch] = React.useState("");
-
   const { openModal, closeModal } = useModal();
   const common = useTranslations("Common");
   const t = useTranslations("Vehicles");
@@ -30,7 +27,6 @@ export function VehiclesCard(props: { vehicles: RegisteredVehicle[] }) {
 
   const asyncTable = useAsyncTable({
     fetchOptions: {
-      pageSize: 12,
       onResponse: (json: GetCitizenVehiclesData) => ({
         data: json.vehicles,
         totalCount: json.totalCount,
@@ -40,9 +36,9 @@ export function VehiclesCard(props: { vehicles: RegisteredVehicle[] }) {
     totalCount: props.vehicles.length,
     initialData: props.vehicles,
   });
-  const tableState = useTableState({ pagination: asyncTable.pagination });
+  const tableState = useTableState({ pagination: { ...asyncTable.pagination, pageSize: 12 } });
 
-  const [tempVehicle, vehicleState] = useTemporaryItem(asyncTable.items);
+  const [tempVehicle, vehicleState] = useTemporaryItem(asyncTable.data);
 
   async function handleDelete() {
     if (!tempVehicle) return;
@@ -53,7 +49,13 @@ export function VehiclesCard(props: { vehicles: RegisteredVehicle[] }) {
     });
 
     if (json) {
-      asyncTable.remove(tempVehicle.id);
+      const newData = asyncTable.data.filter((v) => v.id !== tempVehicle.id);
+
+      if (newData.length <= 0) {
+        props.vehicles.length = 0;
+      }
+
+      asyncTable.setData(newData);
       vehicleState.setTempId(null);
       closeModal(ModalIds.AlertDeleteVehicle);
     }
@@ -85,20 +87,36 @@ export function VehiclesCard(props: { vehicles: RegisteredVehicle[] }) {
           </Button>
         </header>
 
-        {asyncTable.items.length <= 0 ? (
+        {props.vehicles.length <= 0 ? (
           <p className="text-neutral-700 dark:text-gray-400">{t("noVehicles")}</p>
         ) : (
           <>
-            <SearchArea
-              asyncTable={asyncTable}
-              search={{ search, setSearch }}
-              totalCount={props.vehicles.length}
-            />
+            <TextField
+              label={common("search")}
+              className="w-full relative"
+              name="search"
+              onChange={asyncTable.search.setSearch}
+              value={asyncTable.search.search}
+              placeholder="VIN Number, Plate, Model, ..."
+            >
+              {asyncTable.search.state === "loading" ? (
+                <span className="absolute top-[2.4rem] right-2.5">
+                  <Loader />
+                </span>
+              ) : null}
+            </TextField>
+
+            {asyncTable.search.search &&
+            asyncTable.pagination.totalDataCount !== props.vehicles.length ? (
+              <p className="italic text-base font-semibold">
+                Showing {asyncTable.pagination.totalDataCount} result(s)
+              </p>
+            ) : null}
 
             <Table
               tableState={tableState}
-              features={{ isWithinCardOrModal: true }}
-              data={asyncTable.items.map((vehicle) => ({
+              features={{ isWithinCard: true }}
+              data={asyncTable.data.map((vehicle) => ({
                 id: vehicle.id,
                 rowProps: {
                   title: vehicle.impounded ? t("vehicleImpounded") : undefined,
@@ -164,10 +182,15 @@ export function VehiclesCard(props: { vehicles: RegisteredVehicle[] }) {
       <RegisterVehicleModal
         onCreate={(vehicle) => {
           closeModal(ModalIds.RegisterVehicle);
-          asyncTable.append(vehicle);
+          asyncTable.setData((p) => [vehicle, ...p]);
+          props.vehicles.length += 1;
         }}
-        onUpdate={(previousVehicle, newVehicle) => {
-          asyncTable.update(previousVehicle.id, newVehicle);
+        onUpdate={(old, newW) => {
+          asyncTable.setData((p) => {
+            const idx = p.indexOf(old);
+            p[idx] = newW;
+            return p;
+          });
           closeModal(ModalIds.RegisterVehicle);
         }}
         vehicle={tempVehicle}
@@ -178,7 +201,7 @@ export function VehiclesCard(props: { vehicles: RegisteredVehicle[] }) {
         className="w-[600px]"
         title={t("deleteVehicle")}
         id={ModalIds.AlertDeleteVehicle}
-        description={t.rich("alert_deleteVehicle")}
+        description={t("alert_deleteVehicle")}
         onDeleteClick={handleDelete}
         state={state}
         onClose={() => vehicleState.setTempId(null)}
@@ -188,7 +211,7 @@ export function VehiclesCard(props: { vehicles: RegisteredVehicle[] }) {
         <TransferVehicleModal
           onTransfer={(vehicle) => {
             vehicleState.setTempId(null);
-            asyncTable.remove(vehicle.id);
+            asyncTable.setData((prev) => prev.filter((v) => v.id !== vehicle.id));
           }}
           vehicle={tempVehicle}
         />

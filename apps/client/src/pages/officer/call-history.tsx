@@ -8,7 +8,7 @@ import type { GetServerSideProps } from "next";
 import type { AssignedUnit } from "@snailycad/types";
 import { Table, useAsyncTable, useTableState } from "components/shared/Table";
 import { useGenerateCallsign } from "hooks/useGenerateCallsign";
-import { Full911Call, useDispatchState } from "state/dispatch/dispatch-state";
+import { Full911Call, useDispatchState } from "state/dispatch/dispatchState";
 import { Input, Loader, Button } from "@snailycad/ui";
 import { useModal } from "state/modalState";
 import { ModalIds } from "types/ModalIds";
@@ -28,9 +28,9 @@ import type {
   GetIncidentsData,
 } from "@snailycad/types/api";
 import { useTemporaryItem } from "hooks/shared/useTemporaryItem";
-import { getSelectedTableRows } from "hooks/shared/table/use-table-state";
+import { getSelectedTableRows } from "hooks/shared/table/useTableState";
 import { CallDescription } from "components/dispatch/active-calls/CallDescription";
-import { useCall911State } from "state/dispatch/call-911-state";
+import { useCall911State } from "state/dispatch/call911State";
 
 interface Props extends GetDispatchData {
   data: Get911CallsData;
@@ -38,15 +38,12 @@ interface Props extends GetDispatchData {
 }
 
 export default function CallHistory({ data, incidents, officers, deputies }: Props) {
-  const [search, setSearch] = React.useState("");
-
   const dispatchState = useDispatchState();
   const { hasPermissions } = usePermission();
   const hasManagePermissions = hasPermissions([Permissions.ManageCallHistory], true);
-  const setCurrentlySelectedCall = useCall911State((state) => state.setCurrentlySelectedCall);
+  const { setCurrentlySelectedCall } = useCall911State();
 
   const asyncTable = useAsyncTable({
-    search,
     fetchOptions: {
       path: "/911-calls?includeEnded=true&take=35",
       onResponse: (json: Get911CallsData) => ({ data: json.calls, totalCount: json.totalCount }),
@@ -57,10 +54,10 @@ export default function CallHistory({ data, incidents, officers, deputies }: Pro
 
   const tableState = useTableState({
     pagination: asyncTable.pagination,
-    search: { value: search, setValue: setSearch },
+    search: { value: asyncTable.search.search, setValue: asyncTable.search.setSearch },
   });
   const { state, execute } = useFetch();
-  const [tempCall, callState] = useTemporaryItem(asyncTable.items);
+  const [tempCall, callState] = useTemporaryItem(asyncTable.data);
 
   const { openModal, closeModal } = useModal();
   const t = useTranslations("Calls");
@@ -81,7 +78,7 @@ export default function CallHistory({ data, incidents, officers, deputies }: Pro
   }
 
   async function handlePurge() {
-    const selectedRows = getSelectedTableRows(asyncTable.items, tableState.rowSelection);
+    const selectedRows = getSelectedTableRows(asyncTable.data, tableState.rowSelection);
     if (selectedRows.length <= 0) return;
 
     const { json } = await execute<DeletePurge911CallsData>({
@@ -91,7 +88,9 @@ export default function CallHistory({ data, incidents, officers, deputies }: Pro
     });
 
     if (json) {
-      asyncTable.remove(...selectedRows);
+      const updatedCalls = asyncTable.data.filter((call) => !selectedRows.includes(call.id));
+      asyncTable.setData(updatedCalls);
+
       closeModal(ModalIds.AlertPurgeCalls);
     }
   }
@@ -127,7 +126,10 @@ export default function CallHistory({ data, incidents, officers, deputies }: Pro
           <div className="mb-2">
             <FormField label={common("search")} className="my-2">
               <div className="flex gap-2">
-                <Input onChange={(e) => setSearch(e.target.value)} value={search} />
+                <Input
+                  onChange={(e) => asyncTable.search.setSearch(e.target.value)}
+                  value={asyncTable.search.search}
+                />
                 {hasManagePermissions ? (
                   <Button
                     onPress={() => openModal(ModalIds.AlertPurgeCalls)}
@@ -142,18 +144,16 @@ export default function CallHistory({ data, incidents, officers, deputies }: Pro
             </FormField>
           </div>
 
-          {search && asyncTable.pagination.totalDataCount !== data.totalCount ? (
+          {asyncTable.search.search && asyncTable.pagination.totalDataCount !== data.totalCount ? (
             <p className="italic text-base font-semibold">
-              {common.rich("showingXResults", {
-                amount: asyncTable.pagination.totalDataCount,
-              })}
+              Showing {asyncTable.pagination.totalDataCount} result(s)
             </p>
           ) : null}
 
           <Table
             tableState={tableState}
             features={{ rowSelection: hasManagePermissions }}
-            data={asyncTable.items.map((call) => {
+            data={asyncTable.data.map((call) => {
               const caseNumbers = (call.incidents ?? []).map((i) => `#${i.caseNumber}`).join(", ");
 
               return {
@@ -196,14 +196,22 @@ export default function CallHistory({ data, incidents, officers, deputies }: Pro
 
       <LinkCallToIncidentModal
         onSave={(call) => {
-          asyncTable.update(call.id, call);
+          asyncTable.setData((calls) =>
+            calls.map((c) => {
+              if (c.id === call.id) {
+                return call;
+              }
+
+              return c;
+            }),
+          );
         }}
         incidents={incidents}
         call={tempCall}
       />
       <AlertModal
         title={t("purgeSelectedCalls")}
-        description={t("alert_purgeSelectedCalls", {
+        description={t.rich("alert_purgeSelectedCalls", {
           length: getObjLength(tableState.rowSelection),
         })}
         id={ModalIds.AlertPurgeCalls}

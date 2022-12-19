@@ -54,7 +54,7 @@ export function ManageDeputyModal({ deputy, onClose, onUpdate, onCreate }: Props
     const validatedImage = validateFile(image, helpers);
 
     if (validatedImage) {
-      if (typeof validatedImage !== "string") {
+      if (typeof validatedImage === "object") {
         fd.set("image", validatedImage, validatedImage.name);
       }
     }
@@ -94,9 +94,6 @@ export function ManageDeputyModal({ deputy, onClose, onUpdate, onCreate }: Props
         method: "POST",
         data: fd,
         helpers,
-        headers: {
-          "content-type": "multipart/form-data",
-        },
       });
     }
 
@@ -114,7 +111,7 @@ export function ManageDeputyModal({ deputy, onClose, onUpdate, onCreate }: Props
     callsign: deputy?.callsign ?? "",
     callsign2: deputy?.callsign2 ?? "",
     division: deputy?.divisionId ?? "",
-    badgeNumber: BADGE_NUMBERS ? deputy?.badgeNumber ?? undefined : undefined,
+    badgeNumber: BADGE_NUMBERS ? deputy?.badgeNumber ?? "" : 123,
     image: undefined,
   };
 
@@ -130,14 +127,13 @@ export function ManageDeputyModal({ deputy, onClose, onUpdate, onCreate }: Props
           <form ref={formRef} onSubmit={handleSubmit}>
             <ImageSelectInput image={image} setImage={setImage} />
 
-            <CitizenSuggestionsField
-              autoFocus
-              allowsCustomValue
-              label={t("Leo.citizen")}
-              fromAuthUserOnly
-              labelFieldName="name"
-              valueFieldName="citizenId"
-            />
+            <FormField errorMessage={errors.citizenId} label={t("Leo.citizen")}>
+              <CitizenSuggestionsField
+                fromAuthUserOnly
+                labelFieldName="name"
+                valueFieldName="citizenId"
+              />
+            </FormField>
 
             {BADGE_NUMBERS ? (
               <TextField
@@ -145,11 +141,7 @@ export function ManageDeputyModal({ deputy, onClose, onUpdate, onCreate }: Props
                 label={t("Leo.badgeNumber")}
                 autoFocus
                 name="badgeNumber"
-                onChange={(value) => {
-                  isNaN(parseInt(value))
-                    ? setFieldValue("badgeNumber", value)
-                    : setFieldValue("badgeNumber", parseInt(value));
-                }}
+                onChange={(value) => setFieldValue("badgeNumber", parseInt(value))}
                 value={String(values.badgeNumber)}
               />
             ) : null}

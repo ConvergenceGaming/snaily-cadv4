@@ -1,7 +1,7 @@
 import { useTranslations } from "use-intl";
 import * as React from "react";
 import { useRouter } from "next/router";
-import { Button } from "@snailycad/ui";
+import { Button, TextField } from "@snailycad/ui";
 import { Layout } from "components/Layout";
 import { getSessionUser } from "lib/auth";
 import { getTranslations } from "lib/getTranslation";
@@ -12,15 +12,17 @@ import useFetch from "lib/useFetch";
 import { AdminLayout } from "components/admin/AdminLayout";
 import { getObjLength, isEmpty, requestAll, yesOrNoText } from "lib/utils";
 import dynamic from "next/dynamic";
-import { Table, useAsyncTable, useTableState } from "components/shared/Table";
+import { Table, useTableState } from "components/shared/Table";
 import { useTableDataOfType, useTableHeadersOfType } from "lib/admin/values/values";
-import { OptionsDropdown } from "components/admin/values/import/options-dropdown";
+import { OptionsDropdown } from "components/admin/values/import/OptionsDropdown";
 import { Title } from "components/shared/Title";
 import { AlertModal } from "components/modal/AlertModal";
 import { ModalIds } from "types/ModalIds";
 import { FullDate } from "components/shared/FullDate";
+import { hasValueObj, isBaseValue } from "@snailycad/utils/typeguards";
 import { valueRoutes } from "components/admin/Sidebar/routes";
 import type {
+  DeleteValueByIdData,
   DeleteValuesBulkData,
   GetValuesData,
   PutValuePositionsData,
@@ -35,67 +37,28 @@ import {
   hasTableDataChanged,
 } from "lib/admin/values/utils";
 import type { AccessorKeyColumnDef } from "@tanstack/react-table";
-import { getSelectedTableRows } from "hooks/shared/table/use-table-state";
-import { SearchArea } from "components/shared/search/search-area";
-import { useLoadValuesClientSide } from "hooks/useLoadValuesClientSide";
-import { toastMessage } from "lib/toastMessage";
+import { getSelectedTableRows } from "hooks/shared/table/useTableState";
 
-const ManageValueModal = dynamic(
-  async () => (await import("components/admin/values/ManageValueModal")).ManageValueModal,
-  { ssr: false },
-);
+const ManageValueModal = dynamic(async () => {
+  return (await import("components/admin/values/ManageValueModal")).ManageValueModal;
+});
 
-const AlertDeleteValueModal = dynamic(
-  async () =>
-    (await import("components/admin/values/alert-delete-value-modal")).AlertDeleteValueModal,
-  { ssr: false },
-);
-
-const ImportValuesModal = dynamic(
-  async () =>
-    (await import("components/admin/values/import/import-values-modal")).ImportValuesModal,
-  { ssr: false },
-);
+const ImportValuesModal = dynamic(async () => {
+  return (await import("components/admin/values/import/ImportValuesModal")).ImportValuesModal;
+});
 
 interface Props {
   pathValues: GetValuesData[number];
 }
 
-export default function ValuePath({ pathValues: { totalCount, type, values: data } }: Props) {
+export default function ValuePath({ pathValues: { type, values: data } }: Props) {
+  const [values, setValues] = React.useState<AnyValue[]>(data);
   const router = useRouter();
   const path = (router.query.path as string).toUpperCase().replace("-", "_");
   const routeData = valueRoutes.find((v) => v.type === type);
 
-  const pathsRecord: Partial<Record<ValueType, ValueType[]>> = {
-    [ValueType.DEPARTMENT]: [ValueType.OFFICER_RANK],
-    [ValueType.DIVISION]: [ValueType.DEPARTMENT],
-    [ValueType.QUALIFICATION]: [ValueType.DEPARTMENT],
-    [ValueType.CODES_10]: [ValueType.DEPARTMENT],
-    [ValueType.OFFICER_RANK]: [ValueType.DEPARTMENT],
-    [ValueType.EMERGENCY_VEHICLE]: [ValueType.DEPARTMENT, ValueType.DIVISION],
-  };
-
-  useLoadValuesClientSide({
-    // @ts-expect-error - this is fine
-    valueTypes: pathsRecord[type] ? pathsRecord[type] : [],
-  });
-
   const [search, setSearch] = React.useState("");
-  const asyncTable = useAsyncTable({
-    search,
-    fetchOptions: {
-      onResponse(json: GetValuesData) {
-        const [forType] = json;
-        if (!forType) return { data, totalCount };
-        return { data: forType.values, totalCount: forType.totalCount };
-      },
-      path: `/admin/values/${type.toLowerCase()}?includeAll=false`,
-    },
-    initialData: data,
-    totalCount,
-  });
-
-  const [tempValue, valueState] = useTemporaryItem(asyncTable.items);
+  const [tempValue, valueState] = useTemporaryItem(values);
   const { state, execute } = useFetch();
 
   const { isOpen, openModal, closeModal } = useModal();
@@ -106,8 +69,8 @@ export default function ValuePath({ pathValues: { totalCount, type, values: data
   const extraTableHeaders = useTableHeadersOfType(type);
   const extraTableData = useTableDataOfType(type);
   const tableState = useTableState({
-    pagination: asyncTable.pagination,
     dragDrop: { onListChange: setList },
+    search: { value: search, setValue: setSearch },
   });
 
   const tableHeaders = React.useMemo(() => {
@@ -117,22 +80,27 @@ export default function ValuePath({ pathValues: { totalCount, type, values: data
       { header: t("isDisabled"), accessorKey: "isDisabled" },
       { header: common("createdAt"), accessorKey: "createdAt" },
       { header: common("actions"), accessorKey: "actions" },
-    ] as AccessorKeyColumnDef<{ id: string }, "id">[];
+    ] as AccessorKeyColumnDef<{ id: string }>[];
   }, [extraTableHeaders, t, common]);
 
   async function setList(list: AnyValue[]) {
-    if (!hasTableDataChanged(asyncTable.items, list)) return;
+    if (!hasTableDataChanged(values, list)) return;
 
-    for (const [index, value] of list.entries()) {
-      if ("position" in value) {
-        value.position = index;
-      } else {
-        value.value.position = index;
-      }
+    setValues((p) =>
+      list.map((v, idx) => {
+        const prev = p.find((a) => a.id === v.id);
 
-      asyncTable.move(value.id, index);
-      asyncTable.update(value.id, value);
-    }
+        if (prev) {
+          if ("position" in prev) {
+            prev.position = idx;
+          } else {
+            prev.value.position = idx;
+          }
+        }
+
+        return v;
+      }),
+    );
 
     await execute<PutValuePositionsData>({
       path: `/admin/values/${type.toLowerCase()}/positions`,
@@ -155,6 +123,21 @@ export default function ValuePath({ pathValues: { totalCount, type, values: data
     openModal(ModalIds.ManageValue);
   }
 
+  async function handleDelete() {
+    if (!tempValue) return;
+
+    const { json } = await execute<DeleteValueByIdData>({
+      path: `/admin/values/${type.toLowerCase()}/${tempValue.id}`,
+      method: "DELETE",
+    });
+
+    if (json) {
+      setValues((p) => p.filter((v) => v.id !== tempValue.id));
+      valueState.setTempId(null);
+      closeModal(ModalIds.AlertDeleteValue);
+    }
+  }
+
   async function handleDeleteSelected() {
     const selectedRows = getSelectedTableRows(data, tableState.rowSelection);
 
@@ -164,22 +147,16 @@ export default function ValuePath({ pathValues: { totalCount, type, values: data
       data: selectedRows,
     });
 
-    if (json) {
-      asyncTable.remove(...selectedRows.filter((id) => !json.failedIds.includes(id)));
-
+    if (json && typeof json === "boolean") {
+      setValues((p) => p.filter((v) => !selectedRows.includes(v.id)));
       tableState.setRowSelection({});
       closeModal(ModalIds.AlertDeleteSelectedValues);
-
-      toastMessage({
-        title: "Delete Values",
-        icon: "info",
-        message: t("deletedSelectedValues", {
-          failed: json.failedIds.length,
-          deleted: json.success,
-        }),
-      });
     }
   }
+
+  React.useEffect(() => {
+    setValues(data);
+  }, [data]);
 
   React.useEffect(() => {
     // reset form values
@@ -209,8 +186,7 @@ export default function ValuePath({ pathValues: { totalCount, type, values: data
         <div>
           <Title className="!mb-0">{typeT("MANAGE")}</Title>
           <h2 className="text-lg font-semibold">
-            {t("totalItems")}:{" "}
-            <span className="font-normal">{asyncTable.pagination.totalDataCount}</span>
+            {t("totalItems")}: <span className="font-normal">{values.length}</span>
           </h2>
         </div>
 
@@ -221,14 +197,19 @@ export default function ValuePath({ pathValues: { totalCount, type, values: data
             </Button>
           )}
           <Button onPress={() => openModal(ModalIds.ManageValue)}>{typeT("ADD")}</Button>
-          {/* todo: this will not properly work */}
-          <OptionsDropdown type={type} values={asyncTable.items} />
+          <OptionsDropdown type={type} values={values} />
         </div>
       </header>
 
-      <SearchArea search={{ search, setSearch }} asyncTable={asyncTable} totalCount={totalCount} />
+      <TextField
+        label={common("search")}
+        className="my-2"
+        name="search"
+        value={search}
+        onChange={(value) => setSearch(value)}
+      />
 
-      {asyncTable.items.length <= 0 ? (
+      {values.length <= 0 ? (
         <p className="mt-5">There are no values yet for this type.</p>
       ) : (
         <Table
@@ -237,7 +218,7 @@ export default function ValuePath({ pathValues: { totalCount, type, values: data
           containerProps={{
             style: { overflowY: "auto", maxHeight: "75vh" },
           }}
-          data={asyncTable.items.map((value) => ({
+          data={values.map((value) => ({
             id: value.id,
             rowProps: { value },
             value: getValueStrFromValue(value),
@@ -286,15 +267,29 @@ export default function ValuePath({ pathValues: { totalCount, type, values: data
         />
       )}
 
-      <AlertDeleteValueModal
-        type={type}
-        valueState={[tempValue, valueState]}
-        asyncTable={asyncTable}
+      <AlertModal
+        id={ModalIds.AlertDeleteValue}
+        description={t.rich("alert_deleteValue", {
+          value:
+            tempValue &&
+            (isBaseValue(tempValue)
+              ? tempValue.value
+              : hasValueObj(tempValue)
+              ? tempValue.value.value
+              : tempValue.title),
+        })}
+        onDeleteClick={handleDelete}
+        title={typeT("DELETE")}
+        state={state}
+        onClose={() => {
+          // wait for animation to play out
+          setTimeout(() => valueState.setTempId(null), 100);
+        }}
       />
 
       <AlertModal
         id={ModalIds.AlertDeleteSelectedValues}
-        description={t("alert_deleteSelectedValues", {
+        description={t.rich("alert_deleteSelectedValues", {
           length: getObjLength(tableState.rowSelection),
         })}
         onDeleteClick={handleDeleteSelected}
@@ -304,15 +299,20 @@ export default function ValuePath({ pathValues: { totalCount, type, values: data
 
       <ManageValueModal
         onCreate={(value) => {
-          asyncTable.append(value);
+          setValues((p) => [value, ...p]);
         }}
-        onUpdate={(previousValue, newValue) => {
-          asyncTable.update(previousValue.id, newValue);
+        onUpdate={(old, newV) => {
+          setValues((p) => {
+            const idx = p.indexOf(old);
+            p[idx] = newV;
+
+            return p;
+          });
         }}
         value={tempValue}
         type={type}
       />
-      <ImportValuesModal onImport={(data) => asyncTable.append(...data)} type={type} />
+      <ImportValuesModal onImport={(data) => setValues((p) => [...data, ...p])} type={type} />
     </AdminLayout>
   );
 }
@@ -320,21 +320,24 @@ export default function ValuePath({ pathValues: { totalCount, type, values: data
 export const getServerSideProps: GetServerSideProps = async ({ locale, req, query }) => {
   const path = (query.path as string).replace("-", "_") as Lowercase<ValueType>;
 
+  const pathsRecord: Partial<Record<Lowercase<ValueType>, string>> = {
+    department: "officer_rank",
+    division: "department",
+    qualification: "department",
+    codes_10: "department",
+    officer_rank: "department",
+  };
+
+  const paths = pathsRecord[path];
+  const pathsStr = paths ? `?paths=${paths}` : "";
+
   const user = await getSessionUser(req);
-  const [pathValues] = await requestAll(req, [
-    [
-      `/admin/values/${path}?includeAll=false`,
-      {
-        totalCount: 0,
-        values: [],
-        type: path.toUpperCase(),
-      },
-    ],
-  ]);
+  const [values] = await requestAll(req, [[`/admin/values/${path}${pathsStr}`, []]]);
 
   return {
     props: {
-      pathValues: pathValues?.[0] ?? { type: path, values: [] },
+      values,
+      pathValues: values?.[0] ?? { type: path, values: [] },
       session: user,
       messages: {
         ...(await getTranslations(["admin", "values", "common"], user?.locale ?? locale)),

@@ -1,24 +1,15 @@
-import { InfoCircleFill, X } from "react-bootstrap-icons";
+import { X } from "react-bootstrap-icons";
 import toast, { type ToastOptions, ErrorIcon, CheckmarkIcon } from "react-hot-toast";
 
 interface Options extends ToastOptions {
   message: string | React.ReactNode;
   title?: string;
-  icon?: "success" | "error" | "info" | null;
+  icon?: "success" | "error" | null;
 }
 
 export function toastMessage(options: Options) {
   const { title, message, icon, ...rest } = options;
-  const Icon =
-    icon !== null ? (
-      icon === "success" ? (
-        <CheckmarkIcon />
-      ) : icon === "info" ? (
-        <InfoCircleFill className="fill-current text-blue-500 drop-shadow-sm w-5 h-5" />
-      ) : (
-        <ErrorIcon />
-      )
-    ) : null;
+  const Icon = icon !== null ? icon === "success" ? <CheckmarkIcon /> : <ErrorIcon /> : null;
 
   return toast.custom((t) => {
     return (

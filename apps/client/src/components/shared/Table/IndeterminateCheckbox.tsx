@@ -32,7 +32,7 @@ export function IndeterminateCheckbox({
   );
 }
 
-export function createTableCheckboxColumn<TData extends RowData>(): ColumnDef<TData, keyof TData> {
+export function createTableCheckboxColumn<TData extends RowData>(): ColumnDef<TData> {
   return {
     id: "select",
     header: ({ table }) => (

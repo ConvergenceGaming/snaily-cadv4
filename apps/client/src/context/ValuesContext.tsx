@@ -5,6 +5,7 @@ import type {
   DriversLicenseCategoryValue,
   EmployeeValue,
   PenalCode,
+  PenalCodeGroup,
   StatusValue,
   Value,
   VehicleValue,
@@ -36,6 +37,7 @@ export interface ValueContext {
   vehicleFlag: ContextValue;
   citizenFlag: ContextValue;
   penalCode: ContextValue<PenalCode>;
+  penalCodeGroups: PenalCodeGroup[];
   department: ContextValue<DepartmentValue>;
   driverslicenseCategory: ContextValue<DriversLicenseCategoryValue>;
   impoundLot: ContextValue;
@@ -78,8 +80,11 @@ export function ValuesProvider({ initialData, children, router }: ProviderProps)
       const valuesForType = values.find((v) => v.type === valueType) ?? {
         values: [],
         type: valueType,
-        totalCount: 0,
       };
+
+      if (valuesForType.type === "PENAL_CODE" && valuesForType.groups) {
+        obj.penalCodeGroups = valuesForType.groups;
+      }
 
       return { ...obj, [normalizeValue(valueType)]: removeDisabledValues(valuesForType) };
     }, {} as ValueContext);

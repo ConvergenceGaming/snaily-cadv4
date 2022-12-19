@@ -39,22 +39,12 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       onPressStart,
       onPressEnd,
       onPressUp,
-      excludeFromTabOrder,
       ...rest
     },
     ref,
   ) => {
     const { buttonProps } = useButton(
-      {
-        onPress,
-        onPressChange,
-        onPressStart,
-        onPressEnd,
-        onPressUp,
-        isDisabled,
-        excludeFromTabOrder,
-        ...rest,
-      },
+      { onPress, onPressChange, onPressStart, onPressEnd, onPressUp, isDisabled, ...rest },
       ref as any,
     );
 

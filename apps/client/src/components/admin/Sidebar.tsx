@@ -27,7 +27,7 @@ export function AdminSidebar() {
   }
 
   function isValueActive(type: string) {
-    return router.asPath === `/admin/values/${type.toLowerCase()}`;
+    return router.asPath.endsWith(type.toLowerCase());
   }
 
   function makeType(t: string) {

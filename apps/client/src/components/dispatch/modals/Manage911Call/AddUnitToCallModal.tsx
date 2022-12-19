@@ -1,3 +1,4 @@
+import * as React from "react";
 import { useTranslations } from "use-intl";
 import { Loader, Button } from "@snailycad/ui";
 import { Modal } from "components/modal/Modal";
@@ -7,14 +8,14 @@ import { Form, Formik } from "formik";
 import { FormField } from "components/form/FormField";
 import useFetch from "lib/useFetch";
 import { Select } from "components/form/Select";
-import { useDispatchState } from "state/dispatch/dispatch-state";
+import { useDispatchState } from "state/dispatch/dispatchState";
 import { makeUnitName } from "lib/utils";
 import type { CombinedLeoUnit, EmsFdDeputy } from "@snailycad/types";
 import { isUnitCombined } from "@snailycad/utils";
 import { useGenerateCallsign } from "hooks/useGenerateCallsign";
 import { Toggle } from "components/form/Toggle";
 import type { Put911CallByIdData } from "@snailycad/types/api";
-import { useCall911State } from "state/dispatch/call-911-state";
+import { useCall911State } from "state/dispatch/call911State";
 
 interface Props {
   onClose?(): void;

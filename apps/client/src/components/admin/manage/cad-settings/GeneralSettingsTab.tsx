@@ -34,7 +34,7 @@ export function GeneralSettingsTab() {
     const validatedImage = validateFile(logo, helpers);
 
     if (validatedImage) {
-      if (typeof validatedImage !== "string") {
+      if (typeof validatedImage === "object") {
         fd.set("image", validatedImage, validatedImage.name);
       }
     }
@@ -55,9 +55,6 @@ export function GeneralSettingsTab() {
           method: "POST",
           data: fd,
           helpers,
-          headers: {
-            "content-type": "multipart/form-data",
-          },
         });
 
         json.logoId = logoId;

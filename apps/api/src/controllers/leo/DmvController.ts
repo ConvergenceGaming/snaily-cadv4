@@ -6,12 +6,11 @@ import { ContentType, Description, Get, Post } from "@tsed/schema";
 import {
   AcceptDeclineType,
   ACCEPT_DECLINE_TYPES,
-} from "controllers/admin/manage/manage-units-controller";
+} from "controllers/admin/manage/AdminManageUnitsController";
 import { prisma } from "lib/prisma";
 import { IsAuth } from "middlewares/IsAuth";
 import { UsePermissions, Permissions } from "middlewares/UsePermissions";
 import type * as APITypes from "@snailycad/types/api";
-import { IsFeatureEnabled, Feature } from "middlewares/is-enabled";
 
 const vehicleInclude = {
   model: { include: { value: true } },
@@ -23,7 +22,6 @@ const vehicleInclude = {
 @Controller("/leo/dmv")
 @UseBeforeEach(IsAuth)
 @ContentType("application/json")
-@IsFeatureEnabled({ feature: Feature.DMV })
 export class DmvController {
   @Get("/")
   @Description("Get pending vehicles for the dmv")

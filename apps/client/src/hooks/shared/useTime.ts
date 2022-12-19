@@ -1,14 +1,12 @@
 import * as React from "react";
 import format from "date-fns/format";
-import { useMounted } from "@casper124578/useful";
 
 export function useTime() {
   const ref = React.useRef<HTMLSpanElement>(null);
-  const isMounted = useMounted();
 
   React.useEffect(() => {
     function setTime() {
-      if (ref.current && isMounted) {
+      if (ref.current) {
         ref.current.textContent = format(new Date(), "HH:mm:ss - yyyy-MM-dd");
       }
     }
@@ -19,7 +17,7 @@ export function useTime() {
     return () => {
       clearInterval(interval);
     };
-  }, [isMounted]);
+  }, []);
 
   return ref;
 }

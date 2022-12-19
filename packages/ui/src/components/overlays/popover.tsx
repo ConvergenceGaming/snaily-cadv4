@@ -51,7 +51,7 @@ export function Popover(props: Props) {
   return (
     <div ref={outerRef}>
       <OverlayContainer>
-        <FocusScope contain>
+        <FocusScope restoreFocus contain>
           <div
             {...mergeProps(overlayProps, modalProps, dialogProps)}
             ref={popoverRef}

@@ -1,3 +1,4 @@
+import * as React from "react";
 import { useTranslations } from "use-intl";
 import { Loader, Button } from "@snailycad/ui";
 import { Modal } from "components/modal/Modal";
@@ -7,10 +8,10 @@ import { Form, Formik } from "formik";
 import { FormField } from "components/form/FormField";
 import useFetch from "lib/useFetch";
 import { Select } from "components/form/Select";
-import type { ActiveOfficer } from "state/leo-state";
+import type { ActiveOfficer } from "state/leoState";
 import { useValues } from "context/ValuesContext";
-import { useDispatchState } from "state/dispatch/dispatch-state";
-import type { ActiveDeputy } from "state/ems-fd-state";
+import { useDispatchState } from "state/dispatch/dispatchState";
+import type { ActiveDeputy } from "state/emsFdState";
 import { makeUnitName } from "lib/utils";
 import { CombinedLeoUnit, StatusValueType, StatusValue } from "@snailycad/types";
 import { classNames } from "lib/classNames";

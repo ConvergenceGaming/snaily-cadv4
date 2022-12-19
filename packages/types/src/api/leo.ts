@@ -61,22 +61,6 @@ export interface GetDMVPendingVehiclesData {
  */
 export type PostDMVVehiclesData = Types.RegisteredVehicle;
 
-/** bureau of firearms */
-/**
- * @method GET
- * @route /leo/bureau-of-firearms
- */
-export interface GetPendingBOFWeapons {
-  weapons: Types.Weapon[];
-  totalCount: number;
-}
-
-/**
- * @method POST
- * @route /leo/bureau-of-firearms/:vehicleId
- */
-export type PostBOFData = Types.Weapon;
-
 /** jail */
 /**
  * @method GET

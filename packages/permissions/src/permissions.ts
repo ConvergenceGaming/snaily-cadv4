@@ -17,12 +17,10 @@ export enum Permissions {
   ViewCustomFields = "ViewCustomFields",
   ManageCustomFields = "ManageCustomFields",
   ManageDMV = "ManageDMV",
-  ManageBureauOfFirearms = "ManageBureauOfFirearms",
   DeleteCitizenRecords = "DeleteCitizenRecords",
   ManageCustomRoles = "ManageCustomRoles",
   ViewCustomRoles = "ViewCustomRoles",
   ManageWarrants = "ManageWarrants",
-  ManageAwardsAndQualifications = "ManageAwardsAndQualifications",
 
   Dispatch = "Dispatch",
   EmsFd = "EmsFd",
@@ -94,7 +92,6 @@ export enum Permissions {
   ManageValueQualification = "ManageValueQualification",
   ManageValueCallType = "ManageValueCallType",
   ManageValueAddress = "ManageValueAddress",
-  ManageValueEmergencyVehicle = "ManageValueEmergencyVehicle",
 
   // other
   UsePersonalApiToken = "UsePersonalApiToken",

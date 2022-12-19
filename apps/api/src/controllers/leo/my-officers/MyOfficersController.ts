@@ -3,14 +3,14 @@ import { Controller, UseBeforeEach, PlatformMulterFile, MultipartFile } from "@t
 import { ContentType, Delete, Get, Post, Put } from "@tsed/schema";
 import { CREATE_OFFICER_SCHEMA } from "@snailycad/schemas";
 import { QueryParams, BodyParams, Context, PathParams } from "@tsed/platform-params";
-import { NotFound } from "@tsed/exceptions";
+import { BadRequest, NotFound } from "@tsed/exceptions";
 import { prisma } from "lib/prisma";
 import { IsAuth } from "middlewares/IsAuth";
-import { getImageWebPPath, validateImgurURL } from "utils/images/image";
-import { cad, User, MiscCadSettings, Feature, CadFeature } from "@prisma/client";
+import { getImageWebPPath, validateImgurURL } from "utils/image";
+import { User, MiscCadSettings, Feature, CadFeature } from "@prisma/client";
 import { validateSchema } from "lib/validateSchema";
 import { handleWhitelistStatus } from "lib/leo/handleWhitelistStatus";
-import { manyToManyHelper } from "utils/manyToMany";
+import { getLastOfArray, manyToManyHelper } from "utils/manyToMany";
 import { Permissions, UsePermissions } from "middlewares/UsePermissions";
 import { updateOfficerDivisionsCallsigns, validateMaxDepartmentsEachPerUser } from "lib/leo/utils";
 import { isFeatureEnabled } from "lib/cad";
@@ -21,8 +21,7 @@ import { leoProperties } from "lib/leo/activeOfficer";
 import { AllowedFileExtension, allowedFileExtensions } from "@snailycad/config";
 import { ExtendedBadRequest } from "src/exceptions/ExtendedBadRequest";
 import type * as APITypes from "@snailycad/types/api";
-import { createOfficer } from "./create-officer";
-import generateBlurPlaceholder from "utils/images/generate-image-blur-data";
+import type { cad } from "@snailycad/types";
 
 @Controller("/leo")
 @UseBeforeEach(IsAuth)
@@ -55,7 +54,117 @@ export class MyOfficersController {
     @Context("user") user: User,
     @Context("cad") cad: cad & { features: CadFeature[]; miscCadSettings: MiscCadSettings },
   ): Promise<APITypes.PostMyOfficersData> {
-    return createOfficer({ body, user, cad });
+    const data = validateSchema(CREATE_OFFICER_SCHEMA, body);
+
+    const checkCitizenUserId = shouldCheckCitizenUserId({ cad, user });
+    const citizen = await prisma.citizen.findFirst({
+      where: {
+        id: data.citizenId,
+        userId: checkCitizenUserId ? user.id : undefined,
+      },
+    });
+
+    if (!citizen) {
+      throw new NotFound("citizenNotFound");
+    }
+
+    const divisionsEnabled = isFeatureEnabled({
+      feature: Feature.DIVISIONS,
+      defaultReturn: true,
+      features: cad.features,
+    });
+
+    if (divisionsEnabled) {
+      if (!data.divisions || data.divisions.length <= 0) {
+        throw new ExtendedBadRequest({ divisions: "Must have at least 1 item" });
+      }
+
+      await validateMaxDivisionsPerUnit(data.divisions, cad);
+      await validateMaxDepartmentsEachPerUser({
+        departmentId: data.department,
+        userId: user.id,
+        cad,
+        type: "officer",
+      });
+    }
+
+    const officerCount = await prisma.officer.count({
+      where: { userId: user.id },
+    });
+
+    if (
+      cad.miscCadSettings.maxOfficersPerUser &&
+      officerCount >= cad.miscCadSettings.maxOfficersPerUser
+    ) {
+      throw new BadRequest("maxLimitOfficersPerUserReached");
+    }
+
+    const isBadgeNumbersEnabled = isFeatureEnabled({
+      feature: Feature.BADGE_NUMBERS,
+      defaultReturn: true,
+      features: cad.features,
+    });
+
+    const { defaultDepartment, department, whitelistStatusId } = await handleWhitelistStatus(
+      data.department,
+      null,
+    );
+
+    await validateDuplicateCallsigns({
+      callsign1: data.callsign,
+      callsign2: data.callsign2,
+      type: "leo",
+    });
+
+    const incremental = await findNextAvailableIncremental({ type: "leo" });
+    let officer: any = await prisma.officer.create({
+      data: {
+        callsign: data.callsign,
+        callsign2: data.callsign2,
+        userId: user.id,
+        departmentId: defaultDepartment ? defaultDepartment.id : data.department,
+        rankId:
+          (defaultDepartment
+            ? defaultDepartment.defaultOfficerRankId
+            : department.defaultOfficerRankId) || undefined,
+        badgeNumber: isBadgeNumbersEnabled ? data.badgeNumber : undefined,
+        citizenId: citizen.id,
+        imageId: validateImgurURL(data.image),
+        whitelistStatusId,
+        incremental,
+      },
+      include: leoProperties,
+    });
+
+    if (divisionsEnabled) {
+      const disconnectConnectArr = manyToManyHelper([], data.divisions as string[]);
+
+      await updateOfficerDivisionsCallsigns({
+        officerId: officer.id,
+        disconnectConnectArr,
+        callsigns: data.callsigns,
+      });
+
+      officer = getLastOfArray(
+        await prisma.$transaction(
+          disconnectConnectArr.map((v, idx) =>
+            prisma.officer.update({
+              where: { id: officer.id },
+              data: { divisions: v },
+              include:
+                idx + 1 === disconnectConnectArr.length
+                  ? {
+                      ...leoProperties,
+                      qualifications: { include: { qualification: { include: { value: true } } } },
+                    }
+                  : undefined,
+            }),
+          ),
+        ),
+      );
+    }
+
+    return officer as APITypes.PostMyOfficersData;
   }
 
   @Put("/:id")
@@ -67,7 +176,7 @@ export class MyOfficersController {
     @PathParams("id") officerId: string,
     @BodyParams() body: unknown,
     @Context("user") user: User,
-    @Context("cad") cad: cad & { features: CadFeature[]; miscCadSettings: MiscCadSettings },
+    @Context("cad") cad: cad & { miscCadSettings: MiscCadSettings },
   ): Promise<APITypes.PutMyOfficerByIdData> {
     const data = validateSchema(CREATE_OFFICER_SCHEMA, body);
 
@@ -153,10 +262,6 @@ export class MyOfficersController {
       features: cad.features,
     });
 
-    if (isBadgeNumbersEnabled && !data.badgeNumber) {
-      throw new ExtendedBadRequest({ badgeNumber: "Required" });
-    }
-
     const rank = officer.rankId
       ? undefined
       : (defaultDepartment
@@ -166,7 +271,6 @@ export class MyOfficersController {
     const incremental = officer.incremental
       ? undefined
       : await findNextAvailableIncremental({ type: "leo" });
-    const validatedImageURL = validateImgurURL(data.image);
 
     const updatedOfficer = await prisma.officer.update({
       where: {
@@ -177,8 +281,7 @@ export class MyOfficersController {
         callsign2: data.callsign2,
         badgeNumber: isBadgeNumbersEnabled ? data.badgeNumber : undefined,
         citizenId: citizen.id,
-        imageId: validatedImageURL,
-        imageBlurData: await generateBlurPlaceholder(validatedImageURL),
+        imageId: validateImgurURL(data.image),
         departmentId: defaultDepartment ? defaultDepartment.id : data.department,
         rankId: rank,
         whitelistStatusId,
@@ -281,24 +384,13 @@ export class MyOfficersController {
     const image = await getImageWebPPath({
       buffer: file.buffer,
       pathType: "units",
-      id: `${officer.id}-${file.originalname.split(".")[0]}`,
+      id: officer.id,
     });
-
-    const previousImage = officer.imageId
-      ? `${process.cwd()}/public/units/${officer.imageId}`
-      : undefined;
-
-    if (previousImage) {
-      await fs.rm(previousImage, { force: true });
-    }
 
     const [data] = await Promise.all([
       prisma.officer.update({
         where: { id: officer.id },
-        data: {
-          imageId: image.fileName,
-          imageBlurData: await generateBlurPlaceholder(image),
-        },
+        data: { imageId: image.fileName },
         select: { imageId: true },
       }),
       fs.writeFile(image.path, image.buffer),
@@ -308,10 +400,7 @@ export class MyOfficersController {
   }
 }
 
-export async function validateMaxDivisionsPerUnit(
-  arr: unknown[],
-  cad: (cad & { miscCadSettings: MiscCadSettings }) | null,
-) {
+export async function validateMaxDivisionsPerUnit(arr: unknown[], cad: cad | null) {
   const { maxDivisionsPerOfficer } = cad?.miscCadSettings ?? {};
 
   if (maxDivisionsPerOfficer && arr.length > maxDivisionsPerOfficer) {

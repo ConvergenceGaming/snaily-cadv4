@@ -16,8 +16,7 @@ import type {
 } from "@snailycad/types/api";
 
 import dynamic from "next/dynamic";
-import { useCall911State } from "state/dispatch/call-911-state";
-import shallow from "zustand/shallow";
+import { useCall911State } from "state/dispatch/call911State";
 const EnableSignal100Modal = dynamic(
   async () => (await import("./modals/EnableSignal100Modal")).EnableSignal100Modal,
 );
@@ -42,13 +41,7 @@ export function DispatchModalButtons() {
   const { user } = useAuth();
   const { ACTIVE_DISPATCHERS, TONES } = useFeatureEnabled();
   const { openModal } = useModal();
-  const { calls, setCalls } = useCall911State(
-    (state) => ({
-      calls: state.calls,
-      setCalls: state.setCalls,
-    }),
-    shallow,
-  );
+  const { calls, setCalls } = useCall911State();
 
   const isActive = ACTIVE_DISPATCHERS ? activeDispatchers.some((v) => v.userId === user?.id) : true;
 

@@ -44,7 +44,6 @@ function useGetUserOfficers() {
 export default function MyOfficersLogs({ logs: data }: Props) {
   const asyncTable = useAsyncTable({
     fetchOptions: {
-      pageSize: 25,
       onResponse: (json: GetMyOfficersLogsData) => ({
         data: json.logs,
         totalCount: json.totalCount,
@@ -81,13 +80,8 @@ export default function MyOfficersLogs({ logs: data }: Props) {
             <FormField label="Group By Officer">
               <Select
                 isClearable
-                onChange={(e) => {
-                  asyncTable.setFilters((prev) => ({
-                    ...prev,
-                    officerId: e.target.value,
-                  }));
-                }}
-                value={asyncTable.filters?.officerId ?? null}
+                onChange={(e) => asyncTable.search.setExtraParams({ officerId: e.target.value })}
+                value={asyncTable.search.extraParams.officerId}
                 values={Object.entries(officerNames).map(([id, name]) => ({
                   label: name,
                   value: id,

@@ -21,7 +21,6 @@ import { VersionDisplay } from "components/shared/VersionDisplay";
 import type { PostRegisterUserData } from "@snailycad/types/api";
 
 import { GoogleReCaptchaProvider, useGoogleReCaptcha } from "react-google-recaptcha-v3";
-import { toastMessage } from "lib/toastMessage";
 
 const INITIAL_VALUES = {
   username: "",
@@ -42,10 +41,9 @@ const hasGoogleCaptchaSiteKey =
 function Register({ cad }: Props) {
   const router = useRouter();
   const { state, execute } = useFetch();
-  const t = useTranslations();
+  const t = useTranslations("Auth");
   const { ALLOW_REGULAR_LOGIN } = useFeatureEnabled();
   const validate = handleValidate(AUTH_SCHEMA);
-  const common = useTranslations();
 
   const { executeRecaptcha } = useGoogleReCaptcha();
 
@@ -64,22 +62,12 @@ function Register({ cad }: Props) {
     }
 
     const captchaResult = await executeRecaptcha?.("registerUserAccount");
-    const { json, error } = await execute<PostRegisterUserData, typeof INITIAL_VALUES>({
+    const { json } = await execute<PostRegisterUserData, typeof INITIAL_VALUES>({
       path: "/auth/register",
       data: { ...values, captchaResult },
       method: "POST",
       helpers,
-      noToast: "whitelistPending",
     });
-
-    if (error === "whitelistPending") {
-      toastMessage({
-        icon: "info",
-        message: t("Errors.whitelistPending"),
-        title: common("Common.information"),
-        duration: Infinity,
-      });
-    }
 
     if (json.isOwner) {
       router.push("/admin/manage/cad-settings");
@@ -91,7 +79,7 @@ function Register({ cad }: Props) {
   if (!ALLOW_REGULAR_LOGIN) {
     return (
       <div className="fixed inset-0 grid bg-transparent place-items-center">
-        <Title renderLayoutTitle={false}>{t("Auth.login")}</Title>
+        <Title renderLayoutTitle={false}>{t("login")}</Title>
 
         <span aria-label="loading...">
           <Loader className="w-14 h-14 border-[3px]" />
@@ -102,7 +90,7 @@ function Register({ cad }: Props) {
 
   return (
     <>
-      <Title renderLayoutTitle={false}>{t("Auth.register")}</Title>
+      <Title renderLayoutTitle={false}>{t("register")}</Title>
 
       <main className="flex flex-col items-center justify-center pt-20">
         <AuthScreenImages />
@@ -113,7 +101,7 @@ function Register({ cad }: Props) {
             <Form className="w-full max-w-md p-6 bg-gray-100 rounded-lg shadow-md dark:bg-primary dark:border dark:border-secondary z-10">
               <header className="mb-3">
                 <h1 className="text-3xl font-bold text-gray-800 dark:text-white">
-                  {t("Auth.register")}
+                  {t("register")}
                 </h1>
 
                 {ALLOW_REGULAR_LOGIN ? (
@@ -121,14 +109,14 @@ function Register({ cad }: Props) {
                     href="/auth/login"
                     className="inline-block mt-2 underline text-neutral-700 dark:text-gray-200"
                   >
-                    {t("Auth.hasAccount")}
+                    {t("hasAccount")}
                   </Link>
                 ) : null}
               </header>
 
               <TextField
                 errorMessage={errors.username}
-                label={t("Auth.username")}
+                label={t("username")}
                 name="username"
                 onChange={(value) => setFieldValue("username", value)}
               />
@@ -145,7 +133,7 @@ function Register({ cad }: Props) {
               <TextField
                 type="password"
                 errorMessage={errors.password}
-                label={t("Auth.password")}
+                label={t("password")}
                 name="password"
                 onChange={(value) => setFieldValue("password", value)}
               />
@@ -153,7 +141,7 @@ function Register({ cad }: Props) {
               <TextField
                 type="password"
                 errorMessage={errors.confirmPassword}
-                label={t("Auth.confirmPassword")}
+                label={t("confirmPassword")}
                 name="confirmPassword"
                 onChange={(value) => setFieldValue("confirmPassword", value)}
               />
@@ -161,7 +149,7 @@ function Register({ cad }: Props) {
               {cad.registrationCode ? (
                 <TextField
                   errorMessage={errors.registrationCode}
-                  label={t("Auth.registrationCode")}
+                  label={t("registrationCode")}
                   name="registrationCode"
                   onChange={(value) => setFieldValue("registrationCode", value)}
                 />
@@ -186,21 +174,12 @@ function Register({ cad }: Props) {
                 type="submit"
                 className="flex items-center justify-center w-full py-1.5 mt-5"
               >
-                {state === "loading" ? <Loader className="mr-3" /> : null} {t("Auth.register")}
+                {state === "loading" ? <Loader className="mr-3" /> : null} {t("register")}
               </Button>
             </Form>
           )}
         </Formik>
         <VersionDisplay cad={cad} />
-
-        <a
-          rel="noreferrer"
-          target="_blank"
-          className="mt-3 md:mt-0 relative md:absolute md:bottom-10 md:left-1/2 md:-translate-x-1/2 underline text-lg transition-colors text-neutral-700 hover:text-neutral-900 dark:text-gray-400 dark:hover:text-white mx-2 block cursor-pointer z-50"
-          href="https://snailycad.caspertheghost.me"
-        >
-          SnailyCAD
-        </a>
       </main>
     </>
   );

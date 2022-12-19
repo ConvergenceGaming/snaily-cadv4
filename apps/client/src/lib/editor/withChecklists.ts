@@ -1,5 +1,5 @@
 import { Editor, Transforms, Range, Point, Element as SlateElement } from "slate";
-import type { SlateEditor } from "components/editor/editor";
+import type { SlateEditor } from "components/editor/Editor";
 
 export function withChecklists(editor: SlateEditor) {
   const { deleteBackward } = editor;
@@ -15,7 +15,6 @@ export function withChecklists(editor: SlateEditor) {
 
       if (match) {
         const [, path] = match;
-
         const start = Editor.start(editor, path);
 
         if (Point.equals(selection.anchor, start)) {

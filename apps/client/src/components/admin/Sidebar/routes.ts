@@ -28,7 +28,6 @@ export const managementRoutes: SidebarRoute[] = [
       Permissions.ManageUnits,
       Permissions.DeleteUnits,
       Permissions.ManageUnitCallsigns,
-      Permissions.ManageAwardsAndQualifications,
     ],
   },
   {
@@ -100,10 +99,6 @@ export const valueRoutes: SidebarRoute[] = [
   {
     type: ValueType.DRIVERSLICENSE_CATEGORY,
     permissions: [Permissions.ManageValueDLCategory],
-  },
-  {
-    type: ValueType.EMERGENCY_VEHICLE,
-    permissions: [Permissions.ManageValueEmergencyVehicle],
   },
   {
     type: ValueType.ETHNICITY,

@@ -8,17 +8,21 @@ import {
 } from "@snailycad/types";
 import { Loader, Button, SelectField } from "@snailycad/ui";
 import { FormField } from "components/form/FormField";
+import { InputSuggestions } from "components/form/inputs/InputSuggestions";
 import { Select } from "components/form/Select";
 import { Modal } from "components/modal/Modal";
 import { useModal } from "state/modalState";
 import { useValues } from "context/ValuesContext";
 import { Form, Formik } from "formik";
+import { useFeatureEnabled } from "hooks/useFeatureEnabled";
+import { useImageUrl } from "hooks/useImageUrl";
 import { handleValidate } from "lib/handleValidate";
 import useFetch from "lib/useFetch";
 import { useTranslations } from "next-intl";
 import { ModalIds } from "types/ModalIds";
+import type { NameSearchResult } from "state/search/nameSearchState";
 import type { PostLicenseExamsData, PutLicenseExamByIdData } from "@snailycad/types/api";
-import { CitizenSuggestionsField } from "components/shared/CitizenSuggestionsField";
+import Image from "next/image";
 
 interface Props {
   exam: LicenseExam | null;
@@ -32,6 +36,8 @@ export function ManageExamModal({ exam, onClose, onCreate, onUpdate }: Props) {
   const t = useTranslations();
   const { isOpen, closeModal } = useModal();
   const { state, execute } = useFetch();
+  const { makeImageUrl } = useImageUrl();
+  const { SOCIAL_SECURITY_NUMBERS } = useFeatureEnabled();
   const { driverslicenseCategory, license } = useValues();
 
   const PASS_FAIL_VALUES = [
@@ -105,10 +111,9 @@ export function ManageExamModal({ exam, onClose, onCreate, onUpdate }: Props) {
       className="min-w-[600px]"
     >
       <Formik validate={validate} onSubmit={onSubmit} initialValues={INITIAL_VALUES}>
-        {({ handleChange, setFieldValue, errors, values }) => (
+        {({ handleChange, setFieldValue, setValues, errors, values }) => (
           <Form>
             <SelectField
-              autoFocus
               errorMessage={errors.type}
               label={common("type")}
               isDisabled={!!exam}
@@ -121,13 +126,49 @@ export function ManageExamModal({ exam, onClose, onCreate, onUpdate }: Props) {
               onSelectionChange={(key) => setFieldValue("type", key)}
             />
 
-            <CitizenSuggestionsField
-              fromAuthUserOnly={false}
-              label={common("citizen")}
-              isDisabled={!!exam}
-              labelFieldName="citizenName"
-              valueFieldName="citizenId"
-            />
+            <FormField errorMessage={errors.citizenId} label={common("citizen")}>
+              <InputSuggestions<NameSearchResult>
+                onSuggestionPress={(suggestion) => {
+                  setValues({
+                    ...values,
+                    citizenName: `${suggestion.name} ${suggestion.surname}`,
+                    citizenId: suggestion.id,
+                  });
+                }}
+                Component={({ suggestion }) => (
+                  <div className="flex items-center">
+                    {suggestion.imageId ? (
+                      <Image
+                        className="rounded-md w-[30px] h-[30px] object-cover mr-2"
+                        draggable={false}
+                        src={makeImageUrl("citizens", suggestion.imageId)!}
+                        loading="lazy"
+                        width={30}
+                        height={30}
+                        alt={`${suggestion.name} ${suggestion.surname}`}
+                      />
+                    ) : null}
+                    <p>
+                      {suggestion.name} {suggestion.surname}{" "}
+                      {SOCIAL_SECURITY_NUMBERS && suggestion.socialSecurityNumber ? (
+                        <>(SSN: {suggestion.socialSecurityNumber})</>
+                      ) : null}
+                    </p>
+                  </div>
+                )}
+                options={{
+                  apiPath: "/search/name",
+                  method: "POST",
+                  dataKey: "name",
+                }}
+                inputProps={{
+                  value: values.citizenName,
+                  name: "citizenName",
+                  onChange: handleChange,
+                  disabled: !!exam,
+                }}
+              />
+            </FormField>
 
             <FormField errorMessage={errors.license} label={t("Leo.license")}>
               <Select
@@ -168,6 +209,7 @@ export function ManageExamModal({ exam, onClose, onCreate, onUpdate }: Props) {
               isClearable
               label={t("licenseExams.theoryExam")}
               errorMessage={errors.theoryExam}
+              isDisabled={!!exam}
               name="theoryExam"
               options={PASS_FAIL_VALUES}
               selectedKey={values.theoryExam}
@@ -178,6 +220,7 @@ export function ManageExamModal({ exam, onClose, onCreate, onUpdate }: Props) {
               isClearable
               label={t("licenseExams.practiceExam")}
               errorMessage={errors.practiceExam}
+              isDisabled={!!exam}
               name="practiceExam"
               options={PASS_FAIL_VALUES}
               selectedKey={values.practiceExam}

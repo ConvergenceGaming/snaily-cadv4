@@ -71,7 +71,10 @@ export function UserApiTokenTab() {
       <Formik onSubmit={onSubmit} initialValues={INITIAL_VALUES}>
         {({ handleChange, setFieldValue, values }) => (
           <Form className="mt-3 space-y-5">
-            <SettingsFormField description={t("userApiTokenDescription")} label={t("token")}>
+            <SettingsFormField
+              description="This is the token used to communicate to SnailyCAD via the API."
+              label="Token"
+            >
               <PasswordInput onClick={handleClick} readOnly value={values.token} />
             </SettingsFormField>
 

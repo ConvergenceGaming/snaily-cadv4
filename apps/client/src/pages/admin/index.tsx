@@ -30,14 +30,14 @@ export default function Admin({ counts }: Props) {
     >
       <Title>{t("adminDashboard")}</Title>
 
-      <Group name={t("users")}>
-        <Item count={counts.activeUsers} name={t("active")} />
-        <Item count={counts.pendingUsers} name={t("pending")} />
-        <Item count={counts.bannedUsers} name={t("banned")} />
+      <Group name="Users">
+        <Item count={counts.activeUsers} name="active" />
+        <Item count={counts.pendingUsers} name="pending" />
+        <Item count={counts.bannedUsers} name="banned" />
       </Group>
 
-      <Group name={t("citizens")}>
-        <Item count={counts.createdCitizens} name={t("created")} />
+      <Group name="Citizens">
+        <Item count={counts.createdCitizens} name="created" />
         <Item
           count={counts.citizensInBolo}
           name={t("inBolo")}
@@ -45,18 +45,18 @@ export default function Admin({ counts }: Props) {
         />
         <Item
           count={counts.arrestCitizens}
-          name={t("arrested")}
+          name="arrested"
           percentage={(100 / counts.createdCitizens) * counts.arrestCitizens}
         />
         <Item
           count={counts.deadCitizens}
-          name={t("dead")}
+          name="dead"
           percentage={(100 / counts.createdCitizens) * counts.deadCitizens}
         />
       </Group>
 
-      <Group name={t("vehicles")}>
-        <Item count={counts.vehicles} name={t("registered")} />
+      <Group name="Vehicles">
+        <Item count={counts.vehicles} name="registered" />
         <Item
           count={counts.vehiclesInBOLO}
           name={t("inBolo")}
@@ -69,35 +69,7 @@ export default function Admin({ counts }: Props) {
         />
       </Group>
 
-      <Group name={t("leo")}>
-        <Item count={counts.officerCount} name="total" />
-        <Item
-          count={counts.onDutyOfficers}
-          name={t("onDuty")}
-          percentage={(100 / counts.officerCount) * counts.onDutyOfficers}
-        />
-        <Item
-          count={counts.suspendedOfficers}
-          name={t("suspended")}
-          percentage={(100 / counts.officerCount) * counts.suspendedOfficers}
-        />
-      </Group>
-
-      <Group name={t("emsFd")}>
-        <Item count={counts.emsDeputiesCount} name="total" />
-        <Item
-          count={counts.onDutyEmsDeputies}
-          name={t("onDuty")}
-          percentage={(100 / counts.emsDeputiesCount) * counts.onDutyEmsDeputies}
-        />
-        <Item
-          count={counts.suspendedEmsFDDeputies}
-          name={t("suspended")}
-          percentage={(100 / counts.emsDeputiesCount) * counts.suspendedEmsFDDeputies}
-        />
-      </Group>
-
-      <Group name={t("images")}>
+      <Group name="Images">
         <Item count={counts.imageData.count} name="total" />
         <Item count={prettyBytes(counts.imageData.totalSize, { binary: true })} name="" />
       </Group>

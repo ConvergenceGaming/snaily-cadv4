@@ -20,7 +20,7 @@ export async function sendDiscordWebhook(options: SendDiscordWebhookOptions) {
   if (!webhook) return;
 
   const webhookData = await performDiscordRequest<RESTGetAPIWebhookResult>({
-    async handler(rest) {
+    handler(rest) {
       if (!webhook.webhookId) return null;
       return rest.get(Routes.webhook(webhook.webhookId));
     },
@@ -34,7 +34,7 @@ export async function sendDiscordWebhook(options: SendDiscordWebhookOptions) {
   };
 
   await performDiscordRequest({
-    async handler(rest) {
+    handler(rest) {
       rest.post(Routes.webhook(webhookData.id, webhookData.token), {
         body: normalizedData,
       });

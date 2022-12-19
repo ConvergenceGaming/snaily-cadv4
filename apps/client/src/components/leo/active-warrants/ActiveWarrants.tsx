@@ -1,3 +1,4 @@
+import * as React from "react";
 import type { AssignedWarrantOfficer, Warrant } from "@snailycad/types";
 import { Button } from "@snailycad/ui";
 import { Table, useTableState } from "components/shared/Table";
@@ -68,7 +69,7 @@ export function ActiveWarrants() {
         ) : (
           <Table
             tableState={tableState}
-            features={{ isWithinCardOrModal: true }}
+            features={{ isWithinCard: true }}
             data={activeWarrants.filter(isActiveWarrant).map((warrant) => ({
               id: warrant.id,
               citizen: `${warrant.citizen.name} ${warrant.citizen.surname}`,

@@ -2,9 +2,9 @@ import * as React from "react";
 import { useTranslations } from "next-intl";
 import { Button } from "@snailycad/ui";
 import { Manage911CallModal } from "components/dispatch/modals/Manage911CallModal";
-import type { Full911Call } from "state/dispatch/dispatch-state";
+import type { Full911Call } from "state/dispatch/dispatchState";
 import { useActiveDispatchers } from "hooks/realtime/useActiveDispatchers";
-import { useCall911State } from "state/dispatch/call-911-state";
+import { useCall911State } from "state/dispatch/call911State";
 
 interface Props {
   call: Full911Call | null;
@@ -16,7 +16,7 @@ export function ActiveCallColumn({ call, isDispatch }: Props) {
   const common = useTranslations("Common");
   const { hasActiveDispatchers } = useActiveDispatchers();
   const isBtnDisabled = !hasActiveDispatchers && isDispatch;
-  const setCurrentlySelectedCall = useCall911State((state) => state.setCurrentlySelectedCall);
+  const { setCurrentlySelectedCall } = useCall911State();
 
   function handleOpen() {
     if (isBtnDisabled) return;
