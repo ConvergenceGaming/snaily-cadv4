@@ -228,6 +228,16 @@ export class StatusController {
       }
     }
 
+    if (code.shouldDo === ShouldDoType.SET_OFF_DUTY) {
+      this.socket.emitSetUnitOffDuty(unit.id);
+    }
+
+    if (["leo", "combined"].includes(type)) {
+      await this.socket.emitUpdateOfficerStatus();
+    } else {
+      await this.socket.emitUpdateDeputyStatus();
+    }
+
     try {
       const data = createWebhookData(cad, updatedUnit);
       await sendDiscordWebhook({ type: DiscordWebhookType.UNIT_STATUS, data });
