@@ -8,8 +8,8 @@ import { useLeoState } from "state/leoState";
 import type { CombinedLeoUnit, Officer } from "@snailycad/types";
 import { isUnitCombined, isUnitOfficer } from "@snailycad/utils";
 import type { GetActiveOfficersData } from "@snailycad/types/api";
-// import { useCall911State } from "state/dispatch/call911State";
-import { useCall911State } from "state/dispatch/call-911-state";
+import { useCall911State } from "state/dispatch/call911State";
+// import { useCall911State } from "state/dispatch/call-911-state";
 import shallow from "zustand/shallow";
 import { useMapPlayersStore } from "./useMapPlayers";
 
