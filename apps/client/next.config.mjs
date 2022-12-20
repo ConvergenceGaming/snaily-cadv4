@@ -18,7 +18,7 @@ const nextConfig = {
   // prettier-ignore
   images: { // start images
     formats: ["image/avif", "image/webp"],
-    domains: ["i.imgur.com", "cdn.discordapp.com", "localhost"]
+    domains: ["i.imgur.com", "cdn.discordapp.com", "localhost", "192.168.178.227"]
   }, // end images
   // prettier-enable
   webpack(config, { webpack }) {

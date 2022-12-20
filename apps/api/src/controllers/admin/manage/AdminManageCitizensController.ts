@@ -92,7 +92,11 @@ export class AdminManageCitizensController {
     const OR: Prisma.CitizenWhereInput["OR"] = [{ id }];
 
     if (!isCitizenId) {
-      OR.push({ user: { discordId: id } }, { user: { steamId: id } });
+      OR.push(
+        { user: { fivemLicense: id } },
+        { user: { discordId: id } },
+        { user: { steamId: id } },
+      );
     }
 
     // @ts-expect-error same properties

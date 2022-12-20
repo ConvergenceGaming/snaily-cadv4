@@ -93,6 +93,7 @@ export default function ManageCitizens(props: Props) {
     isTaxi: user.isTaxi,
     steamId: user.steamId ?? "",
     discordId: user.discordId ?? "",
+    fivemLicense: user.fivemLicense ?? "",
     useOldPerms: false,
   };
 
@@ -176,11 +177,11 @@ export default function ManageCitizens(props: Props) {
               <FormRow>
                 <TextField
                   isOptional
-                  label="Steam ID"
-                  name="steamId"
-                  onChange={(value) => setFieldValue("steamId", value)}
-                  value={values.steamId}
-                  errorMessage={errors.steamId}
+                  label="Fivem License"
+                  name="fivemLicense"
+                  onChange={(value) => setFieldValue("fivemLicense", value)}
+                  value={values.fivemLicense}
+                  errorMessage={errors.fivemLicense}
                 />
 
                 <TextField
@@ -190,6 +191,17 @@ export default function ManageCitizens(props: Props) {
                   onChange={(value) => setFieldValue("discordId", value)}
                   value={values.discordId}
                   errorMessage={errors.discordId}
+                />
+              </FormRow>
+
+              <FormRow>
+                <TextField
+                  isOptional
+                  label="Steam ID"
+                  name="steamId"
+                  onChange={(value) => setFieldValue("steamId", value)}
+                  value={values.steamId}
+                  errorMessage={errors.steamId}
                 />
               </FormRow>
 

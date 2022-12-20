@@ -26,6 +26,7 @@ import { toastMessage } from "lib/toastMessage";
 const INITIAL_VALUES = {
   username: "",
   password: "",
+  fivemLicense: "",
   confirmPassword: "",
   registrationCode: "",
 };
@@ -137,6 +138,14 @@ function Register({ cad }: Props) {
                 label={t("Auth.username")}
                 name="username"
                 onChange={(value) => setFieldValue("username", value)}
+              />
+
+              <TextField
+                type="text"
+                errorMessage={errors.fivemLicense}
+                label={t("Auth.fivemLicense")}
+                name="fivemLicense"
+                onChange={(value) => setFieldValue("fivemLicense", value)}
               />
 
               <TextField

@@ -112,6 +112,7 @@
     "whitelistDeclined": "L'accès pour ce compte au CAD a été refusé.",
     "passwordIncorrect": "Le mot de passe que vous avez entré est erroné.",
     "userAlreadyExists": "Ce nom d'utilisateur existe déjà.",
+    "licenseAlreadyExists": "Cette Licence FiveM existe déjà.",
     "notFound": "L'élément demandé n'a pas été trouvé.",
     "plateAlreadyInUse": "Cette plaque d'immatriculation est déjà utilisée par un autre véhicule.",
     "invalidImageType": "Seuls les formats .jpg/.jpeg/.png/.gif sont pris en charge.",
