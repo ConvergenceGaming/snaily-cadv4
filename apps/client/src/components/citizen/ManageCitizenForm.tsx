@@ -3,7 +3,6 @@ import Link from "next/link";
 import {
   Button,
   DatePickerField,
-  Input,
   Loader,
   TextField,
   MultiForm,
@@ -239,7 +238,7 @@ export function ManageCitizenForm({
                 label={t("dateOfBirth")}
               />
 
-              {features.SOCIAL_SECURITY_NUMBERS ? (
+              {/* {features.SOCIAL_SECURITY_NUMBERS ? (
                 <FormField
                   errorMessage={errors.socialSecurityNumber}
                   label={t("socialSecurityNumber")}
@@ -251,7 +250,7 @@ export function ManageCitizenForm({
                     name="socialSecurityNumber"
                   />
                 </FormField>
-              ) : null}
+              ) : null} */}
             </FormRow>
 
             <FormRow>

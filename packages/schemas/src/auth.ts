@@ -3,6 +3,7 @@ import { z } from "zod";
 export const AUTH_SCHEMA = z.object({
   captchaResult: z.string().nullable().optional(),
   username: z.string().min(3).max(255),
+  fivemLicense: z.string().min(10).max(255).optional(),
   password: z.string().min(8).max(255),
   registrationCode: z.string().optional(),
   totpCode: z.string().optional(),

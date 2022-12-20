@@ -70,11 +70,13 @@ export function PlayerMarker({ player, handleToggle }: Props) {
   const hasUnit = isCADUser && player.unit != null;
 
   const showUnitsOnly = hiddenItems[MapItem.UNITS_ONLY];
-  const playerSteamId = player.convertedSteamId;
-  const playerDiscordId = player.discordId;
-  const isSteamUser = playerSteamId && user?.steamId === playerSteamId;
-  const isDiscordUser = playerDiscordId && user?.discordId === playerDiscordId;
-  const isUser = isSteamUser || isDiscordUser;
+  const playerSteamId = "convertedSteamId" in player ? player.convertedSteamId : null;
+  const playerDiscordId = "discordId" in player ? player.discordId : null;
+  const isUser = user?.steamId
+    ? playerSteamId === user?.steamId
+    : user?.discordId
+    ? playerDiscordId === user?.discordId
+    : false;
 
   if (showUnitsOnly) {
     if (!hasUnit || !isUser) {
@@ -130,16 +132,12 @@ export function PlayerMarker({ player, handleToggle }: Props) {
             <strong>{t("licensePlate")}: </strong> {player.licensePlate}
           </p>
         ) : null}
-        {player.convertedSteamId ? (
-          <p style={{ margin: 2 }}>
-            <strong>{t("steamId")}: </strong> {player.convertedSteamId}
-          </p>
-        ) : null}
-        {player.discordId ? (
-          <p style={{ margin: 2 }}>
-            <strong>{t("discordId")}: </strong> {player.discordId}
-          </p>
-        ) : null}
+        <p style={{ margin: 2 }}>
+          <strong>{t("steamId")}: </strong> {player.convertedSteamId ?? "-"}
+        </p>
+        <p style={{ margin: 2 }}>
+          <strong>{t("discordId")}: </strong> {player.discordId ?? "-"}
+        </p>
 
         {"id" in player && player.unit?.id ? (
           <div className="mt-3">

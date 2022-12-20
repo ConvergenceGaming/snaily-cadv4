@@ -159,7 +159,7 @@ export class ManageUsersController {
     @QueryParams("select-citizens") selectCitizens: boolean,
   ): Promise<APITypes.GetManageUserByIdData> {
     const user = await prisma.user.findFirst({
-      where: { OR: [{ id }, { discordId: id }, { steamId: id }] },
+      where: { OR: [{ id }, { discordId: id }, { steamId: id }, { fivemLicense: id }] },
       select: manageUsersSelect(selectCitizens),
     });
 
@@ -307,6 +307,7 @@ export class ManageUsersController {
         steamId: data.steamId,
         rank: user.rank === Rank.OWNER ? Rank.OWNER : Rank[data.rank as Rank],
         discordId: data.discordId,
+        fivemLicense: data.fivemLicense,
       },
       select: manageUsersSelect(false),
     });

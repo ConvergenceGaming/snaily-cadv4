@@ -32,14 +32,13 @@ export function useMapPlayers() {
 
   const { cad } = useAuth();
   const url = getCADURL(cad);
-  const { state, execute } = useFetch();
+  const { execute } = useFetch();
 
   const getCADUsers = React.useCallback(
     async (
       playersToFetch: (Player & { discordId?: string | null; convertedSteamId?: string | null })[],
       payload: PlayerDataEventPayload[],
     ) => {
-      if (state === "loading") return;
       let _prevPlayerData = prevPlayerData;
 
       const { json } =
@@ -106,7 +105,7 @@ export function useMapPlayers() {
 
       setPlayers(newMap);
     },
-    [players, state, prevPlayerData], // eslint-disable-line react-hooks/exhaustive-deps
+    [players, prevPlayerData], // eslint-disable-line react-hooks/exhaustive-deps
   );
 
   const onPlayerData = React.useCallback(
@@ -137,10 +136,8 @@ export function useMapPlayers() {
   const onPlayerLeft = React.useCallback(
     (data: PlayerLeftEvent) => {
       const newPlayers = players;
-      const player = Array.from(players.values()).find((player) => player.name === data.payload);
-      if (!player) return;
+      players.delete(data.payload);
 
-      players.delete(player?.playerId);
       setPlayers(newPlayers);
     },
     [players], // eslint-disable-line react-hooks/exhaustive-deps
@@ -166,19 +163,7 @@ export function useMapPlayers() {
 
   const onError = React.useCallback(() => {
     toastMessage({
-      message: (
-        <>
-          Unable to make a Websocket connection to {url}.{" "}
-          <a
-            target="_blank"
-            rel="noreferrer"
-            className="underline text-blue-200"
-            href="https://cad-docs.caspertheghost.me/docs/fivem-integrations/live-map#connecting-to-snailycadv4"
-          >
-            See documentation.
-          </a>
-        </>
-      ),
+      message: `Unable to make a Websocket connection to ${url}`,
       title: "Connection Error",
       duration: 10_000,
     });
@@ -199,13 +184,11 @@ export function useMapPlayers() {
     if (s) {
       s.onAny(onMessage);
       s.on("disconnect", console.log);
-      s.once("connect_error", onError);
     }
 
     return () => {
       s?.offAny(onMessage);
       s?.off("disconnect", console.log);
-      s?.off("connect_error", onError);
     };
   }, [socket, onError, onMessage]);
 
@@ -236,12 +219,8 @@ function getCADURL(cad: cad | null) {
 
 function makeSocketConnection(url: string) {
   try {
-    if (url.startsWith("ws")) {
-      const _url = url.replace(/ws:\/\//, "http://").replace(/wss:\/\//, "https://");
-      return io(_url);
-    }
-
-    return io(url);
+    const _url = url.replace(/ws:\/\//, "http://").replace(/wss:\/\//, "https://");
+    return io(_url);
   } catch (error) {
     const isSecurityError = error instanceof Error && error.name === "SecurityError";
 
@@ -251,7 +230,6 @@ function makeSocketConnection(url: string) {
         title: "Security Error",
         duration: Infinity,
       });
-      return;
     }
 
     toastMessage({

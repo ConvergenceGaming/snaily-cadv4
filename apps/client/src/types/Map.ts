@@ -20,7 +20,7 @@ export interface PlayerDataEvent {
 
 export interface PlayerLeftEvent {
   type: "playerLeft";
-  payload: string;
+  payload: number;
 }
 
 export type DataActions = PlayerLeftEvent | PlayerDataEvent;
