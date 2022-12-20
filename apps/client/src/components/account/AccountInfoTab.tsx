@@ -70,6 +70,17 @@ export function AccountInfoTab() {
               />
 
               <TextField
+                label="Fivem License"
+                errorMessage={errors.fivemLicense}
+                isDisabled
+                isReadOnly
+                defaultValue={String(values.fivemLicense)}
+                name="fivemLicense"
+              />
+            </FormRow>
+
+            <FormRow>
+              <TextField
                 label="Steam Id"
                 errorMessage={errors.steamId}
                 isDisabled

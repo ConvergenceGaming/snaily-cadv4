@@ -114,6 +114,7 @@
     "whitelistDeclined": "This account was declined access to the CAD.",
     "passwordIncorrect": "The password you entered was not correct.",
     "userAlreadyExists": "A user with that username already exists.",
+    "licenseAlreadyExists": "A user with that FiveM License already exists.",
     "notFound": "The requested item was not found.",
     "plateAlreadyInUse": "That registration is already being used on a vehicle.",
     "invalidImageType": "Only types image/png, image/jpeg, image/jpg and image/gif are supported",

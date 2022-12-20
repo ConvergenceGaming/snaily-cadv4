@@ -1,7 +1,7 @@
 import * as React from "react";
 import { icon as leafletIcon, LeafletEvent } from "leaflet";
 import useFetch from "lib/useFetch";
-import { Marker, Popup, Tooltip, useMap } from "react-leaflet";
+import { Marker, Popup, useMap } from "react-leaflet";
 import type { Full911Call } from "state/dispatch/dispatch-state";
 import { ActiveMapCalls } from "./ActiveMapCalls";
 import { convertToMap } from "lib/map/utils";
@@ -38,9 +38,7 @@ export function RenderActiveCalls() {
   const [openItems, setOpenItems] = React.useState<string[]>([]);
   const { hiddenItems } = useDispatchMapState();
 
-  const callsWithPosition = React.useMemo(() => {
-    return calls.filter((v) => v.gtaMapPosition || (v.position?.lat && v.position.lng));
-  }, [calls]);
+  const callsWithPosition = calls.filter((v) => v.position?.lat && v.position.lng);
 
   function handleCallStateUpdate(callId: string, data: Full911Call) {
     const prevIdx = calls.findIndex((v) => v.id === callId);
@@ -64,7 +62,11 @@ export function RenderActiveCalls() {
       path: `/911-calls/${call.id}`,
       method: "PUT",
       data: {
-        position: data.position,
+        ...data,
+        situationCode: call.situationCodeId,
+        divisions: undefined,
+        departments: undefined,
+        assignedUnits: undefined,
       },
     });
 
@@ -86,7 +88,11 @@ export function RenderActiveCalls() {
       path: `/911-calls/${call.id}`,
       method: "PUT",
       data: {
-        position: callData.position,
+        ...callData,
+        situationCode: call.situationCodeId,
+        divisions: undefined,
+        departments: undefined,
+        assignedUnits: undefined,
       },
     });
 
@@ -107,11 +113,7 @@ export function RenderActiveCalls() {
     <>
       {!hiddenItems[MapItem.CALLS] &&
         callsWithPosition.map((call) => {
-          const callGtaPosition = call.gtaMapPosition
-            ? convertToMap(call.gtaMapPosition.x, call.gtaMapPosition.y, map)
-            : null;
-          const callPosition = call.position as { lat: number; lng: number };
-          const position = callGtaPosition ?? callPosition;
+          const position = call.position as { lat: number; lng: number };
 
           return (
             <Marker

@@ -126,6 +126,16 @@ export class AuthController {
       throw new ExtendedBadRequest({ username: "userAlreadyExists" });
     }
 
+    const fivemExisting = await prisma.user.findFirst({
+      where: {
+        fivemLicense: { equals: data.fivemLicense, mode: "insensitive" },
+      },
+    });
+
+    if (fivemExisting) {
+      throw new ExtendedBadRequest({ fivemLicense: "licenseAlreadyExists" });
+    }
+
     const preCad = await prisma.cad.findFirst({
       select: { features: true, registrationCode: true },
     });
@@ -152,6 +162,7 @@ export class AuthController {
     const salt = genSaltSync();
 
     const password = data.password ? hashSync(data.password, salt) : undefined;
+    // const fivemLicense = data.fivemLicense;
 
     const user = await prisma.user.create({
       data: {
@@ -159,6 +170,7 @@ export class AuthController {
         password: password ?? "",
         steamId: data.steamId ?? null,
         discordId: data.discordId ?? null,
+        fivemLicense: data.fivemLicense,
       },
     });
 
