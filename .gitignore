@@ -48,3 +48,4 @@ test.mjs
 *.code-workspace
 .gitold
 .env.bck
+/batch/*
