@@ -25,6 +25,7 @@ import { defaultPermissions, hasPermission } from "@snailycad/permissions";
 import { shouldCheckCitizenUserId } from "lib/citizen/hasCitizenAccess";
 import type * as APITypes from "@snailycad/types/api";
 import { ExtendedBadRequest } from "src/exceptions/ExtendedBadRequest";
+import { setEndedSuspendedLicenses } from "lib/citizen/setEndedSuspendedLicenses";
 
 export const vehicleSearchInclude = {
   model: { include: { value: true } },
@@ -76,6 +77,7 @@ export const citizenSearchIncludeOrSelect = (
               include: leoProperties,
             },
             seizedItems: true,
+            courtEntry: { include: { dates: true } },
             violations: {
               include: {
                 penalCode: {
@@ -98,6 +100,7 @@ export const citizenSearchIncludeOrSelect = (
       name: true,
       surname: true,
       imageId: true,
+      imageBlurData: true,
       officers: { select: { department: { select: { isConfidential: true } } } },
       id: true,
       socialSecurityNumber: true,
@@ -115,7 +118,7 @@ const weaponsInclude = {
 @Controller("/search")
 @UseBeforeEach(IsAuth)
 @ContentType("application/json")
-export class SearchController {
+export class LeoSearchController {
   @Post("/name")
   @Description("Search citizens by their name, surname or fullname. Returns the first 35 results.")
   async searchName(
@@ -160,6 +163,10 @@ export class SearchController {
             name: { contains: surname, mode: "insensitive" },
             surname: { contains: name, mode: "insensitive" },
           },
+          { driversLicenseNumber: { contains: name, mode: "insensitive" } },
+          { weaponLicenseNumber: { contains: name, mode: "insensitive" } },
+          { waterLicenseNumber: { contains: name, mode: "insensitive" } },
+          { pilotLicenseNumber: { contains: name, mode: "insensitive" } },
           { socialSecurityNumber: name },
         ],
       },
@@ -168,7 +175,7 @@ export class SearchController {
     });
 
     return appendConfidential(
-      await appendCustomFields(citizens, CustomFieldCategory.CITIZEN),
+      await appendCustomFields(setEndedSuspendedLicenses(citizens), CustomFieldCategory.CITIZEN),
     ) as APITypes.PostLeoSearchCitizenData;
   }
 
@@ -180,12 +187,13 @@ export class SearchController {
   })
   async searchWeapon(
     @BodyParams("serialNumber") serialNumber: string,
+    @QueryParams("includeMany", Boolean) includeMany = false,
   ): Promise<APITypes.PostLeoSearchWeaponData> {
     if (!serialNumber || serialNumber.length < 3) {
       return null;
     }
 
-    const weapon = await prisma.weapon.findFirst({
+    const data = {
       where: {
         serialNumber: {
           startsWith: serialNumber,
@@ -193,7 +201,14 @@ export class SearchController {
         },
       },
       include: weaponsInclude,
-    });
+    } as const;
+
+    if (includeMany) {
+      const weapons = await prisma.weapon.findMany(data);
+      return appendCustomFields(weapons, CustomFieldCategory.WEAPON);
+    }
+
+    const weapon = await prisma.weapon.findFirst(data);
 
     if (!weapon) {
       throw new NotFound("weaponNotFound");
@@ -209,7 +224,7 @@ export class SearchController {
     permissions: [Permissions.Leo, Permissions.Dispatch],
   })
   async searchVehicle(
-    @BodyParams("plateOrVin") plateOrVin: string,
+    @BodyParams("plateOrVin", String) plateOrVin: string,
     @QueryParams("includeMany", Boolean) includeMany: boolean,
   ): Promise<APITypes.PostLeoSearchVehicleData> {
     if (!plateOrVin || plateOrVin.length < 3) {

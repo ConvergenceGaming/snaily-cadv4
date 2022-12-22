@@ -1,26 +1,21 @@
 import { Form, Formik, FormikHelpers } from "formik";
 import { useTranslations } from "use-intl";
-import { Button } from "components/Button";
+import { Loader, Button, SelectField, TextField } from "@snailycad/ui";
 import { FormField } from "components/form/FormField";
 import { Select } from "components/form/Select";
-import { Textarea } from "components/form/Textarea";
-import { Loader } from "components/Loader";
 import useFetch from "lib/useFetch";
 import { Modal } from "components/modal/Modal";
 import { useModal } from "state/modalState";
 import { ModalIds } from "types/ModalIds";
-import { InputSuggestions } from "components/form/inputs/InputSuggestions";
-import { PersonFill } from "react-bootstrap-icons";
-import { useImageUrl } from "hooks/useImageUrl";
 import { toastMessage } from "lib/toastMessage";
-import type { NameSearchResult } from "state/search/nameSearchState";
 import type { PostCreateWarrantData, PutWarrantsData } from "@snailycad/types/api";
-import type { ActiveWarrant } from "state/leoState";
+import type { ActiveWarrant } from "state/leo-state";
 import { isUnitCombined } from "@snailycad/utils";
 import { makeUnitName } from "lib/utils";
 import { useGenerateCallsign } from "hooks/useGenerateCallsign";
 import { useActiveOfficers } from "hooks/realtime/useActiveOfficers";
-import Image from "next/future/image";
+import { WarrantStatus } from "@snailycad/types";
+import { CitizenSuggestionsField } from "components/shared/CitizenSuggestionsField";
 
 interface Props {
   onClose?(): void;
@@ -35,7 +30,6 @@ export function CreateWarrantModal({ warrant, readOnly, onClose, onCreate, onUpd
   const { isOpen, closeModal, getPayload } = useModal();
   const { state, execute } = useFetch();
   const common = useTranslations("Common");
-  const { makeImageUrl } = useImageUrl();
   const t = useTranslations("Leo");
   const { generateCallsign } = useGenerateCallsign();
   const { activeOfficers } = useActiveOfficers();
@@ -128,48 +122,14 @@ export function CreateWarrantModal({ warrant, readOnly, onClose, onCreate, onUpd
       <Formik onSubmit={onSubmit} initialValues={INITIAL_VALUES}>
         {({ handleChange, setFieldValue, values, errors, isValid }) => (
           <Form autoComplete="off">
-            <FormField errorMessage={errors.citizenId} label={t("citizen")}>
-              <InputSuggestions<NameSearchResult>
-                inputProps={{
-                  value: values.citizenName,
-                  name: "citizenName",
-                  onChange: handleChange,
-                  errorMessage: errors.citizenId,
-                  disabled: readOnly,
-                }}
-                onSuggestionClick={(suggestion) => {
-                  setFieldValue("citizenId", suggestion.id);
-                  setFieldValue("citizenName", `${suggestion.name} ${suggestion.surname}`);
-                }}
-                options={{
-                  apiPath: "/search/name",
-                  dataKey: "name",
-                  method: "POST",
-                }}
-                Component={({ suggestion }) => (
-                  <div className="flex items-center">
-                    <div className="mr-2 min-w-[25px]">
-                      {suggestion.imageId ? (
-                        <Image
-                          className="rounded-md w-[30px] h-[30px] object-cover mr-2"
-                          draggable={false}
-                          src={makeImageUrl("citizens", suggestion.imageId)!}
-                          loading="lazy"
-                          width={30}
-                          height={30}
-                          alt={`${suggestion.name} ${suggestion.surname}`}
-                        />
-                      ) : (
-                        <PersonFill className="text-gray-500/60 w-[25px] h-[25px]" />
-                      )}
-                    </div>
-                    <p>
-                      {suggestion.name} {suggestion.surname}
-                    </p>
-                  </div>
-                )}
-              />
-            </FormField>
+            <CitizenSuggestionsField
+              autoFocus
+              fromAuthUserOnly={false}
+              label={t("citizen")}
+              isDisabled={readOnly}
+              labelFieldName="citizenName"
+              valueFieldName="citizenId"
+            />
 
             {isActive ? (
               <FormField label="Assigned Officers">
@@ -190,30 +150,30 @@ export function CreateWarrantModal({ warrant, readOnly, onClose, onCreate, onUpd
               </FormField>
             ) : null}
 
-            <FormField errorMessage={errors.status} label={t("status")}>
-              <Select
-                disabled={readOnly}
-                values={[
-                  { label: "Active", value: "ACTIVE" },
-                  { label: "Inactive", value: "INACTIVE" },
-                ]}
-                name="status"
-                onChange={handleChange}
-                value={values.status}
-              />
-            </FormField>
+            <SelectField
+              errorMessage={errors.status}
+              isDisabled={readOnly}
+              label={t("status")}
+              onSelectionChange={(value) => setFieldValue("status", value)}
+              options={[
+                { label: "Active", value: WarrantStatus.ACTIVE },
+                { label: "Inactive", value: WarrantStatus.INACTIVE },
+              ]}
+              selectedKey={values.status}
+            />
 
-            <FormField errorMessage={errors.description} label={common("description")}>
-              <Textarea
-                disabled={readOnly}
-                name="description"
-                onChange={handleChange}
-                value={values.description}
-              />
-            </FormField>
+            <TextField
+              isTextarea
+              errorMessage={errors.description}
+              label={common("description")}
+              isOptional={readOnly}
+              name="description"
+              onChange={(value) => setFieldValue("description", value)}
+              value={values.description}
+            />
 
             <footer className="flex justify-end mt-5">
-              <Button type="reset" onClick={handleClose} variant="cancel">
+              <Button type="reset" onPress={handleClose} variant="cancel">
                 {common("cancel")}
               </Button>
               <Button

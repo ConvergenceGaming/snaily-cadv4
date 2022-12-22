@@ -16,6 +16,9 @@ import {
 } from "@prisma/client";
 import { prisma } from "lib/prisma";
 import { combinedUnitProperties, leoProperties, unitProperties } from "lib/leo/activeOfficer";
+import type { z } from "zod";
+import type { TONES_SCHEMA } from "@snailycad/schemas";
+import type { User } from "@snailycad/types";
 
 type FullIncident = LeoIncident & { unitsInvolved: any[]; events?: IncidentEvent[] };
 
@@ -88,13 +91,20 @@ export class Socket {
     this.io.sockets.emit(SocketEvents.RoleplayStopped, value);
   }
 
+  emitSetUnitOffDuty(unitId: string) {
+    this.io.sockets.emit(SocketEvents.SetUnitOffDuty, unitId);
+  }
+
   async emitUpdateOfficerStatus() {
     const [officers, units] = await prisma.$transaction([
       prisma.officer.findMany({
+        orderBy: { updatedAt: "desc" },
         where: { status: { NOT: { shouldDo: ShouldDoType.SET_OFF_DUTY } } },
         include: leoProperties,
       }),
-      prisma.combinedLeoUnit.findMany({ include: combinedUnitProperties }),
+      prisma.combinedLeoUnit.findMany({
+        include: combinedUnitProperties,
+      }),
     ]);
 
     const data = [...officers, ...units];
@@ -104,6 +114,7 @@ export class Socket {
 
   async emitUpdateDeputyStatus() {
     const deputies = await prisma.emsFdDeputy.findMany({
+      orderBy: { updatedAt: "desc" },
       where: { status: { NOT: { shouldDo: ShouldDoType.SET_OFF_DUTY } } },
       include: unitProperties,
     });
@@ -147,7 +158,7 @@ export class Socket {
     this.io.sockets.emit(SocketEvents.UpdateDispatchersState);
   }
 
-  emitTones(data: any) {
-    this.io.sockets.emit(SocketEvents.Tones, data);
+  emitTones(data: z.infer<typeof TONES_SCHEMA> & { user: User }) {
+    this.io.sockets.emit(SocketEvents.Tones, { ...data, user: { username: data.user.username } });
   }
 }

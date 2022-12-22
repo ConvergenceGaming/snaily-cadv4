@@ -5,7 +5,7 @@ import { Layout } from "components/Layout";
 import { getSessionUser } from "lib/auth";
 import { getTranslations } from "lib/getTranslation";
 
-import { FullBusiness, FullEmployee, useBusinessState } from "state/businessState";
+import { FullBusiness, FullEmployee, useBusinessState } from "state/business-state";
 import { useTranslations } from "use-intl";
 import { TabList } from "components/shared/TabList";
 import { EmployeeAsEnum } from "@snailycad/types";
@@ -13,8 +13,8 @@ import dynamic from "next/dynamic";
 import { requestAll } from "lib/utils";
 import { Title } from "components/shared/Title";
 import { EmployeesTab } from "components/business/manage/EmployeesTab";
-import Link from "next/link";
-import { Button } from "components/Button";
+import { BreadcrumbItem, Breadcrumbs } from "@snailycad/ui";
+import shallow from "zustand/shallow";
 
 interface Props {
   employee: FullEmployee | null;
@@ -34,15 +34,28 @@ const VehiclesTab = dynamic(
 );
 
 export default function BusinessId(props: Props) {
-  const { currentBusiness, currentEmployee, ...state } = useBusinessState();
+  const businessActions = useBusinessState((state) => ({
+    setCurrentBusiness: state.setCurrentBusiness,
+    setCurrentEmployee: state.setCurrentEmployee,
+  }));
+
+  const { currentBusiness, currentEmployee } = useBusinessState(
+    (state) => ({
+      currentBusiness: state.currentBusiness,
+      currentEmployee: state.currentEmployee,
+      posts: state.posts,
+    }),
+    shallow,
+  );
+
   const common = useTranslations("Common");
   const t = useTranslations("Business");
 
   React.useEffect(() => {
-    state.setCurrentBusiness(props.business);
-    state.setCurrentEmployee(props.employee);
+    businessActions.setCurrentBusiness(props.business);
+    businessActions.setCurrentEmployee(props.employee);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [props, state.setCurrentEmployee, state.setCurrentBusiness]);
+  }, [props]);
 
   if (!currentBusiness || !currentEmployee) {
     return null;
@@ -75,17 +88,17 @@ export default function BusinessId(props: Props) {
 
   return (
     <Layout className="dark:text-white">
-      <header className="flex items-center justify-between">
-        <Title className="!mb-0">
-          {currentBusiness.name} - {common("manage")}
-        </Title>
+      <Title renderLayoutTitle={false} className="!mb-0">
+        {common("manage")}
+      </Title>
 
-        <div>
-          <Link href={`/business/${currentBusiness.id}/${currentEmployee.id}`}>
-            <Button>{common("goBack")}</Button>
-          </Link>
-        </div>
-      </header>
+      <Breadcrumbs>
+        <BreadcrumbItem href="/business">{t("business")}</BreadcrumbItem>
+        <BreadcrumbItem href={`/citizen/${currentBusiness.id}`}>
+          {currentBusiness.name}
+        </BreadcrumbItem>
+        <BreadcrumbItem>{common("manage")}</BreadcrumbItem>
+      </Breadcrumbs>
 
       <div className="mt-3">
         <TabList tabs={tabs}>

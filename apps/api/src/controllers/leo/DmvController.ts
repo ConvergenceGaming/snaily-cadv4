@@ -1,16 +1,17 @@
 import { WhitelistStatus } from "@prisma/client";
-import { BodyParams, PathParams, UseBeforeEach } from "@tsed/common";
+import { BodyParams, PathParams, QueryParams, UseBeforeEach } from "@tsed/common";
 import { Controller } from "@tsed/di";
 import { BadRequest, NotFound } from "@tsed/exceptions";
 import { ContentType, Description, Get, Post } from "@tsed/schema";
 import {
   AcceptDeclineType,
   ACCEPT_DECLINE_TYPES,
-} from "controllers/admin/manage/AdminManageUnitsController";
+} from "controllers/admin/manage/manage-units-controller";
 import { prisma } from "lib/prisma";
 import { IsAuth } from "middlewares/IsAuth";
 import { UsePermissions, Permissions } from "middlewares/UsePermissions";
 import type * as APITypes from "@snailycad/types/api";
+import { IsFeatureEnabled, Feature } from "middlewares/is-enabled";
 
 const vehicleInclude = {
   model: { include: { value: true } },
@@ -22,6 +23,7 @@ const vehicleInclude = {
 @Controller("/leo/dmv")
 @UseBeforeEach(IsAuth)
 @ContentType("application/json")
+@IsFeatureEnabled({ feature: Feature.DMV })
 export class DmvController {
   @Get("/")
   @Description("Get pending vehicles for the dmv")
@@ -29,16 +31,23 @@ export class DmvController {
     fallback: (u) => u.isLeo,
     permissions: [Permissions.ManageDMV],
   })
-  async getPendingVehicles(): Promise<APITypes.GetDMVPendingVehiclesData> {
-    const vehicles = await prisma.registeredVehicle.findMany({
-      where: { dmvStatus: WhitelistStatus.PENDING },
-      include: vehicleInclude,
-      orderBy: { createdAt: "desc" },
-    });
+  async getPendingVehicles(
+    @QueryParams("skip", Number) skip = 0,
+    @QueryParams("includeAll", Boolean) includeAll = false,
+  ): Promise<APITypes.GetDMVPendingVehiclesData> {
+    const [totalCount, vehicles] = await prisma.$transaction([
+      prisma.registeredVehicle.count({ where: { dmvStatus: { not: null } } }),
+      prisma.registeredVehicle.findMany({
+        where: { dmvStatus: { not: null } },
+        include: vehicleInclude,
+        orderBy: { createdAt: "desc" },
+        take: includeAll ? undefined : 35,
+        skip: includeAll ? undefined : skip,
+      }),
+    ]);
 
-    return vehicles;
+    return { vehicles, totalCount };
   }
-
   @Post("/:vehicleId")
   @Description("Accept or decline a pending vehicle in the dmv")
   async acceptOrDeclineVehicle(

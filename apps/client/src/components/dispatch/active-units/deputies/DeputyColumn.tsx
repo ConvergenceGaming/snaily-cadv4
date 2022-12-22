@@ -1,4 +1,3 @@
-import * as React from "react";
 import { useImageUrl } from "hooks/useImageUrl";
 import { ContextMenu } from "components/shared/ContextMenu";
 import { useValues } from "context/ValuesContext";
@@ -9,7 +8,8 @@ import { ActiveUnitsQualificationsCard } from "components/leo/qualifications/Act
 import { useActiveDeputies } from "hooks/realtime/useActiveDeputies";
 import { useActiveDispatchers } from "hooks/realtime/useActiveDispatchers";
 import type { EmsFdDeputy } from "@snailycad/types";
-import Image from "next/future/image";
+import Image from "next/image";
+import { useDispatchState } from "state/dispatch/dispatch-state";
 
 interface Props {
   isDispatch: boolean;
@@ -24,12 +24,13 @@ export function DeputyColumn({ deputy, isDispatch, nameAndCallsign }: Props) {
   const { setStatus } = useUnitStatusChange({ setUnits: setActiveDeputies, units: activeDeputies });
   const { makeImageUrl } = useImageUrl();
   const { codes10 } = useValues();
+  const setDraggingUnit = useDispatchState((state) => state.setDraggingUnit);
 
   const codesMapped = codes10.values
     .filter((v) => v.type === "STATUS_CODE")
     .map((v) => ({
       name: v.value.value,
-      onClick: () => setStatus(deputy.id, v),
+      onPress: () => setStatus(deputy.id, v),
       "aria-label": `Set status to ${v.value.value}`,
       title: `Set status to ${v.value.value}`,
     }));
@@ -38,6 +39,7 @@ export function DeputyColumn({ deputy, isDispatch, nameAndCallsign }: Props) {
     <ContextMenu canBeOpened={isDispatch && hasActiveDispatchers} asChild items={codesMapped}>
       <span>
         <Draggable
+          onDrag={(isDragging) => setDraggingUnit(isDragging ? "move" : null)}
           canDrag={hasActiveDispatchers && isDispatch}
           item={deputy}
           type={DndActions.MoveUnitTo911CallOrIncident}

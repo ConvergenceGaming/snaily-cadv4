@@ -1,12 +1,12 @@
 import { Controller } from "@tsed/di";
 import { ContentType, Description, Get, Post, Put } from "@tsed/schema";
-import { QueryParams, BodyParams, PathParams, Context } from "@tsed/platform-params";
-import { BadRequest } from "@tsed/exceptions";
+import { BodyParams, PathParams, Context } from "@tsed/platform-params";
+import { BadRequest, NotFound } from "@tsed/exceptions";
 import { prisma } from "lib/prisma";
 import { Socket } from "services/SocketService";
 import { UseBeforeEach } from "@tsed/platform-middlewares";
 import { IsAuth } from "middlewares/IsAuth";
-import type { cad, MiscCadSettings, User } from "@prisma/client";
+import { cad, Feature, MiscCadSettings, User } from "@snailycad/types";
 import { validateSchema } from "lib/validateSchema";
 import { TONES_SCHEMA, UPDATE_AOP_SCHEMA, UPDATE_RADIO_CHANNEL_SCHEMA } from "@snailycad/schemas";
 import {
@@ -25,6 +25,8 @@ import { getInactivityFilter } from "lib/leo/utils";
 import { filterInactiveUnits, setInactiveUnitsOffDuty } from "lib/leo/setInactiveUnitsOffDuty";
 import { getActiveDeputy } from "lib/ems-fd";
 import type * as APITypes from "@snailycad/types/api";
+import { IsFeatureEnabled } from "middlewares/is-enabled";
+import { z } from "zod";
 
 @Controller("/dispatch")
 @UseBeforeEach(IsAuth)
@@ -48,6 +50,11 @@ export class DispatchController {
       "unitInactivityTimeout",
       "lastStatusChangeTimestamp",
     );
+    const dispatcherInactivityTimeout = getInactivityFilter(
+      cad,
+      "activeDispatchersInactivityTimeout",
+      "updatedAt",
+    );
 
     if (unitsInactivityFilter) {
       setInactiveUnitsOffDuty(unitsInactivityFilter.lastStatusChangeTimestamp);
@@ -63,6 +70,7 @@ export class DispatchController {
     });
 
     const activeDispatchers = await prisma.activeDispatchers.findMany({
+      where: dispatcherInactivityTimeout?.filter,
       include: {
         user: {
           select: { id: true, username: true, rank: true, isLeo: true, isEmsFd: true },
@@ -73,6 +81,10 @@ export class DispatchController {
     const incidentInactivityFilter = getInactivityFilter(cad, "incidentInactivityTimeout");
     if (incidentInactivityFilter) {
       this.endInactiveIncidents(incidentInactivityFilter.updatedAt);
+    }
+
+    if (dispatcherInactivityTimeout) {
+      this.endInactiveDispatchers(dispatcherInactivityTimeout.updatedAt);
     }
 
     const activeIncidents = await prisma.leoIncident.findMany({
@@ -135,6 +147,7 @@ export class DispatchController {
   async setSignal100(
     @Context("cad") cad: cad,
     @BodyParams("value") value: boolean,
+    @BodyParams("callId") callId?: string,
   ): Promise<APITypes.PostDispatchSignal100Data> {
     if (typeof value !== "boolean") {
       throw new BadRequest("body.valueIsRequired");
@@ -148,6 +161,26 @@ export class DispatchController {
         signal100Enabled: value,
       },
     });
+
+    if (callId) {
+      const call = await prisma.call911.findUnique({
+        where: { id: callId },
+      });
+
+      if (!call) {
+        throw new NotFound("callNotFound");
+      }
+
+      await prisma.call911.update({
+        where: { id: call.id },
+        data: { isSignal100: true },
+      });
+    } else if (!value) {
+      await prisma.call911.updateMany({
+        where: { isSignal100: true },
+        data: { isSignal100: false },
+      });
+    }
 
     this.socket.emitSignal100(value);
 
@@ -192,6 +225,7 @@ export class DispatchController {
   }
 
   @Put("/radio-channel/:unitId")
+  @IsFeatureEnabled({ feature: Feature.RADIO_CHANNEL_MANAGEMENT })
   @UsePermissions({
     fallback: (u) => u.isDispatch,
     permissions: [Permissions.Dispatch],
@@ -234,20 +268,21 @@ export class DispatchController {
     return updated;
   }
 
-  @Get("/players")
+  @Post("/players")
   @UsePermissions({
     fallback: (u) => u.isDispatch,
     permissions: [Permissions.Dispatch, Permissions.LiveMap],
   })
-  async getCADUsersBySteamIds(
-    @QueryParams("steamIds", String) steamIds: string,
-    @Context() ctx: Context,
-  ) {
+  async getCADUsersByDiscordOrSteamId(@BodyParams() body: unknown, @Context() ctx: Context) {
+    const schema = z.array(
+      z.object({ discordId: z.string().optional(), steamId: z.string().optional() }),
+    );
+    const ids = validateSchema(schema, body);
     const users = [];
 
-    for (const steamId of steamIds.split(",")) {
+    for (const { steamId, discordId } of ids) {
       const user = await prisma.user.findFirst({
-        where: { steamId },
+        where: { OR: [{ steamId }, { discordId }] },
         select: {
           username: true,
           id: true,
@@ -258,6 +293,7 @@ export class DispatchController {
           rank: true,
           steamId: true,
           roles: true,
+          discordId: true,
         },
       });
 
@@ -313,14 +349,17 @@ export class DispatchController {
   }
 
   @Post("/tones")
+  @IsFeatureEnabled({ feature: Feature.TONES })
   @UsePermissions({
     permissions: [Permissions.Dispatch, Permissions.Leo, Permissions.EmsFd],
     fallback: (u) => u.isDispatch || u.isLeo || u.isEmsFd,
   })
-  async handleTones(@BodyParams() body: unknown): Promise<APITypes.PostDispatchTonesData> {
+  async handleTones(
+    @BodyParams() body: unknown,
+    @Context("user") user: User,
+  ): Promise<APITypes.PostDispatchTonesData> {
     const data = validateSchema(TONES_SCHEMA, body);
-
-    this.socket.emitTones(data);
+    this.socket.emitTones({ ...data, user });
 
     return true;
   }
@@ -348,6 +387,18 @@ export class DispatchController {
             }),
           ),
         );
+      }),
+    );
+  }
+
+  private async endInactiveDispatchers(updatedAt: Date) {
+    const activeDispatchers = await prisma.activeDispatchers.findMany({
+      where: { updatedAt: { not: { gte: updatedAt } } },
+    });
+
+    await Promise.all(
+      activeDispatchers.map(async (dispatcher) => {
+        await prisma.activeDispatchers.delete({ where: { id: dispatcher.id } });
       }),
     );
   }

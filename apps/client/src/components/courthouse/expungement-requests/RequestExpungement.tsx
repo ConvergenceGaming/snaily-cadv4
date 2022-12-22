@@ -1,7 +1,6 @@
 import * as React from "react";
-import { Button } from "components/Button";
+import { Loader, Button } from "@snailycad/ui";
 import { FormField } from "components/form/FormField";
-import { Loader } from "components/Loader";
 import { Modal } from "components/modal/Modal";
 import { useModal } from "state/modalState";
 import { Form, Formik } from "formik";
@@ -29,7 +28,6 @@ export function RequestExpungement({
   );
 
   const t = useTranslations("Courthouse");
-  const leo = useTranslations("Leo");
   const common = useTranslations("Common");
 
   function handleClose() {
@@ -65,15 +63,16 @@ export function RequestExpungement({
     >
       <div>
         <Formik onSubmit={onSubmit} initialValues={INITIAL_VALUES}>
-          {({ values, errors }) => (
+          {({ values }) => (
             <Form className="flex items-center gap-2">
-              <FormField className="w-full" errorMessage={errors.citizenId} label={leo("citizen")}>
-                <CitizenSuggestionsField
-                  fromAuthUserOnly
-                  labelFieldName="citizenName"
-                  valueFieldName="citizenId"
-                />
-              </FormField>
+              <CitizenSuggestionsField
+                autoFocus
+                allowsCustomValue
+                label={common("citizen")}
+                fromAuthUserOnly
+                labelFieldName="citizenName"
+                valueFieldName="citizenId"
+              />
 
               <Button
                 className="flex items-center mt-4"
@@ -208,7 +207,7 @@ function ResultsForm({ result, onSuccess, handleClose }: ResultProps) {
           </FormField>
 
           <footer className="flex justify-end mt-5">
-            <Button onClick={handleClose} variant="cancel" type="reset">
+            <Button onPress={handleClose} variant="cancel" type="reset">
               {common("cancel")}
             </Button>
             <Button

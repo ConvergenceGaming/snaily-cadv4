@@ -4,7 +4,7 @@ import { useValues } from "context/ValuesContext";
 import useFetch from "lib/useFetch";
 import type { CombinedLeoUnit, EmsFdDeputy, StatusValue } from "@snailycad/types";
 import { useGenerateCallsign } from "hooks/useGenerateCallsign";
-import { Full911Call, useDispatchState } from "state/dispatch/dispatchState";
+import { Full911Call, useDispatchState } from "state/dispatch/dispatch-state";
 import { makeUnitName } from "lib/utils";
 import { useModal } from "state/modalState";
 import { ModalIds } from "types/ModalIds";
@@ -50,7 +50,7 @@ export function MultiValueContainerContextMenu(props: MultiValueGenericProps<any
 
   const codesMapped: ContextItem[] = codes10.values.map((v) => ({
     name: v.value.value,
-    onClick: () => setCode(v),
+    onPress: () => setCode(v),
     "aria-label":
       v.type === "STATUS_CODE"
         ? `Set status to ${v.value.value}`

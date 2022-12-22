@@ -1,13 +1,13 @@
 import { useListener } from "@casper124578/use-socket.io";
 import { SocketEvents } from "@snailycad/config";
-import { Button } from "components/Button";
+import { Button } from "@snailycad/ui";
 import { useModal } from "state/modalState";
 import { useValues } from "context/ValuesContext";
 import { classNames } from "lib/classNames";
 import useFetch from "lib/useFetch";
 import { useRouter } from "next/router";
-import type { ActiveDeputy } from "state/emsFdState";
-import type { ActiveOfficer } from "state/leoState";
+import type { ActiveDeputy } from "state/ems-fd-state";
+import type { ActiveOfficer } from "state/leo-state";
 import { ModalIds } from "types/ModalIds";
 import { Officer, ShouldDoType, WhatPages, type StatusValue } from "@snailycad/types";
 import { useAudio } from "react-use";
@@ -87,7 +87,11 @@ export function StatusesArea<T extends ActiveOfficer | ActiveDeputy>({
     if (!activeUnit) return;
     if (status.id === activeUnit.statusId) return;
 
-    setActiveUnit({ ...activeUnit, statusId: status.id, status });
+    if (status.shouldDo === ShouldDoType.SET_OFF_DUTY) {
+      setActiveUnit(null);
+    } else {
+      setActiveUnit({ ...activeUnit, statusId: status.id, status });
+    }
 
     if (status.shouldDo === ShouldDoType.SET_OFF_DUTY) {
       setUnits(units.filter((v) => v.id !== activeUnit.id));
@@ -111,7 +115,11 @@ export function StatusesArea<T extends ActiveOfficer | ActiveDeputy>({
     });
 
     if (json.id) {
-      setActiveUnit({ ...activeUnit, ...json });
+      if (!json.status || json.status.shouldDo === ShouldDoType.SET_OFF_DUTY) {
+        setActiveUnit(null);
+      } else {
+        setActiveUnit({ ...activeUnit, ...json });
+      }
     }
   }
 
@@ -136,7 +144,7 @@ export function StatusesArea<T extends ActiveOfficer | ActiveDeputy>({
         <Button
           className={classNames("w-full min-w-[5em] text-base", isOnDutyActive && "font-semibold")}
           variant={isOnDutyActive ? "blue" : "default"}
-          onClick={() => handleOnDuty(onDutyCode)}
+          onPress={() => handleOnDuty(onDutyCode)}
         >
           {onDutyCode?.value.value}
         </Button>
@@ -158,7 +166,7 @@ export function StatusesArea<T extends ActiveOfficer | ActiveDeputy>({
           return (
             <li key={code.id}>
               <Button
-                onClick={() => handleStatusUpdate(code)}
+                onPress={() => handleStatusUpdate(code)}
                 disabled={isUnitOffDuty}
                 variant={variant}
                 className={classNames("text-base w-full min-w-[5em]", isActive && "font-semibold")}

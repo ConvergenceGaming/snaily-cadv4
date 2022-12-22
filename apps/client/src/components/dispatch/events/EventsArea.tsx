@@ -1,5 +1,4 @@
-import * as React from "react";
-import type { Full911Call } from "state/dispatch/dispatchState";
+import type { Full911Call } from "state/dispatch/dispatch-state";
 import type { FormikHelpers } from "formik";
 import compareDesc from "date-fns/compareDesc";
 import useFetch from "lib/useFetch";
@@ -58,7 +57,7 @@ export function CallEventsArea({ disabled, call, handleStateUpdate }: Props) {
       <h4 className="text-xl font-semibold">{common("events")}</h4>
 
       <ul className="overflow-auto max-h-[350px] md:max-h-[65%] md:h-[65%]">
-        {(call?.events.length ?? 0) <= 0 ? (
+        {(call?.events?.length ?? 0) <= 0 ? (
           <p className="mt-2">{t("noEvents")}</p>
         ) : (
           call?.events

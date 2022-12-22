@@ -1,7 +1,7 @@
 import { hasPermission, Permissions } from "@snailycad/permissions";
 import type { EmsFdDeputy, Feature, User } from "@snailycad/types";
 import { isUnitOfficer } from "@snailycad/utils";
-import type { ActiveOfficer } from "state/leoState";
+import type { ActiveOfficer } from "state/leo-state";
 import { ModalIds } from "types/ModalIds";
 
 export type Args<T> = Record<Feature | "hasActiveDispatchers" | "isDispatch", boolean> & {
@@ -17,13 +17,13 @@ export interface ModalButton<T = unknown> {
   };
 }
 
-export const switchDivision: ModalButton = ({ unit }) => {
+export const switchDivision: ModalButton = ({ DIVISIONS, unit }) => {
   const isEnabled = unit ? isUnitOfficer(unit) && (unit.callsigns?.length ?? 0) >= 1 : false;
 
   return {
     modalId: ModalIds.SwitchDivisionCallsign,
     nameKey: ["Leo", "switchDivisionCallsign"],
-    isEnabled,
+    isEnabled: DIVISIONS && isEnabled,
   };
 };
 

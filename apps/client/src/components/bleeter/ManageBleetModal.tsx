@@ -2,10 +2,8 @@ import { Form, Formik, FormikHelpers } from "formik";
 import { useTranslations } from "use-intl";
 import { useRouter } from "next/router";
 
-import { Button } from "components/Button";
+import { Loader, Input, Button, TextField } from "@snailycad/ui";
 import { FormField } from "components/form/FormField";
-import { Input } from "components/form/inputs/Input";
-import { Loader } from "components/Loader";
 import { Modal } from "components/modal/Modal";
 import { useModal } from "state/modalState";
 import useFetch from "lib/useFetch";
@@ -13,7 +11,7 @@ import { ModalIds } from "types/ModalIds";
 import { handleValidate } from "lib/handleValidate";
 import { BLEETER_SCHEMA } from "@snailycad/schemas";
 import { CropImageModal } from "components/modal/CropImageModal";
-import { dataToSlate, Editor } from "components/editor/Editor";
+import { dataToSlate, Editor } from "components/editor/editor";
 import type {
   GetBleeterByIdData,
   PostBleeterByIdData,
@@ -75,6 +73,9 @@ export function ManageBleetModal({ post }: Props) {
           method: "POST",
           data: fd,
           helpers,
+          headers: {
+            "content-type": "multipart/form-data",
+          },
         });
       }
     }
@@ -105,7 +106,7 @@ export function ManageBleetModal({ post }: Props) {
       className="w-[700px]"
     >
       <Formik validate={validate} onSubmit={onSubmit} initialValues={INITIAL_VALUES}>
-        {({ handleChange, setFieldValue, isValid, values, errors }) => (
+        {({ setFieldValue, isValid, values, errors }) => (
           <Form>
             <FormField optional errorMessage={errors.image as string} label={t("headerImage")}>
               <div className="flex">
@@ -120,18 +121,23 @@ export function ManageBleetModal({ post }: Props) {
                 <Button
                   className="mr-2"
                   type="button"
-                  onClick={() => {
+                  onPress={() => {
                     openModal(ModalIds.CropImageModal);
                   }}
                 >
-                  Crop
+                  {common("crop")}
                 </Button>
               </div>
             </FormField>
 
-            <FormField errorMessage={errors.title} label={t("bleetTitle")}>
-              <Input name="title" value={values.title} onChange={handleChange} />
-            </FormField>
+            <TextField
+              errorMessage={errors.title}
+              autoFocus
+              isRequired
+              label={t("bleetTitle")}
+              value={values.title}
+              onChange={(value) => setFieldValue("title", value)}
+            />
 
             <FormField errorMessage={errors.body} label={t("bleetBody")}>
               <Editor value={values.bodyData} onChange={(v) => setFieldValue("bodyData", v)} />
@@ -140,7 +146,7 @@ export function ManageBleetModal({ post }: Props) {
             <footer className="flex justify-end mt-5">
               <Button
                 type="reset"
-                onClick={() => closeModal(ModalIds.ManageBleetModal)}
+                onPress={() => closeModal(ModalIds.ManageBleetModal)}
                 variant="cancel"
               >
                 {common("cancel")}

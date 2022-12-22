@@ -18,6 +18,7 @@ import {
   cad,
   Citizen,
   DiscordWebhookType,
+  Feature,
   RegisteredVehicle,
   User,
   Value,
@@ -30,6 +31,8 @@ import { officerOrDeputyToUnit } from "lib/leo/officerOrDeputyToUnit";
 import { sendDiscordWebhook } from "lib/discord/webhooks";
 import type * as APITypes from "@snailycad/types/api";
 import { shouldCheckCitizenUserId } from "lib/citizen/hasCitizenAccess";
+import { IsFeatureEnabled } from "middlewares/is-enabled";
+import { getTranslator } from "utils/get-translator";
 
 const CITIZEN_SELECTS = {
   name: true,
@@ -45,6 +48,7 @@ export const towIncludes = {
 @Controller("/tow")
 @UseBeforeEach(IsAuth)
 @ContentType("application/json")
+@IsFeatureEnabled({ feature: Feature.TAXI })
 export class TowController {
   private socket: Socket;
   constructor(socket: Socket) {
@@ -136,8 +140,8 @@ export class TowController {
       });
 
       try {
-        const data = createWebhookData(impoundedVehicle);
-        await sendDiscordWebhook(DiscordWebhookType.VEHICLE_IMPOUNDED, data);
+        const data = await createVehicleImpoundedWebhookData(impoundedVehicle, user.locale);
+        await sendDiscordWebhook({ type: DiscordWebhookType.VEHICLE_IMPOUNDED, data });
       } catch (error) {
         console.error("Could not send Discord webhook.", error);
       }
@@ -168,12 +172,12 @@ export class TowController {
 
     const call = await prisma.towCall.create({
       data: {
-        creatorId: data.creatorId,
+        creatorId: data.creatorId || null,
         description: data.description,
-        descriptionData: data.descriptionData,
+        descriptionData: data.descriptionData || undefined,
         location: data.location,
         postal: data.postal,
-        deliveryAddressId: data.deliveryAddressId,
+        deliveryAddressId: data.deliveryAddressId || undefined,
         plate: vehicle?.plate.toUpperCase() ?? null,
         model: vehicle?.model.value.value ?? null,
         ended: data.callCountyService ?? false,
@@ -225,7 +229,7 @@ export class TowController {
       where: { id: callId },
       data: {
         description: data.description,
-        descriptionData: data.descriptionData,
+        descriptionData: data.descriptionData || undefined,
         location: data.location,
         postal: data.postal ? String(data.postal) : null,
         assignedUnit: assignedUnitId,
@@ -267,22 +271,25 @@ export class TowController {
   }
 }
 
-function createWebhookData(
+export async function createVehicleImpoundedWebhookData(
   vehicle: RegisteredVehicle & {
     model: VehicleValue & { value: Value };
     registrationStatus: Value;
     citizen: Pick<Citizen, "name" | "surname">;
   },
+  locale?: string | null,
 ) {
+  const t = await getTranslator({ locale, namespace: "Tow" });
+
   return {
     embeds: [
       {
-        title: "Vehicle Impounded",
+        title: t("vehicleImpounded"),
         fields: [
-          { name: "Registration Status", value: vehicle.registrationStatus.value, inline: true },
-          { name: "Model", value: vehicle.model.value.value, inline: true },
+          { name: t("registrationStatus"), value: vehicle.registrationStatus.value, inline: true },
+          { name: t("model"), value: vehicle.model.value.value, inline: true },
           {
-            name: "Owner",
+            name: t("owner"),
             value: `${vehicle.citizen.name} ${vehicle.citizen.surname}`,
             inline: true,
           },

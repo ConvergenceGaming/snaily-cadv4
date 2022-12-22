@@ -4,6 +4,7 @@ import {
   LEO_VEHICLE_LICENSE_SCHEMA,
   CREATE_CITIZEN_SCHEMA,
   VEHICLE_SCHEMA,
+  IMPOUND_VEHICLE_SCHEMA,
 } from "@snailycad/schemas";
 import { BodyParams, PathParams } from "@tsed/platform-params";
 import { BadRequest, NotFound } from "@tsed/exceptions";
@@ -22,8 +23,12 @@ import {
   WhitelistStatus,
   User,
   CustomFieldCategory,
+  SuspendedCitizenLicenses,
+  DiscordWebhookType,
+  Officer,
+  CombinedLeoUnit,
 } from "@prisma/client";
-import { UseBeforeEach, Context } from "@tsed/common";
+import { UseBeforeEach, Context, UseBefore } from "@tsed/common";
 import { ContentType, Description, Post, Put } from "@tsed/schema";
 import { UsePermissions, Permissions } from "middlewares/UsePermissions";
 import { validateSchema } from "lib/validateSchema";
@@ -39,6 +44,10 @@ import {
 import { citizenObjectFromData } from "lib/citizen";
 import { generateString } from "utils/generateString";
 import type * as APITypes from "@snailycad/types/api";
+import { createVehicleImpoundedWebhookData } from "controllers/calls/TowController";
+import { sendDiscordWebhook } from "lib/discord/webhooks";
+import { getFirstOfficerFromActiveOfficer } from "lib/leo/utils";
+import { ActiveOfficer } from "middlewares/ActiveOfficer";
 
 @Controller("/search/actions")
 @UseBeforeEach(IsAuth)
@@ -60,7 +69,7 @@ export class SearchActionsController {
       where: {
         id: citizenId,
       },
-      include: { dlCategory: true },
+      include: { dlCategory: true, suspendedLicenses: true },
     });
 
     if (!citizen) {
@@ -68,6 +77,27 @@ export class SearchActionsController {
     }
 
     await updateCitizenLicenseCategories(citizen, data);
+
+    let suspendedLicenses: SuspendedCitizenLicenses | undefined;
+
+    if (data.suspended) {
+      const createUpdateData = {
+        driverLicense: data.suspended.driverLicense,
+        driverLicenseTimeEnd: data.suspended.driverLicenseTimeEnd,
+        firearmsLicense: data.suspended.firearmsLicense,
+        firearmsLicenseTimeEnd: data.suspended.firearmsLicenseTimeEnd,
+        pilotLicense: data.suspended.pilotLicense,
+        pilotLicenseTimeEnd: data.suspended.pilotLicenseTimeEnd,
+        waterLicense: data.suspended.waterLicense,
+        waterLicenseTimeEnd: data.suspended.waterLicenseTimeEnd,
+      };
+
+      suspendedLicenses = await prisma.suspendedCitizenLicenses.upsert({
+        where: { id: String(citizen.suspendedLicensesId) },
+        create: createUpdateData,
+        update: createUpdateData,
+      });
+    }
 
     const updated = await prisma.citizen.update({
       where: {
@@ -78,6 +108,7 @@ export class SearchActionsController {
         pilotLicenseId: data.pilotLicense,
         weaponLicenseId: data.weaponLicense,
         waterLicenseId: data.waterLicense,
+        suspendedLicensesId: suspendedLicenses?.id,
       },
       include: citizenInclude,
     });
@@ -329,7 +360,7 @@ export class SearchActionsController {
       });
 
       if (existing) {
-        throw new ExtendedBadRequest({ name: "nameAlreadyTaken" });
+        throw new ExtendedBadRequest({ name: "nameAlreadyTaken" }, "nameAlreadyTaken");
       }
     }
 
@@ -346,11 +377,63 @@ export class SearchActionsController {
     const defaultLicenseValueId = defaultLicenseValue?.id ?? null;
 
     const citizen = await prisma.citizen.create({
-      data: citizenObjectFromData(data, defaultLicenseValueId),
+      data: await citizenObjectFromData({
+        data,
+        defaultLicenseValueId,
+        cad,
+      }),
       ...citizenSearchIncludeOrSelect(user, cad),
     });
 
     return citizen as APITypes.PostSearchActionsCreateCitizen;
+  }
+
+  @UseBefore(ActiveOfficer)
+  @Post("/impound/:vehicleId")
+  @Description("Impound a vehicle from plate search")
+  async impoundVehicle(
+    @BodyParams() body: unknown,
+    @PathParams("vehicleId") vehicleId: string,
+    @Context("activeOfficer") activeOfficer: (CombinedLeoUnit & { officers: Officer[] }) | Officer,
+    @Context("user") user: User,
+  ): Promise<APITypes.PostSearchActionsCreateVehicle> {
+    const data = validateSchema(IMPOUND_VEHICLE_SCHEMA, body);
+    const officer = getFirstOfficerFromActiveOfficer({ allowDispatch: true, activeOfficer });
+
+    const vehicle = await prisma.registeredVehicle.findUnique({
+      where: { id: vehicleId },
+    });
+
+    if (!vehicle) {
+      throw new NotFound("NotFound");
+    }
+
+    if (vehicle.impounded) {
+      throw new BadRequest("vehicleAlreadyImpounded");
+    }
+
+    await prisma.impoundedVehicle.create({
+      data: {
+        valueId: data.impoundLot,
+        registeredVehicleId: vehicle.id,
+        officerId: officer?.id ?? null,
+      },
+    });
+
+    const impoundedVehicle = await prisma.registeredVehicle.update({
+      where: { id: vehicle.id },
+      data: { impounded: true },
+      include: vehicleSearchInclude,
+    });
+
+    try {
+      const data = await createVehicleImpoundedWebhookData(impoundedVehicle, user.locale);
+      await sendDiscordWebhook({ type: DiscordWebhookType.VEHICLE_IMPOUNDED, data });
+    } catch (error) {
+      console.error("Could not send Discord webhook.", error);
+    }
+
+    return appendCustomFields(impoundedVehicle, CustomFieldCategory.VEHICLE);
   }
 
   @Post("/vehicle")
@@ -435,5 +518,34 @@ export class SearchActionsController {
     });
 
     return appendCustomFields(vehicle, CustomFieldCategory.VEHICLE);
+  }
+
+  @Post("/missing/:citizenId")
+  @UsePermissions({
+    fallback: (u) => u.isEmsFd || u.isLeo || u.isDispatch,
+    permissions: [Permissions.EmsFd, Permissions.Leo, Permissions.Dispatch],
+  })
+  async declareCitizenMissing(
+    @PathParams("citizenId") citizenId: string,
+  ): Promise<APITypes.PostLEODeclareCitizenMissing> {
+    const citizen = await prisma.citizen.findUnique({
+      where: { id: citizenId },
+    });
+
+    if (!citizen) {
+      throw new NotFound("notFound");
+    }
+
+    const updated = await prisma.citizen.update({
+      where: {
+        id: citizen.id,
+      },
+      data: {
+        missing: !citizen.missing,
+        dateOfMissing: citizen.missing ? null : new Date(),
+      },
+    });
+
+    return updated;
   }
 }

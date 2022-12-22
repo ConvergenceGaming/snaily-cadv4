@@ -136,6 +136,11 @@ export class AuthController {
       }
     }
 
+    const nonDiscordUserUsernameRegex = /^([a-z_.\d]+)*[a-z\d]+$/i;
+    if (!nonDiscordUserUsernameRegex.test(data.username)) {
+      throw new ExtendedBadRequest({ username: "Invalid" });
+    }
+
     const existing = await prisma.user.findFirst({
       where: {
         username: { equals: data.username, mode: "insensitive" },
@@ -144,6 +149,16 @@ export class AuthController {
 
     if (existing) {
       throw new ExtendedBadRequest({ username: "userAlreadyExists" });
+    }
+
+    const fivemExisting = await prisma.user.findFirst({
+      where: {
+        fivemLicense: { equals: data.fivemLicense, mode: "insensitive" },
+      },
+    });
+
+    if (fivemExisting) {
+      throw new ExtendedBadRequest({ fivemLicense: "licenseAlreadyExists" });
     }
 
     const preCad = await prisma.cad.findFirst({
@@ -172,10 +187,12 @@ export class AuthController {
     const salt = genSaltSync();
 
     const password = hashSync(data.password, salt);
+    // const fivemLicense = data.fivemLicense;
 
     const user = await prisma.user.create({
       data: {
         username: data.username,
+        fivemLicense: data.fivemLicense,
         password,
       },
     });

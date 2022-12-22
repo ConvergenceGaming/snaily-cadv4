@@ -23,7 +23,7 @@ import { Permissions, UsePermissions } from "middlewares/UsePermissions";
 
 @Controller("/admin/manage/cad-settings")
 @ContentType("application/json")
-export class ManageCitizensController {
+export class CADSettingsController {
   private socket: Socket;
   constructor(socket: Socket) {
     this.socket = socket;
@@ -38,7 +38,7 @@ export class ManageCitizensController {
     const version = await getCADVersion();
 
     const cad = await prisma.cad.findFirst({
-      select: { ...CAD_SELECT(user, true), registrationCode: true },
+      select: { ...CAD_SELECT(user, !!user), registrationCode: true },
     });
 
     const registrationCode =
@@ -156,6 +156,7 @@ export class ManageCitizensController {
         call911InactivityTimeout: data.call911InactivityTimeout || null,
         incidentInactivityTimeout: data.incidentInactivityTimeout || null,
         unitInactivityTimeout: data.unitInactivityTimeout || null,
+        activeDispatchersInactivityTimeout: data.activeDispatchersInactivityTimeout || null,
         jailTimeScale: (data.jailTimeScaling || null) as JailTimeScale | null,
       },
     });

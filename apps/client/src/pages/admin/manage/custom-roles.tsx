@@ -8,7 +8,7 @@ import { AdminLayout } from "components/admin/AdminLayout";
 import { requestAll } from "lib/utils";
 import { Title } from "components/shared/Title";
 import { Permissions } from "@snailycad/permissions";
-import { Button } from "components/Button";
+import { Button } from "@snailycad/ui";
 import { useModal } from "state/modalState";
 import { Table, useTableState } from "components/shared/Table";
 import { ModalIds } from "types/ModalIds";
@@ -76,14 +76,13 @@ export default function ManageCustomRoles({ customRoles: data }: Props) {
           <Title className="!mb-0">{t("MANAGE_CUSTOM_ROLES")}</Title>
 
           <p className="max-w-2xl mt-2 text-neutral-700 dark:text-gray-400">
-            A list of custom roles, these roles can be given to users instead of giving a user
-            permissions one by one.
+            {t("manageCustomRolesDescription")}
           </p>
         </div>
 
         <div>
           {hasManagePermissions ? (
-            <Button onClick={() => openModal(ModalIds.ManageCustomRole)}>
+            <Button onPress={() => openModal(ModalIds.ManageCustomRole)}>
               {t("createCustomRole")}
             </Button>
           ) : null}
@@ -103,14 +102,14 @@ export default function ManageCustomRoles({ customRoles: data }: Props) {
             createdAt: <FullDate>{field.createdAt}</FullDate>,
             actions: (
               <>
-                <Button size="xs" variant="success" onClick={() => handleEditClick(field)}>
+                <Button size="xs" variant="success" onPress={() => handleEditClick(field)}>
                   {common("edit")}
                 </Button>
                 <Button
                   className="ml-2"
                   size="xs"
                   variant="danger"
-                  onClick={() => handleDeleteClick(field)}
+                  onPress={() => handleDeleteClick(field)}
                 >
                   {common("delete")}
                 </Button>
@@ -145,8 +144,7 @@ export default function ManageCustomRoles({ customRoles: data }: Props) {
       <AlertModal
         id={ModalIds.AlertDeleteCustomRole}
         title={t("deleteCustomRole")}
-        description={t.rich("alert_deleteCustomRole", {
-          span: (children) => <span className="font-semibold">{children}</span>,
+        description={t("alert_deleteCustomRole", {
           role: tempRole?.name,
         })}
         onDeleteClick={handleDelete}
@@ -158,14 +156,15 @@ export default function ManageCustomRoles({ customRoles: data }: Props) {
 }
 
 export const getServerSideProps: GetServerSideProps = async ({ locale, req }) => {
+  const user = await getSessionUser(req);
   const [customRoles] = await requestAll(req, [["/admin/manage/custom-roles", []]]);
 
   return {
     props: {
       customRoles,
-      session: await getSessionUser(req),
+      session: user,
       messages: {
-        ...(await getTranslations(["admin", "values", "common"], locale)),
+        ...(await getTranslations(["admin", "values", "common"], user?.locale ?? locale)),
       },
     },
   };

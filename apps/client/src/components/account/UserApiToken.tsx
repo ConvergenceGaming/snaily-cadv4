@@ -1,11 +1,10 @@
 import { TabsContent } from "components/shared/TabList";
-import { Button } from "components/Button";
 import { Toggle } from "components/form/Toggle";
 import { useAuth } from "context/AuthContext";
 import { Form, Formik, FormikHelpers } from "formik";
 import useFetch from "lib/useFetch";
 import { useTranslations } from "use-intl";
-import { Loader } from "components/Loader";
+import { Button, Loader } from "@snailycad/ui";
 import { SettingsFormField } from "components/form/SettingsFormField";
 import { PasswordInput } from "components/form/inputs/Input";
 import type {
@@ -72,10 +71,7 @@ export function UserApiTokenTab() {
       <Formik onSubmit={onSubmit} initialValues={INITIAL_VALUES}>
         {({ handleChange, setFieldValue, values }) => (
           <Form className="mt-3 space-y-5">
-            <SettingsFormField
-              description="This is the token used to communicate to SnailyCAD via the API."
-              label="Token"
-            >
+            <SettingsFormField description={t("userApiTokenDescription")} label={t("token")}>
               <PasswordInput onClick={handleClick} readOnly value={values.token} />
             </SettingsFormField>
 
@@ -102,7 +98,7 @@ export function UserApiTokenTab() {
             <div className="flex">
               {user?.apiTokenId ? (
                 <Button
-                  onClick={() => handleRegenerate(setFieldValue)}
+                  onPress={() => handleRegenerate(setFieldValue)}
                   variant="danger"
                   className="flex items-center mr-2"
                   type="button"

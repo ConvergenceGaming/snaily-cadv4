@@ -1,9 +1,8 @@
 import type * as React from "react";
 import { TabsContent } from "components/shared/TabList";
-import { Button } from "components/Button";
 import { PasswordInput } from "components/form/inputs/Input";
 import { Toggle } from "components/form/Toggle";
-import { Loader } from "components/Loader";
+import { Button, Loader } from "@snailycad/ui";
 import { useAuth } from "context/AuthContext";
 import { Form, Formik, FormikHelpers } from "formik";
 import useFetch from "lib/useFetch";
@@ -12,6 +11,7 @@ import { SettingsFormField } from "components/form/SettingsFormField";
 import { SettingsTabs } from "src/pages/admin/manage/cad-settings";
 import { toastMessage } from "lib/toastMessage";
 import type { DeleteCADApiTokenData, PutCADApiTokenData } from "@snailycad/types/api";
+import { getAPIUrl } from "@snailycad/utils/api-url";
 
 export function ApiTokenTab() {
   const common = useTranslations("Common");
@@ -66,6 +66,9 @@ export function ApiTokenTab() {
     token: cad?.apiToken?.token ?? "",
   };
 
+  const apiURL = getAPIUrl();
+  const discordCommand = `/config set api-url: ${apiURL} api-token: ${cad?.apiToken?.token ?? ""}`;
+
   return (
     <TabsContent aria-label="API Token" value={SettingsTabs.APIToken}>
       <h2 className="mt-2 text-2xl font-semibold">Public API access</h2>
@@ -78,6 +81,26 @@ export function ApiTokenTab() {
               label="Token"
             >
               <PasswordInput onClick={handleClick} readOnly value={values.token} />
+            </SettingsFormField>
+
+            <SettingsFormField
+              description={
+                <>
+                  This command can be used when using the{" "}
+                  <a
+                    rel="noreferrer"
+                    target="_blank"
+                    href="https://cad-docs.caspertheghost.me/docs/discord-integration/discord-bot"
+                    className="underline"
+                  >
+                    Discord bot integration
+                  </a>
+                  . Simply paste it into Discord.
+                </>
+              }
+              label={"Discord bot integration command"}
+            >
+              <PasswordInput onClick={handleClick} readOnly value={discordCommand} />
             </SettingsFormField>
 
             <SettingsFormField
@@ -103,7 +126,7 @@ export function ApiTokenTab() {
             <div className="flex">
               {cad?.apiTokenId ? (
                 <Button
-                  onClick={() => handleRegenerate(setFieldValue)}
+                  onPress={() => handleRegenerate(setFieldValue)}
                   variant="danger"
                   className="flex items-center mr-2"
                   type="button"

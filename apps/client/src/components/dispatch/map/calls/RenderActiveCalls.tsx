@@ -1,26 +1,36 @@
 import * as React from "react";
 import type { LeafletEvent } from "leaflet";
 import useFetch from "lib/useFetch";
-import { Marker, Popup, useMap } from "react-leaflet";
-import type { Full911Call } from "state/dispatch/dispatchState";
+import { Marker, Popup, Tooltip, useMap } from "react-leaflet";
+import type { Full911Call } from "state/dispatch/dispatch-state";
 import { ActiveMapCalls } from "./ActiveMapCalls";
 import { convertToMap } from "lib/map/utils";
-import { Button } from "components/Button";
+import { Button } from "@snailycad/ui";
 import { useTranslations } from "next-intl";
 import type { Put911CallByIdData } from "@snailycad/types/api";
-import { useCall911State } from "state/dispatch/call911State";
+import { useCall911State } from "state/dispatch/call-911-state";
 import { CallDescription } from "components/dispatch/active-calls/CallDescription";
 import { MapItem, useDispatchMapState } from "state/mapState";
+import shallow from "zustand/shallow";
 
 export function RenderActiveCalls() {
   const map = useMap();
   const { execute } = useFetch();
-  const { calls, setCalls } = useCall911State();
+  const { setCalls, calls } = useCall911State(
+    (state) => ({
+      setCalls: state.setCalls,
+      calls: state.calls,
+    }),
+    shallow,
+  );
+
   const t = useTranslations("Calls");
   const [openItems, setOpenItems] = React.useState<string[]>([]);
   const { hiddenItems } = useDispatchMapState();
 
-  const callsWithPosition = calls.filter((v) => v.position?.lat && v.position.lng);
+  const callsWithPosition = React.useMemo(() => {
+    return calls.filter((v) => v.gtaMapPosition || (v.position?.lat && v.position.lng));
+  }, [calls]);
 
   function handleCallStateUpdate(callId: string, data: Full911Call) {
     const prevIdx = calls.findIndex((v) => v.id === callId);
@@ -44,11 +54,7 @@ export function RenderActiveCalls() {
       path: `/911-calls/${call.id}`,
       method: "PUT",
       data: {
-        ...data,
-        situationCode: call.situationCodeId,
-        divisions: undefined,
-        departments: undefined,
-        assignedUnits: undefined,
+        position: data.position,
       },
     });
 
@@ -70,11 +76,7 @@ export function RenderActiveCalls() {
       path: `/911-calls/${call.id}`,
       method: "PUT",
       data: {
-        ...callData,
-        situationCode: call.situationCodeId,
-        divisions: undefined,
-        departments: undefined,
-        assignedUnits: undefined,
+        position: callData.position,
       },
     });
 
@@ -95,7 +97,11 @@ export function RenderActiveCalls() {
     <>
       {!hiddenItems[MapItem.CALLS] &&
         callsWithPosition.map((call) => {
-          const position = call.position as { lat: number; lng: number };
+          const callGtaPosition = call.gtaMapPosition
+            ? convertToMap(call.gtaMapPosition.x, call.gtaMapPosition.y, map)
+            : null;
+          const callPosition = call.position as { lat: number; lng: number };
+          const position = callGtaPosition ?? callPosition;
 
           return (
             <Marker
@@ -106,6 +112,8 @@ export function RenderActiveCalls() {
               key={call.id}
               position={position}
             >
+              <Tooltip direction="top">{t("dragToMoveCallBlip")}</Tooltip>
+
               <Popup minWidth={300}>
                 <p style={{ margin: 2, fontSize: 18 }}>
                   <strong>{t("location")}: </strong> {call.location}
@@ -118,14 +126,14 @@ export function RenderActiveCalls() {
                 </div>
 
                 <div className="flex gap-2 mt-2">
-                  <Button size="xs" className="!text-base" onClick={() => handleToggle(call.id)}>
+                  <Button size="xs" className="!text-base" onPress={() => handleToggle(call.id)}>
                     {t("toggleCall")}
                   </Button>
                   <Button
                     size="xs"
                     variant="danger"
                     className="!text-base"
-                    onClick={() => handleMarkerChange(call, "remove")}
+                    onPress={() => handleMarkerChange(call, "remove")}
                   >
                     {t("removeMarker")}
                   </Button>

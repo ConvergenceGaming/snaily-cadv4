@@ -1,4 +1,3 @@
-import * as React from "react";
 import { AdminLayout } from "components/admin/AdminLayout";
 import { getSessionUser } from "lib/auth";
 import { getTranslations } from "lib/getTranslation";
@@ -11,8 +10,11 @@ import { Permissions } from "@snailycad/permissions";
 import { useLoadValuesClientSide } from "hooks/useLoadValuesClientSide";
 import type { GetManageUnitByIdData } from "@snailycad/types/api";
 import { TabList } from "components/shared/TabList";
-import { ManageUnitTab } from "components/admin/manage/units/tabs/manage-unit-tab/ManageUnitTab";
-import { UnitLogsTab } from "components/admin/manage/units/tabs/manage-unit-tab/UnitLogsTab";
+import { ManageUnitTab } from "components/admin/manage/units/tabs/manage-unit-tab/manage-unit-tab";
+import { UnitLogsTab } from "components/admin/manage/units/tabs/manage-unit-tab/unit-logs-tab";
+import { BreadcrumbItem, Breadcrumbs } from "@snailycad/ui";
+import { useGenerateCallsign } from "hooks/useGenerateCallsign";
+import { usePermission } from "hooks/usePermission";
 
 interface Props {
   unit: GetManageUnitByIdData;
@@ -21,31 +23,49 @@ interface Props {
 export default function SupervisorPanelPage({ unit: data }: Props) {
   useLoadValuesClientSide({ valueTypes: [ValueType.QUALIFICATION] });
 
+  const { hasPermissions } = usePermission();
+
+  const hasManagePermissions = hasPermissions([Permissions.ManageUnits], true);
+  const hasManageCallsignPermissions = hasPermissions([Permissions.ManageUnitCallsigns], true);
+  const hasManageAwardsPermissions = hasPermissions(
+    [Permissions.ManageAwardsAndQualifications],
+    true,
+  );
+
+  const { generateCallsign } = useGenerateCallsign();
   const tAdmin = useTranslations("Management");
+
+  const TABS = [];
+
+  if (hasManageAwardsPermissions || hasManagePermissions) {
+    TABS[0] = { name: "Manage Unit", value: "manage-unit" };
+  }
+
+  if (hasManageCallsignPermissions) {
+    const idx = hasManageAwardsPermissions || hasManagePermissions ? 1 : 0;
+    TABS[idx] = { name: "Unit Logs", value: "unit-logs" };
+  }
 
   return (
     <AdminLayout
       permissions={{
         fallback: (u) => u.rank !== Rank.USER,
-        permissions: [Permissions.ManageUnits],
+        permissions: [Permissions.ManageUnits, Permissions.ManageAwardsAndQualifications],
       }}
     >
-      <header className="mb-3">
-        <Title className="mb-2">{tAdmin("editUnit")}</Title>
-        <h2 className="text-lg">
-          {tAdmin.rich("editing", {
-            span: (children) => <span className="font-semibold">{children}</span>,
-            user: makeUnitName(data),
-          })}
-        </h2>
-      </header>
+      <Breadcrumbs>
+        <BreadcrumbItem href="/admin/manage/units">{tAdmin("MANAGE_UNITS")}</BreadcrumbItem>
+        <BreadcrumbItem>{tAdmin("editUnit")}</BreadcrumbItem>
+        <BreadcrumbItem>
+          {generateCallsign(data)} {makeUnitName(data)}
+        </BreadcrumbItem>
+      </Breadcrumbs>
 
-      <TabList
-        tabs={[
-          { name: "Manage Unit", value: "manage-unit" },
-          { name: "Unit Logs", value: "unit-logs" },
-        ]}
-      >
+      <Title renderLayoutTitle={false} className="mb-2">
+        {tAdmin("editUnit")}
+      </Title>
+
+      <TabList tabs={TABS}>
         <ManageUnitTab unit={data} />
         <UnitLogsTab unit={data} />
       </TabList>

@@ -1,6 +1,5 @@
-import { Button } from "components/Button";
+import { Loader, Button } from "@snailycad/ui";
 import { FormField } from "components/form/FormField";
-import { Loader } from "components/Loader";
 import { Modal } from "components/modal/Modal";
 import { useModal } from "state/modalState";
 import { Form, Formik } from "formik";
@@ -11,7 +10,7 @@ import { JOIN_COMPANY_SCHEMA } from "@snailycad/schemas";
 import { handleValidate } from "lib/handleValidate";
 import { Select } from "components/form/Select";
 import { useRouter } from "next/router";
-import { useBusinessState } from "state/businessState";
+import { useBusinessState } from "state/business-state";
 import { toastMessage } from "lib/toastMessage";
 import { WhitelistStatus } from "@snailycad/types";
 import { CitizenSuggestionsField } from "components/shared/CitizenSuggestionsField";
@@ -69,13 +68,14 @@ export function JoinBusinessModal({ onCreate }: Props) {
       <Formik validate={validate} onSubmit={onSubmit} initialValues={INITIAL_VALUES}>
         {({ handleChange, errors, values, isValid }) => (
           <Form>
-            <FormField errorMessage={errors.citizenId} label={t("citizen")}>
-              <CitizenSuggestionsField
-                labelFieldName="citizenName"
-                valueFieldName="citizenId"
-                fromAuthUserOnly
-              />
-            </FormField>
+            <CitizenSuggestionsField
+              autoFocus
+              allowsCustomValue
+              label={t("citizen")}
+              fromAuthUserOnly
+              labelFieldName="citizenName"
+              valueFieldName="citizenId"
+            />
 
             <FormField errorMessage={errors.businessId} label={t("business")}>
               <Select
@@ -92,7 +92,7 @@ export function JoinBusinessModal({ onCreate }: Props) {
             </FormField>
 
             <footer className="flex justify-end mt-5">
-              <Button type="reset" onClick={handleClose} variant="cancel">
+              <Button type="reset" onPress={handleClose} variant="cancel">
                 {common("cancel")}
               </Button>
               <Button

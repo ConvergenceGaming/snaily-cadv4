@@ -1,22 +1,20 @@
-import * as React from "react";
 import { useTranslations } from "use-intl";
-import { Button } from "components/Button";
+import { Loader, Button } from "@snailycad/ui";
 import { Modal } from "components/modal/Modal";
 import { useModal } from "state/modalState";
 import { ModalIds } from "types/ModalIds";
 import { Form, Formik } from "formik";
 import { FormField } from "components/form/FormField";
 import useFetch from "lib/useFetch";
-import { Loader } from "components/Loader";
 import { Select } from "components/form/Select";
-import { useDispatchState } from "state/dispatch/dispatchState";
+import { useDispatchState } from "state/dispatch/dispatch-state";
 import { makeUnitName } from "lib/utils";
 import type { CombinedLeoUnit, EmsFdDeputy } from "@snailycad/types";
 import { isUnitCombined } from "@snailycad/utils";
 import { useGenerateCallsign } from "hooks/useGenerateCallsign";
 import { Toggle } from "components/form/Toggle";
 import type { Put911CallByIdData } from "@snailycad/types/api";
-import { useCall911State } from "state/dispatch/call911State";
+import { useCall911State } from "state/dispatch/call-911-state";
 
 interface Props {
   onClose?(): void;
@@ -124,7 +122,7 @@ export function AddUnitToCallModal({ onClose }: Props) {
 
             <footer className="flex mt-5 justify-end">
               <div className="flex">
-                <Button onClick={handleClose} type="button" variant="cancel">
+                <Button onPress={handleClose} type="button" variant="cancel">
                   {common("cancel")}
                 </Button>
                 <Button className="flex items-center ml-2" type="submit">

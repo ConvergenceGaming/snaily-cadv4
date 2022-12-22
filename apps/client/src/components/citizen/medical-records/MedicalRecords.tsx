@@ -1,6 +1,5 @@
-import * as React from "react";
 import { useTranslations } from "use-intl";
-import { Button } from "components/Button";
+import { Button } from "@snailycad/ui";
 import type { MedicalRecord, Value } from "@snailycad/types";
 import { ModalIds } from "types/ModalIds";
 import { useModal } from "state/modalState";
@@ -61,7 +60,7 @@ export function MedicalRecords() {
         <header className="flex items-center justify-between">
           <h1 className="text-2xl font-semibold">{t("yourMedicalRecords")}</h1>
 
-          <Button onClick={() => openModal(ModalIds.ManageMedicalRecords)} size="xs">
+          <Button onPress={() => openModal(ModalIds.ManageMedicalRecords)} size="xs">
             {t("addMedicalRecord")}
           </Button>
         </header>
@@ -71,7 +70,7 @@ export function MedicalRecords() {
         ) : (
           <Table
             tableState={tableState}
-            features={{ isWithinCard: true }}
+            features={{ isWithinCardOrModal: true }}
             data={citizen.medicalRecords.map((record) => ({
               id: record.id,
               diseases: record.type,
@@ -80,12 +79,12 @@ export function MedicalRecords() {
               createdAt: <FullDate>{record.createdAt}</FullDate>,
               actions: (
                 <>
-                  <Button onClick={() => handleEditClick(record)} size="xs" variant="success">
+                  <Button onPress={() => handleEditClick(record)} size="xs" variant="success">
                     {common("edit")}
                   </Button>
                   <Button
                     className="ml-2"
-                    onClick={() => handleDeleteClick(record)}
+                    onPress={() => handleDeleteClick(record)}
                     size="xs"
                     variant="danger"
                   >

@@ -1,6 +1,6 @@
-import * as React from "react";
+import type * as React from "react";
 import { QualificationValueType, UnitQualification } from "@snailycad/types";
-import { Button } from "components/Button";
+import { Button } from "@snailycad/ui";
 import { AlertModal } from "components/modal/AlertModal";
 import { Table, useTableState } from "components/shared/Table";
 import useFetch from "lib/useFetch";
@@ -18,11 +18,12 @@ import type {
 import { useTemporaryItem } from "hooks/shared/useTemporaryItem";
 
 interface Props {
+  hasManagePermissions: boolean;
   unit: GetManageUnitByIdData;
   setUnit: React.Dispatch<React.SetStateAction<GetManageUnitByIdData>>;
 }
 
-export function QualificationsTable({ setUnit, unit }: Props) {
+export function QualificationsTable({ hasManagePermissions, setUnit, unit }: Props) {
   const t = useTranslations("Leo");
   const { openModal } = useModal();
 
@@ -35,14 +36,14 @@ export function QualificationsTable({ setUnit, unit }: Props) {
   );
 
   return (
-    <div className="mt-10">
+    <div className={hasManagePermissions ? "mt-10" : undefined}>
       <div id="qualifications">
         <header className="flex items-center justify-between">
           <h2 className="text-xl font-semibold">{t("unitQualifications")}</h2>
 
           <div>
             <Button
-              onClick={() =>
+              onPress={() =>
                 openModal(ModalIds.ManageUnitQualifications, QualificationValueType.QUALIFICATION)
               }
             >
@@ -63,7 +64,7 @@ export function QualificationsTable({ setUnit, unit }: Props) {
           <h2 className="text-xl font-semibold">{t("unitAwards")}</h2>
           <div>
             <Button
-              onClick={() =>
+              onPress={() =>
                 openModal(ModalIds.ManageUnitQualifications, QualificationValueType.AWARD)
               }
             >
@@ -84,7 +85,7 @@ export function QualificationsTable({ setUnit, unit }: Props) {
   );
 }
 
-function QualificationAwardsTable({ unit, setUnit }: Props) {
+function QualificationAwardsTable({ unit, setUnit }: Omit<Props, "hasManagePermissions">) {
   const [tempQualification, qualificationState] = useTemporaryItem(unit.qualifications);
 
   const tableState = useTableState();
@@ -154,7 +155,7 @@ function QualificationAwardsTable({ unit, setUnit }: Props) {
               <>
                 {qa.suspendedAt ? (
                   <Button
-                    onClick={() => handleSuspendOrUnsuspend("unsuspend", qa)}
+                    onPress={() => handleSuspendOrUnsuspend("unsuspend", qa)}
                     disabled={state === "loading"}
                     size="xs"
                     variant="success"
@@ -164,7 +165,7 @@ function QualificationAwardsTable({ unit, setUnit }: Props) {
                 ) : (
                   <Button
                     disabled={state === "loading"}
-                    onClick={() => handleSuspendOrUnsuspend("suspend", qa)}
+                    onPress={() => handleSuspendOrUnsuspend("suspend", qa)}
                     size="xs"
                     variant="amber"
                   >
@@ -173,7 +174,7 @@ function QualificationAwardsTable({ unit, setUnit }: Props) {
                 )}
                 <Button
                   disabled={state === "loading"}
-                  onClick={() => handleDeleteClick(qa)}
+                  onPress={() => handleDeleteClick(qa)}
                   className="ml-2"
                   size="xs"
                   variant="danger"

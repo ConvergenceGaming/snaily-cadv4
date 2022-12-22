@@ -8,15 +8,13 @@ import type { GetServerSideProps } from "next";
 import type { AssignedUnit } from "@snailycad/types";
 import { Table, useAsyncTable, useTableState } from "components/shared/Table";
 import { useGenerateCallsign } from "hooks/useGenerateCallsign";
-import { Full911Call, useDispatchState } from "state/dispatch/dispatchState";
-import { Button } from "components/Button";
+import { Full911Call, useDispatchState } from "state/dispatch/dispatch-state";
+import { Input, Loader, Button } from "@snailycad/ui";
 import { useModal } from "state/modalState";
 import { ModalIds } from "types/ModalIds";
 import { LinkCallToIncidentModal } from "components/leo/call-history/LinkCallToIncidentModal";
 import { FormField } from "components/form/FormField";
-import { Input } from "components/form/inputs/Input";
 import useFetch from "lib/useFetch";
-import { Loader } from "components/Loader";
 import { Title } from "components/shared/Title";
 import { FullDate } from "components/shared/FullDate";
 import { AlertModal } from "components/modal/AlertModal";
@@ -30,9 +28,9 @@ import type {
   GetIncidentsData,
 } from "@snailycad/types/api";
 import { useTemporaryItem } from "hooks/shared/useTemporaryItem";
-import { getSelectedTableRows } from "hooks/shared/table/useTableState";
+import { getSelectedTableRows } from "hooks/shared/table/use-table-state";
 import { CallDescription } from "components/dispatch/active-calls/CallDescription";
-import { useCall911State } from "state/dispatch/call911State";
+import { useCall911State } from "state/dispatch/call-911-state";
 
 interface Props extends GetDispatchData {
   data: Get911CallsData;
@@ -40,12 +38,15 @@ interface Props extends GetDispatchData {
 }
 
 export default function CallHistory({ data, incidents, officers, deputies }: Props) {
+  const [search, setSearch] = React.useState("");
+
   const dispatchState = useDispatchState();
   const { hasPermissions } = usePermission();
   const hasManagePermissions = hasPermissions([Permissions.ManageCallHistory], true);
-  const { setCurrentlySelectedCall } = useCall911State();
+  const setCurrentlySelectedCall = useCall911State((state) => state.setCurrentlySelectedCall);
 
   const asyncTable = useAsyncTable({
+    search,
     fetchOptions: {
       path: "/911-calls?includeEnded=true&take=35",
       onResponse: (json: Get911CallsData) => ({ data: json.calls, totalCount: json.totalCount }),
@@ -56,10 +57,10 @@ export default function CallHistory({ data, incidents, officers, deputies }: Pro
 
   const tableState = useTableState({
     pagination: asyncTable.pagination,
-    search: { value: asyncTable.search.search, setValue: asyncTable.search.setSearch },
+    search: { value: search, setValue: setSearch },
   });
   const { state, execute } = useFetch();
-  const [tempCall, callState] = useTemporaryItem(asyncTable.data);
+  const [tempCall, callState] = useTemporaryItem(asyncTable.items);
 
   const { openModal, closeModal } = useModal();
   const t = useTranslations("Calls");
@@ -80,7 +81,7 @@ export default function CallHistory({ data, incidents, officers, deputies }: Pro
   }
 
   async function handlePurge() {
-    const selectedRows = getSelectedTableRows(asyncTable.data, tableState.rowSelection);
+    const selectedRows = getSelectedTableRows(asyncTable.items, tableState.rowSelection);
     if (selectedRows.length <= 0) return;
 
     const { json } = await execute<DeletePurge911CallsData>({
@@ -90,9 +91,7 @@ export default function CallHistory({ data, incidents, officers, deputies }: Pro
     });
 
     if (json) {
-      const updatedCalls = asyncTable.data.filter((call) => !selectedRows.includes(call.id));
-      asyncTable.setData(updatedCalls);
-
+      asyncTable.remove(...selectedRows);
       closeModal(ModalIds.AlertPurgeCalls);
     }
   }
@@ -128,13 +127,10 @@ export default function CallHistory({ data, incidents, officers, deputies }: Pro
           <div className="mb-2">
             <FormField label={common("search")} className="my-2">
               <div className="flex gap-2">
-                <Input
-                  onChange={(e) => asyncTable.search.setSearch(e.target.value)}
-                  value={asyncTable.search.search}
-                />
+                <Input onChange={(e) => setSearch(e.target.value)} value={search} />
                 {hasManagePermissions ? (
                   <Button
-                    onClick={() => openModal(ModalIds.AlertPurgeCalls)}
+                    onPress={() => openModal(ModalIds.AlertPurgeCalls)}
                     className="flex items-center gap-2 ml-2 min-w-fit"
                     disabled={state === "loading" || isEmpty(tableState.rowSelection)}
                   >
@@ -146,16 +142,18 @@ export default function CallHistory({ data, incidents, officers, deputies }: Pro
             </FormField>
           </div>
 
-          {asyncTable.search.search && asyncTable.pagination.totalDataCount !== data.totalCount ? (
+          {search && asyncTable.pagination.totalDataCount !== data.totalCount ? (
             <p className="italic text-base font-semibold">
-              Showing {asyncTable.pagination.totalDataCount} result(s)
+              {common.rich("showingXResults", {
+                amount: asyncTable.pagination.totalDataCount,
+              })}
             </p>
           ) : null}
 
           <Table
             tableState={tableState}
             features={{ rowSelection: hasManagePermissions }}
-            data={asyncTable.data.map((call) => {
+            data={asyncTable.items.map((call) => {
               const caseNumbers = (call.incidents ?? []).map((i) => `#${i.caseNumber}`).join(", ");
 
               return {
@@ -171,11 +169,11 @@ export default function CallHistory({ data, incidents, officers, deputies }: Pro
                 actions: (
                   <>
                     {hasManagePermissions ? (
-                      <Button onClick={() => handleLinkClick(call)} size="xs">
+                      <Button onPress={() => handleLinkClick(call)} size="xs">
                         {leo("linkToIncident")}
                       </Button>
                     ) : null}
-                    <Button className="ml-2" onClick={() => handleViewClick(call)} size="xs">
+                    <Button className="ml-2" onPress={() => handleViewClick(call)} size="xs">
                       {leo("viewCall")}
                     </Button>
                   </>
@@ -198,22 +196,14 @@ export default function CallHistory({ data, incidents, officers, deputies }: Pro
 
       <LinkCallToIncidentModal
         onSave={(call) => {
-          asyncTable.setData((calls) =>
-            calls.map((c) => {
-              if (c.id === call.id) {
-                return call;
-              }
-
-              return c;
-            }),
-          );
+          asyncTable.update(call.id, call);
         }}
         incidents={incidents}
         call={tempCall}
       />
       <AlertModal
         title={t("purgeSelectedCalls")}
-        description={t.rich("alert_purgeSelectedCalls", {
+        description={t("alert_purgeSelectedCalls", {
           length: getObjLength(tableState.rowSelection),
         })}
         id={ModalIds.AlertPurgeCalls}

@@ -116,7 +116,8 @@ type UserPicks =
   | "locale"
   | "twoFactorEnabled"
   | "hasTempPassword"
-  | "roles";
+  | "roles"
+  | "fivemLicense";
 
 export type User = Pick<
   Prisma.User & {
@@ -144,7 +145,10 @@ export type Citizen = Prisma.Citizen & {
   dlCategory: (Prisma.DriversLicenseCategoryValue & { value: Value })[];
   flags?: Prisma.Value[];
   notes?: Prisma.Note[];
+  suspendedLicenses?: SuspendedCitizenLicenses | null;
 };
+
+export type SuspendedCitizenLicenses = Prisma.SuspendedCitizenLicenses;
 
 export type Note = Prisma.Note & {
   createdBy?: Officer | null;
@@ -197,6 +201,14 @@ export type Violation = Prisma.Violation & {
 };
 
 export type SeizedItem = Prisma.SeizedItem;
+
+export type AddressValue = Prisma.AddressValue & { value: Value };
+
+export type EmergencyVehicleValue = Prisma.EmergencyVehicleValue & {
+  divisions?: DivisionValue[];
+  departments?: DepartmentValue[];
+  value: Value;
+};
 
 export type DivisionValue = Prisma.DivisionValue & { value: Value };
 
@@ -251,6 +263,7 @@ export type Officer = Prisma.Officer & {
   rank: Prisma.Value | null;
   activeIncident?: Prisma.LeoIncident | null;
   callsigns?: IndividualDivisionCallsign[];
+  activeVehicle: EmergencyVehicleValue | null;
 };
 
 export type IndividualDivisionCallsign = Prisma.IndividualDivisionCallsign;
@@ -277,7 +290,8 @@ export type StatusValue = Prisma.StatusValue & {
 export type OfficerLog = Prisma.OfficerLog;
 
 export type ImpoundedVehicle = Prisma.ImpoundedVehicle & {
-  vehicle: Prisma.RegisteredVehicle & { model: VehicleValue };
+  officer?: Officer | null;
+  vehicle: Prisma.RegisteredVehicle & { citizen: BaseCitizen; model: VehicleValue };
   location: Prisma.Value;
 };
 
@@ -294,6 +308,7 @@ export type CombinedLeoUnit = Prisma.CombinedLeoUnit & {
   status: Officer["status"];
   department: Officer["department"];
   officers: Omit<Officer, "activeIncident">[];
+  activeVehicle?: Officer["activeVehicle"];
 };
 
 export type ActiveDispatchers = Prisma.ActiveDispatchers;
@@ -333,6 +348,7 @@ export type Record = Prisma.Record & {
   officer?: Officer | null;
   violations: Violation[];
   seizedItems?: Prisma.SeizedItem[];
+  courtEntry?: CourtEntry | null;
 };
 
 export type RecordRelease = Prisma.RecordRelease & {
@@ -362,12 +378,13 @@ export type CourtDate = Prisma.CourtDate;
 
 export type EmsFdDeputy = Prisma.EmsFdDeputy & {
   department: Officer["department"];
-  division: Officer["divisions"][number];
+  division?: Officer["divisions"][number] | null;
   rank: Officer["rank"];
   status: Officer["status"];
   citizen: Officer["citizen"];
   user: Officer["user"];
   whitelistStatus?: Officer["whitelistStatus"];
+  activeVehicle: EmergencyVehicleValue | null;
 };
 
 export type TruckLog = Prisma.TruckLog & {
@@ -375,13 +392,11 @@ export type TruckLog = Prisma.TruckLog & {
   vehicle: RegisteredVehicle | null;
 };
 
-export type DLExam = Prisma.DLExam & {
+export type LicenseExam = Prisma.LicenseExam & {
   citizen: Prisma.Citizen;
   license: Value;
   categories?: DriversLicenseCategoryValue[];
 };
-
-export type WeaponExam = DLExam;
 
 export type CustomField = Prisma.CustomField;
 
@@ -396,6 +411,7 @@ export type CourthousePost = Prisma.CourthousePost & {
 };
 
 export type ValueWithValueObj = (
+  | AddressValue
   | VehicleValue
   | WeaponValue
   | StatusValue
@@ -405,6 +421,7 @@ export type ValueWithValueObj = (
   | DriversLicenseCategoryValue
   | QualificationValue
   | CallTypeValue
+  | EmergencyVehicleValue
 ) & {
   _count?: ValueCounts;
 };

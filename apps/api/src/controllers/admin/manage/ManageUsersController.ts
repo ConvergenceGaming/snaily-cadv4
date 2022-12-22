@@ -93,6 +93,57 @@ export class ManageUsersController {
     return { totalCount, pendingCount, users };
   }
 
+  @Get("/prune")
+  @UsePermissions({
+    fallback: (u) => u.rank !== Rank.USER,
+    permissions: [Permissions.ManageUsers, Permissions.BanUsers, Permissions.DeleteUsers],
+  })
+  async getInactiveUsers(@QueryParams("days", Number) days = 30) {
+    const [users, total] = await prisma.$transaction([
+      prisma.user.findMany({
+        where: {
+          updatedAt: {
+            lte: new Date(new Date().getTime() - 1000 * 60 * 60 * 24 * days),
+          },
+        },
+        select: userProperties,
+      }),
+      prisma.user.count({
+        where: {
+          updatedAt: {
+            lte: new Date(new Date().getTime() - 1000 * 60 * 60 * 24 * days),
+          },
+        },
+      }),
+    ]);
+
+    return { users, total };
+  }
+
+  @Delete("/prune")
+  @UsePermissions({
+    fallback: (u) => u.rank !== Rank.USER,
+    permissions: [Permissions.ManageUsers, Permissions.BanUsers, Permissions.DeleteUsers],
+  })
+  async pruneInactiveUsers(
+    @BodyParams("userIds", String) userIds: string[],
+    @BodyParams("days", Number) days = 30,
+  ) {
+    const arr = await prisma.$transaction(
+      userIds.map((id) =>
+        prisma.user.deleteMany({
+          where: {
+            id,
+            NOT: { rank: Rank.OWNER },
+            updatedAt: { lte: new Date(new Date().getTime() - 1000 * 60 * 60 * 24 * days) },
+          },
+        }),
+      ),
+    );
+
+    return { count: arr.length };
+  }
+
   @Get("/:id")
   @UsePermissions({
     fallback: (u) => u.rank !== Rank.USER,
@@ -108,7 +159,7 @@ export class ManageUsersController {
     @QueryParams("select-citizens") selectCitizens: boolean,
   ): Promise<APITypes.GetManageUserByIdData> {
     const user = await prisma.user.findFirst({
-      where: { OR: [{ id }, { discordId: id }, { steamId: id }] },
+      where: { OR: [{ id }, { discordId: id }, { steamId: id }, { fivemLicense: id }] },
       select: manageUsersSelect(selectCitizens),
     });
 
@@ -246,6 +297,7 @@ export class ManageUsersController {
         id: user.id,
       },
       data: {
+        username: data.username,
         isLeo: data.isLeo,
         isSupervisor: data.isSupervisor,
         isDispatch: data.isDispatch,
@@ -255,6 +307,7 @@ export class ManageUsersController {
         steamId: data.steamId,
         rank: user.rank === Rank.OWNER ? Rank.OWNER : Rank[data.rank as Rank],
         discordId: data.discordId,
+        fivemLicense: data.fivemLicense,
       },
       select: manageUsersSelect(false),
     });

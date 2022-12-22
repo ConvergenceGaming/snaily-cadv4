@@ -1,16 +1,13 @@
 import * as React from "react";
 import type { CombinedLeoUnit, EmsFdDeputy, Officer } from "@snailycad/types";
-import { Button } from "components/Button";
-import { FormField } from "components/form/FormField";
-import { Input } from "components/form/inputs/Input";
-import { Loader } from "components/Loader";
+import { Loader, Button, TextField } from "@snailycad/ui";
 import { Modal } from "components/modal/Modal";
 import { Form, Formik } from "formik";
 import useFetch from "lib/useFetch";
 import { useTranslations } from "next-intl";
 import { Pencil } from "react-bootstrap-icons";
 import { useRouter } from "next/router";
-import { useDispatchState } from "state/dispatch/dispatchState";
+import { useDispatchState } from "state/dispatch/dispatch-state";
 import { handleValidate } from "lib/handleValidate";
 import { UPDATE_RADIO_CHANNEL_SCHEMA } from "@snailycad/schemas";
 import { isUnitCombined, isUnitOfficer } from "@snailycad/utils";
@@ -27,7 +24,12 @@ export function UnitRadioChannelModal({ unit, onClose }: Props) {
   const { state, execute } = useFetch();
   const common = useTranslations("Common");
   const t = useTranslations("Leo");
-  const dispatchState = useDispatchState();
+  const dispatchState = useDispatchState((state) => ({
+    setActiveOfficers: state.setActiveOfficers,
+    setActiveDeputies: state.setActiveDeputies,
+    activeOfficers: state.activeOfficers,
+    activeDeputies: state.activeDeputies,
+  }));
   const { hasActiveDispatchers } = useActiveDispatchers();
 
   const router = useRouter();
@@ -90,7 +92,7 @@ export function UnitRadioChannelModal({ unit, onClose }: Props) {
         {isDispatch ? (
           <Button
             className="px-1.5"
-            onClick={() => setIsOpen(true)}
+            onPress={() => setIsOpen(true)}
             disabled={!hasActiveDispatchers}
           >
             <Pencil aria-label={t("manageRadioChannel")} className="fill-current text-white" />
@@ -106,14 +108,19 @@ export function UnitRadioChannelModal({ unit, onClose }: Props) {
           className="min-w-[500px]"
         >
           <Formik validate={validate} onSubmit={onSubmit} initialValues={INITIAL_VALUES}>
-            {({ values, errors, handleChange }) => (
+            {({ values, errors, setFieldValue }) => (
               <Form>
-                <FormField errorMessage={errors.radioChannel} label={t("radioChannel")}>
-                  <Input name="radioChannel" onChange={handleChange} value={values.radioChannel} />
-                </FormField>
+                <TextField
+                  errorMessage={errors.radioChannel}
+                  autoFocus
+                  isRequired
+                  label={t("radioChannel")}
+                  value={values.radioChannel}
+                  onChange={(value) => setFieldValue("radioChannel", value)}
+                />
 
                 <footer className="flex mt-5 justify-end">
-                  <Button onClick={handleClose} type="button" variant="cancel">
+                  <Button onPress={handleClose} type="button" variant="cancel">
                     {common("cancel")}
                   </Button>
                   <Button

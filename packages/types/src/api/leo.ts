@@ -50,13 +50,32 @@ export interface PostMyOfficerByIdData {
  * @method GET
  * @route /leo/dmv
  */
-export type GetDMVPendingVehiclesData = Types.RegisteredVehicle[];
+export interface GetDMVPendingVehiclesData {
+  vehicles: Types.RegisteredVehicle[];
+  totalCount: number;
+}
 
 /**
  * @method POST
  * @route /leo/dmv/:vehicleId
  */
 export type PostDMVVehiclesData = Types.RegisteredVehicle;
+
+/** bureau of firearms */
+/**
+ * @method GET
+ * @route /leo/bureau-of-firearms
+ */
+export interface GetPendingBOFWeapons {
+  weapons: Types.Weapon[];
+  totalCount: number;
+}
+
+/**
+ * @method POST
+ * @route /leo/bureau-of-firearms/:vehicleId
+ */
+export type PostBOFData = Types.Weapon;
 
 /** jail */
 /**
@@ -74,61 +93,33 @@ export interface GetJailedCitizensData {
  */
 export type DeleteReleaseJailedCitizenData = Types.BaseCitizen & { Record: Types.Record[] };
 
-/** dl-exams */
+/** license-exams */
 /**
  * @method GET
- * @route /leo/dl-exams
+ * @route /leo/license-exams
  */
-export interface GetDLExamsData {
+export interface GetLicenseExamsData {
   totalCount: number;
-  exams: Types.DLExam[];
+  exams: Types.LicenseExam[];
 }
 
 /**
  * @method POST
- * @route /leo/dl-exams
+ * @route /leo/license-exams
  */
-export type PostDLExamsData = Types.DLExam;
+export type PostLicenseExamsData = Types.LicenseExam;
 
 /**
  * @method PUT
- * @route /leo/dl-exams/:id
+ * @route /leo/license-exams/:id
  */
-export type PutDLExamByIdData = Types.DLExam;
+export type PutLicenseExamByIdData = Types.LicenseExam;
 
 /**
  * @method DELETE
- * @route /leo/dl-exams/:id
+ * @route /leo/license-exams/:id
  */
-export type DeleteDLExamByIdData = boolean;
-
-/** weapon-exams */
-/**
- * @method GET
- * @route /leo/weapon-exams
- */
-export interface GetWeaponExamsData {
-  totalCount: number;
-  exams: Types.WeaponExam[];
-}
-
-/**
- * @method POST
- * @route /leo/weapon-exams
- */
-export type PostWeaponExamsData = Types.WeaponExam;
-
-/**
- * @method PUT
- * @route /leo/weapon-exams/:id
- */
-export type PutWeaponExamByIdData = Types.WeaponExam;
-
-/**
- * @method DELETE
- * @route /leo/weapon-exams/:id
- */
-export type DeleteWeaponExamByIdData = boolean;
+export type DeleteLicenseExamByIdData = boolean;
 
 /** leo */
 /**

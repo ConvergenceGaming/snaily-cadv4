@@ -23,6 +23,8 @@ import {
   PENAL_CODE_ARR,
   QUALIFICATION_ARR,
   CALL_TYPE_ARR,
+  ADDRESS_SCHEMA_ARR,
+  EMERGENCY_VEHICLE_ARR,
 } from "@snailycad/schemas";
 import {
   type DepartmentType,
@@ -37,15 +39,17 @@ import {
   Value,
   CadFeature,
   cad,
+  PenalCodeType,
 } from "@prisma/client";
 import { validateSchema } from "lib/validateSchema";
 import { upsertWarningApplicable } from "lib/records/penal-code";
 import { getLastOfArray, manyToManyHelper } from "utils/manyToMany";
 import { getPermissionsForValuesRequest } from "lib/values/utils";
 import { UsePermissions } from "middlewares/UsePermissions";
-import { validateImgurURL } from "utils/image";
+import { validateImgurURL } from "utils/images/image";
 import type * as APITypes from "@snailycad/types/api";
 import { ExtendedBadRequest } from "src/exceptions/ExtendedBadRequest";
+import generateBlurPlaceholder from "utils/images/generate-image-blur-data";
 
 @Controller("/admin/values/import/:path")
 @UseBeforeEach(IsAuth, IsValidPath)
@@ -102,6 +106,24 @@ interface HandlerOptions {
 }
 
 export const typeHandlers = {
+  ADDRESS: async ({ body, id }: HandlerOptions) => {
+    const data = validateSchema(ADDRESS_SCHEMA_ARR, body);
+
+    return prisma.$transaction(
+      data.map((item) => {
+        return prisma.addressValue.upsert({
+          where: { id: String(id) },
+          ...makePrismaData(ValueType.ADDRESS, {
+            postal: item.postal,
+            county: item.county,
+            value: item.value,
+            isDisabled: item.isDisabled,
+          }),
+          include: { value: true },
+        });
+      }),
+    );
+  },
   VEHICLE: async ({ body, id }: HandlerOptions) => {
     const data = validateSchema(HASH_SCHEMA_ARR, body);
 
@@ -186,6 +208,7 @@ export const typeHandlers = {
             isDefaultDepartment: item.isDefaultDepartment ?? false,
             isConfidential: item.isConfidential ?? false,
             whitelisted: item.whitelisted ?? false,
+            extraFields: item.extraFields || undefined,
             defaultOfficerRank: item.defaultOfficerRankId
               ? { connect: { id: item.defaultOfficerRankId } }
               : undefined,
@@ -268,7 +291,9 @@ export const typeHandlers = {
           title: item.title,
           description: item.description,
           descriptionData: item.descriptionData ?? [],
+          type: (item.type ?? null) as PenalCodeType | null,
           groupId: item.groupId,
+          isPrimary: item.isPrimary ?? true,
           ...(await upsertWarningApplicable({
             body: item,
             cad,
@@ -280,6 +305,8 @@ export const typeHandlers = {
           description: item.description,
           descriptionData: item.descriptionData ?? [],
           groupId: item.groupId,
+          isPrimary: item.isPrimary ?? true,
+          type: (item.type ?? null) as PenalCodeType | null,
           ...(await upsertWarningApplicable({
             body: item,
             cad,
@@ -298,11 +325,13 @@ export const typeHandlers = {
     const data = validateSchema(QUALIFICATION_ARR, body);
 
     return handlePromiseAll(data, async (item) => {
+      const validatedImageURL = validateImgurURL(item.image);
       const updatedValue = await prisma.qualificationValue.upsert({
         where: { id: String(id) },
         ...makePrismaData(ValueType.QUALIFICATION, {
           description: item.description,
-          imageId: validateImgurURL(item.image),
+          imageId: validatedImageURL,
+          imageBlurData: await generateBlurPlaceholder(validatedImageURL),
           value: item.value,
           isDisabled: item.isDisabled,
           qualificationType: item.qualificationType as QualificationValueType,
@@ -338,8 +367,10 @@ export const typeHandlers = {
     const data = validateSchema(BASE_ARR, body);
 
     return handlePromiseAll(data, async (item) => {
+      const validatedImageURL = validateImgurURL(item.officerRankImageId);
       const createUpdateData = {
-        officerRankImageId: validateImgurURL(item.officerRankImageId),
+        officerRankImageId: validatedImageURL,
+        officerRankImageBlurData: await generateBlurPlaceholder(validatedImageURL),
         value: item.value,
         isDisabled: item.isDisabled ?? false,
         isDefault: false,
@@ -392,6 +423,62 @@ export const typeHandlers = {
         });
       }),
     );
+  },
+  EMERGENCY_VEHICLE: async ({ body, id }: HandlerOptions) => {
+    const data = validateSchema(EMERGENCY_VEHICLE_ARR, body);
+
+    const valueInclude = {
+      value: true,
+      divisions: { include: { value: true } },
+      departments: { include: { value: true } },
+    };
+
+    return handlePromiseAll(data, async (item) => {
+      const updatedValue = await prisma.emergencyVehicleValue.upsert({
+        where: { id: String(id) },
+        ...makePrismaData(ValueType.EMERGENCY_VEHICLE, {
+          value: item.value,
+          isDisabled: item.isDisabled,
+        }),
+        include: valueInclude,
+      });
+
+      const departmentDcArr = manyToManyHelper(
+        updatedValue.departments.map((v) => v.id),
+        item.departments ?? [],
+      );
+
+      const divisionsDcArr = manyToManyHelper(
+        updatedValue.divisions.map((v) => v.id),
+        item.divisions ?? [],
+      );
+
+      const updatedWithDepartment = getLastOfArray(
+        await prisma.$transaction(
+          departmentDcArr.map((v, idx) =>
+            prisma.emergencyVehicleValue.update({
+              where: { id: updatedValue.id },
+              data: { departments: v },
+              include: idx + 1 === departmentDcArr.length ? valueInclude : undefined,
+            }),
+          ),
+        ),
+      );
+
+      const updatedWithDivision = getLastOfArray(
+        await prisma.$transaction(
+          divisionsDcArr.map((v, idx) =>
+            prisma.emergencyVehicleValue.update({
+              where: { id: updatedValue.id },
+              data: { divisions: v },
+              include: idx + 1 === divisionsDcArr.length ? valueInclude : undefined,
+            }),
+          ),
+        ),
+      );
+
+      return updatedWithDivision || updatedWithDepartment || updatedValue;
+    });
   },
   GENDER: async (options: HandlerOptions) => typeHandlers.GENERIC({ ...options, type: "GENDER" }),
   ETHNICITY: async (options: HandlerOptions) =>

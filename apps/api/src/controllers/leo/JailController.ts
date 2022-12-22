@@ -36,7 +36,7 @@ const citizenInclude = {
 @Controller("/leo/jail")
 @UseBeforeEach(IsAuth)
 @ContentType("application/json")
-export class LeoController {
+export class JailController {
   @Get("/")
   @Description("Get all the citizens who are jailed")
   @UsePermissions({
@@ -159,7 +159,7 @@ export class LeoController {
     const updatedCitizen = await prisma.citizen.update({
       where: { id: citizen.id },
       data: {
-        arrested: true,
+        arrested: false,
         Record: {
           update: {
             where: { id: record.id },

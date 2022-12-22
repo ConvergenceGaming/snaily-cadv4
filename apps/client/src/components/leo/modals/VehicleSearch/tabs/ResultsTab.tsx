@@ -1,11 +1,10 @@
-import * as React from "react";
-import { Button } from "components/Button";
+import { Button } from "@snailycad/ui";
 import { useTranslations } from "use-intl";
 import { yesOrNoText } from "lib/utils";
 import { classNames } from "lib/classNames";
 import { Infofield } from "components/shared/Infofield";
 import { FullDate } from "components/shared/FullDate";
-import { useVehicleSearch } from "state/search/vehicleSearchState";
+import { useVehicleSearch } from "state/search/vehicle-search-state";
 import { Pencil } from "react-bootstrap-icons";
 import { Status } from "components/shared/Status";
 import { TabsContent } from "components/shared/TabList";
@@ -18,7 +17,7 @@ import { ModalIds } from "types/ModalIds";
 import { useFeatureEnabled } from "hooks/useFeatureEnabled";
 
 export function ResultsTab() {
-  const { currentResult } = useVehicleSearch();
+  const currentResult = useVehicleSearch((state) => state.currentResult);
   const { INSPECTION_STATUS_LABELS, TAX_STATUS_LABELS } = useVehicleLicenses();
   const { openModal, closeModal } = useModal();
   const { BUSINESS, DMV } = useFeatureEnabled();
@@ -61,7 +60,7 @@ export function ResultsTab() {
               title={common("openInSearch")}
               size="xs"
               type="button"
-              onClick={handleNameClick}
+              onPress={handleNameClick}
             >
               {currentResult.citizen.name} {currentResult.citizen.surname}
             </Button>
@@ -118,7 +117,7 @@ export function ResultsTab() {
           <Infofield className="capitalize flex items-center gap-2" label={vT("flags")}>
             <Button
               type="button"
-              onClick={handleEditVehicleFlags}
+              onPress={handleEditVehicleFlags}
               title={t("manageVehicleFlags")}
               aria-label={t("manageVehicleFlags")}
               className="px-1 mr-2"
@@ -149,8 +148,18 @@ export function ResultsTab() {
           >
             {common(yesOrNoText(currentResult.reportedStolen))}
           </Infofield>
+          <Infofield
+            childrenProps={{
+              className: classNames(
+                "capitalize",
+                currentResult.impounded && "text-red-700 font-semibold",
+              ),
+            }}
+            label={t("impounded")}
+          >
+            {common(yesOrNoText(currentResult.impounded))}
+          </Infofield>
         </li>
-
         <CustomFieldsArea currentResult={currentResult} isLeo={isLeo} />
       </ul>
 

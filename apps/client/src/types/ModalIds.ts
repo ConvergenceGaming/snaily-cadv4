@@ -1,5 +1,6 @@
 export const enum ModalIds {
   ReauthorizeSession = "ReauthorizeSessionModal",
+  Changelog = "ChangelogModal",
 
   RegisterVehicle = "RegisterVehicleModal",
   RegisterWeapon = "RegisterWeaponModal",
@@ -23,6 +24,7 @@ export const enum ModalIds {
   ManageUnitCallsign = "ManageUnitCallsignModal",
   ManageCustomRole = "ManageCustomRoleModal",
   ManageRoles = "ManageRolesModal",
+  PruneUsers = "PruneUsersModal",
 
   ManageTowCall = "ManageTowCallModal",
   AssignToTowCall = "AssignToTowCallModal",
@@ -68,16 +70,18 @@ export const enum ModalIds {
   ManageIncident = "ManageIncidentModal",
   LinkCallToIncident = "LinkCallToIncidentModal",
   ManageSeizedItems = "ManageSeizedItemsModal",
-  ManageDLExam = "ManageDLExamModal",
+  ManageExam = "ManageExamModal",
   ManageCitizenCustomFields = "ManageCitizenCustomFieldsModal",
   CustomFieldSearch = "CustomFieldSearchModal",
   AddAssignedUnit = "AddAssignedUnitModal",
+  ImpoundVehicle = "ImpoundVehicleModal",
 
   SearchMedicalRecord = "SearchMedicalRecordModal",
   CreateMedicalRecord = "CreateMedicalRecordModal",
   SelectDeputy = "SelectDeputyModal",
   ManageDeputy = "ManageDeputyModal",
   ManageAOP = "ManageAOPModal",
+  EnableSignal100 = "EnableSignal100",
 
   ManageTruckLog = "ManageTruckLogModal",
 
@@ -91,6 +95,7 @@ export const enum ModalIds {
   ManageNote = "ManageNoteModal",
 
   AlertDeleteCitizen = "alert_DeleteCitizenModal",
+  AlertMarkDeceased = "AlertMarkDeceasedModal",
   AlertDeleteVehicle = "alert_DeleteVehicleModal",
   AlertDeleteWeapon = "alert_DeleteWeaponModal",
   AlertDeleteMedicalRecord = "alert_DeleteMedicalRecordModal",
@@ -117,7 +122,7 @@ export const enum ModalIds {
   AlertDeleteSelectedValues = "AlertDeleteSelectedValuesModal",
   AlertDeclineOfficer = "AlertDeclineOfficerModal",
   AlertUseOldPermissions = "AlertUseOldPermissionsModal",
-  AlertDeleteDLExam = "AlertDeleteDLExamModal",
+  AlertDeleteExam = "AlertDeleteExamModal",
   AlertDeleteCustomField = "AlertDeleteCustomFieldModal",
   AlertRevokePersonalApiToken = "AlertRevokePersonalApiTokenModal",
   AlertDeleteUnitQualification = "AlertDeleteUnitQualificationModal",
@@ -128,4 +133,5 @@ export const enum ModalIds {
   AlertDeleteCustomRole = "AlertDeleteCustomRoleModal",
   AlertDeleteCourthousePost = "AlertDeleteCourthousePostModal",
   AlertDisableUser2FA = "AlertDisableUser2FAModal",
+  AlertCancelExpungementRequest = "AlertCancelExpungementRequest",
 }

@@ -1,8 +1,6 @@
 import * as React from "react";
-import { Button } from "components/Button";
 import { FormField } from "components/form/FormField";
-import { Input } from "components/form/inputs/Input";
-import { Loader } from "components/Loader";
+import { Button, Input, Loader } from "@snailycad/ui";
 import { Modal } from "components/modal/Modal";
 import { Form, Formik, FormikHelpers } from "formik";
 import useFetch from "lib/useFetch";
@@ -98,14 +96,12 @@ export function ImportModal<T extends ImportData>({ onImport, id, url }: Props<T
               </div>
             </FormField>
 
-            <p>
-              <a className="underline" target="_blank" rel="noreferrer" href={data[id].docsUrl}>
-                Documentation
-              </a>
-            </p>
+            <a className="underline" target="_blank" rel="noreferrer" href={data[id].docsUrl}>
+              Documentation
+            </a>
 
             <footer className="flex justify-end mt-5">
-              <Button type="reset" onClick={() => closeModal(id)} variant="cancel">
+              <Button type="reset" onPress={() => closeModal(id)} variant="cancel">
                 Cancel
               </Button>
               <Button className="flex items-center" disabled={state === "loading"} type="submit">

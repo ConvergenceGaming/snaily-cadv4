@@ -1,8 +1,7 @@
-import * as React from "react";
 import { TabsContent } from "components/shared/TabList";
 import { useTranslations } from "use-intl";
-import { Button } from "components/Button";
-import { useBusinessState } from "state/businessState";
+import { Button } from "@snailycad/ui";
+import { useBusinessState } from "state/business-state";
 import { useModal } from "state/modalState";
 import { ModalIds } from "types/ModalIds";
 import type { RegisteredVehicle } from "@snailycad/types";
@@ -13,6 +12,7 @@ import { FullDate } from "components/shared/FullDate";
 import { Table, useTableState } from "components/shared/Table";
 import type { DeleteCitizenVehicleData } from "@snailycad/types/api";
 import { useTemporaryItem } from "hooks/shared/useTemporaryItem";
+import shallow from "zustand/shallow";
 
 export function VehiclesTab() {
   const { state, execute } = useFetch();
@@ -21,8 +21,15 @@ export function VehiclesTab() {
   const bus = useTranslations("Business");
   const t = useTranslations();
   const tableState = useTableState();
+  const { currentBusiness, currentEmployee, setCurrentBusiness } = useBusinessState(
+    (state) => ({
+      currentBusiness: state.currentBusiness,
+      currentEmployee: state.currentEmployee,
+      setCurrentBusiness: state.setCurrentBusiness,
+    }),
+    shallow,
+  );
 
-  const { currentBusiness, currentEmployee, setCurrentBusiness } = useBusinessState();
   const vehicles = currentBusiness?.vehicles ?? [];
   const [tempVehicle, vehicleState] = useTemporaryItem(vehicles);
 
@@ -65,7 +72,7 @@ export function VehiclesTab() {
         <h3 className="text-2xl font-semibold">{bus("businessVehicles")}</h3>
 
         <div>
-          <Button onClick={() => openModal(ModalIds.RegisterVehicle)}>
+          <Button onPress={() => openModal(ModalIds.RegisterVehicle)}>
             {t("Citizen.registerVehicle")}
           </Button>
         </div>
@@ -88,7 +95,7 @@ export function VehiclesTab() {
               <>
                 <Button
                   disabled={vehicle.impounded}
-                  onClick={() => handleManageClick(vehicle)}
+                  onPress={() => handleManageClick(vehicle)}
                   size="xs"
                   variant="success"
                 >
@@ -97,7 +104,7 @@ export function VehiclesTab() {
                 <Button
                   disabled={vehicle.impounded}
                   className="ml-2"
-                  onClick={() => handleDeleteClick(vehicle)}
+                  onPress={() => handleDeleteClick(vehicle)}
                   size="xs"
                   variant="danger"
                 >

@@ -1,13 +1,13 @@
 import * as React from "react";
 import { useTranslations } from "next-intl";
 import type { ModalButton, Args } from "./buttons";
-import { Button } from "components/Button";
+import { Button } from "@snailycad/ui";
 import { useFeatureEnabled } from "hooks/useFeatureEnabled";
 import { useActiveDispatchers } from "hooks/realtime/useActiveDispatchers";
 import { useModal } from "state/modalState";
 import { useRouter } from "next/router";
 import type { EmsFdDeputy } from "@snailycad/types";
-import type { ActiveOfficer } from "state/leoState";
+import type { ActiveOfficer } from "state/leo-state";
 import { useAuth } from "context/AuthContext";
 
 type ButtonProps = Pick<JSX.IntrinsicElements["button"], "name" | "type" | "title" | "disabled">;
@@ -38,7 +38,7 @@ export function ModalButton({ button: buttonFn, unit, ...buttonProps }: Props) {
       id={button.nameKey[1]}
       disabled={buttonProps.disabled}
       title={buttonProps.disabled ? "Go on-duty before continuing" : t(button.nameKey.join("."))}
-      onClick={() => openModal(button.modalId)}
+      onPress={() => openModal(button.modalId)}
       type="button"
       {...buttonProps}
       className="text-base"

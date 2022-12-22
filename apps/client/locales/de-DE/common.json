@@ -97,6 +97,7 @@
     "whitelistDeclined": "Der Zugang zum CAD wurde abgelehnt.",
     "passwordIncorrect": "Das Passwort ist falsch",
     "userAlreadyExists": "Dieser Benutzer existiert bereits",
+    "licenseAlreadyExists": "Dieser FiveM Lizenz existiert bereits.",
     "notFound": "Der angeforderte Artikel wurde nicht gefunden.",
     "plateAlreadyInUse": "Diese Nummernschild ist bereits in Benutzung.",
     "invalidImageType": "Es werden nur die Typen image/png, image/jpeg, image/jpg und image/gif unterstützt",

@@ -9,24 +9,25 @@ import { Title } from "components/shared/Title";
 import { Rank, Weapon } from "@snailycad/types";
 import { Table, useTableState } from "components/shared/Table";
 import { FullDate } from "components/shared/FullDate";
-import { FormField } from "components/form/FormField";
-import { Input } from "components/form/inputs/Input";
-import { Button } from "components/Button";
+import { Button } from "@snailycad/ui";
 import { ImportModal } from "components/admin/import/ImportModal";
 import { ModalIds } from "types/ModalIds";
 import { useModal } from "state/modalState";
-import { useAsyncTable } from "hooks/shared/table/useAsyncTable";
+import { useAsyncTable } from "hooks/shared/table/use-async-table";
 import type { GetImportWeaponsData, PostImportWeaponsData } from "@snailycad/types/api";
 import { AlertModal } from "components/modal/AlertModal";
 import { Permissions, usePermission } from "hooks/usePermission";
 import useFetch from "lib/useFetch";
 import { useTemporaryItem } from "hooks/shared/useTemporaryItem";
+import { SearchArea } from "components/shared/search/search-area";
 
 interface Props {
   data: GetImportWeaponsData;
 }
 
 export default function ImportWeaponsPage({ data }: Props) {
+  const [search, setSearch] = React.useState("");
+
   const t = useTranslations("Management");
   const common = useTranslations("Common");
   const wep = useTranslations("Weapons");
@@ -36,6 +37,7 @@ export default function ImportWeaponsPage({ data }: Props) {
   const hasDeletePermissions = hasPermissions([Permissions.DeleteRegisteredWeapons], true);
 
   const asyncTable = useAsyncTable({
+    search,
     fetchOptions: {
       onResponse: (json: GetImportWeaponsData) => ({
         totalCount: json.totalCount,
@@ -47,7 +49,7 @@ export default function ImportWeaponsPage({ data }: Props) {
     totalCount: data.totalCount,
   });
   const tableState = useTableState({ pagination: asyncTable.pagination });
-  const [tempWeapon, weaponState] = useTemporaryItem(asyncTable.data);
+  const [tempWeapon, weaponState] = useTemporaryItem(asyncTable.items);
 
   function handleDeleteClick(weapon: Weapon) {
     weaponState.setTempId(weapon.id);
@@ -63,7 +65,7 @@ export default function ImportWeaponsPage({ data }: Props) {
     });
 
     if (typeof json === "boolean" && json) {
-      asyncTable.setData((prevData) => prevData.filter((v) => v.id !== tempWeapon.id));
+      asyncTable.remove(tempWeapon.id);
       weaponState.setTempId(null);
       closeModal(ModalIds.AlertDeleteWeapon);
     }
@@ -81,34 +83,24 @@ export default function ImportWeaponsPage({ data }: Props) {
           <Title className="!mb-0">{t("IMPORT_WEAPONS")}</Title>
 
           <div>
-            <Button onClick={() => openModal(ModalIds.ImportWeapons)}>{t("importViaFile")}</Button>
+            <Button onPress={() => openModal(ModalIds.ImportWeapons)}>{t("importViaFile")}</Button>
           </div>
         </div>
 
         <p className="my-2 mt-5 text-neutral-700 dark:text-gray-400 max-w-2xl">
-          Here you can mass-import weapons that are registered to a citizen. In the table below you
-          can also view all registered weapons.
+          {t("importWeaponsDescription")}
         </p>
       </header>
 
-      <FormField label={common("search")} className="my-2 w-full">
-        <Input
-          className="w-full"
-          placeholder="filter by plate, model, color, etc."
-          onChange={(e) => asyncTable.search.setSearch(e.target.value)}
-          value={asyncTable.search.search}
-        />
-      </FormField>
-
-      {asyncTable.search.search && asyncTable.pagination.totalDataCount !== data.totalCount ? (
-        <p className="italic text-base font-semibold">
-          Showing {asyncTable.pagination.totalDataCount} result(s)
-        </p>
-      ) : null}
+      <SearchArea
+        search={{ search, setSearch }}
+        asyncTable={asyncTable}
+        totalCount={data.totalCount}
+      />
 
       <Table
         tableState={tableState}
-        data={asyncTable.data.map((weapon) => ({
+        data={asyncTable.items.map((weapon) => ({
           id: weapon.id,
           model: weapon.model.value.value,
           registrationStatus: weapon.registrationStatus.value,
@@ -116,7 +108,7 @@ export default function ImportWeaponsPage({ data }: Props) {
           citizen: `${weapon.citizen.name} ${weapon.citizen.surname}`,
           createdAt: <FullDate>{weapon.createdAt}</FullDate>,
           actions: (
-            <Button size="xs" variant="danger" onClick={() => handleDeleteClick(weapon)}>
+            <Button size="xs" variant="danger" onPress={() => handleDeleteClick(weapon)}>
               {common("delete")}
             </Button>
           ),
@@ -132,9 +124,7 @@ export default function ImportWeaponsPage({ data }: Props) {
       />
 
       <ImportModal<PostImportWeaponsData>
-        onImport={(weapons) => {
-          asyncTable.setData((p) => [...weapons, ...p]);
-        }}
+        onImport={(weapons) => asyncTable.append(...weapons)}
         id={ModalIds.ImportWeapons}
         url="/admin/import/weapons/file"
       />

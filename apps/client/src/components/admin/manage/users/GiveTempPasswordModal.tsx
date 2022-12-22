@@ -4,7 +4,7 @@ import { useModal } from "state/modalState";
 import type { User } from "@snailycad/types";
 import { ModalIds } from "types/ModalIds";
 import { Modal } from "components/modal/Modal";
-import { Loader } from "components/Loader";
+import { Loader } from "@snailycad/ui";
 import { useTranslations } from "use-intl";
 import type { PostManageUsersGiveTempPasswordData } from "@snailycad/types/api";
 
@@ -34,19 +34,11 @@ export function GiveTempPasswordModal({ user }: Props) {
     if (!result && isOpen(ModalIds.GiveTempPassword)) {
       void fetchNewPassword();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, result]);
 
-  React.useEffect(() => {
     if (result && !isOpen(ModalIds.GiveTempPassword)) {
       setTimeout(() => setResult(null), 90);
     }
-  }, [isOpen, result]);
 
-  React.useEffect(() => {
-    if (!result && isOpen(ModalIds.GiveTempPassword)) {
-      fetchNewPassword();
-    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, result]);
 

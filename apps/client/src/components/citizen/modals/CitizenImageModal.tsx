@@ -3,7 +3,7 @@ import { Modal } from "components/modal/Modal";
 import { useModal } from "state/modalState";
 import { useImageUrl } from "hooks/useImageUrl";
 import { ModalIds } from "types/ModalIds";
-import Image from "next/future/image";
+import Image from "next/image";
 
 interface Props {
   citizen: Citizen;
@@ -21,6 +21,8 @@ export function CitizenImageModal({ citizen }: Props) {
     >
       <div className="flex items-center justify-center mt-10">
         <Image
+          placeholder={citizen.imageBlurData ? "blur" : "empty"}
+          blurDataURL={citizen.imageBlurData ?? undefined}
           draggable={false}
           className="rounded-md w-[40em] h-[40em] object-cover"
           src={makeImageUrl("citizens", citizen.imageId!)!}

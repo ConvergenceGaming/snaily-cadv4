@@ -1,11 +1,17 @@
-import * as React from "react";
 import { useTranslations } from "use-intl";
 import { Form, Formik, FormikHelpers } from "formik";
 import { VEHICLE_SCHEMA } from "@snailycad/schemas";
-import { Button } from "components/Button";
+import {
+  Item,
+  AsyncListSearchField,
+  Button,
+  Input,
+  Loader,
+  SelectField,
+  TextField,
+} from "@snailycad/ui";
 import { FormField } from "components/form/FormField";
 import { Select } from "components/form/Select";
-import { Loader } from "components/Loader";
 import { Modal } from "components/modal/Modal";
 import useFetch from "lib/useFetch";
 import { useValues } from "src/context/ValuesContext";
@@ -18,20 +24,19 @@ import {
   WhitelistStatus,
 } from "@snailycad/types";
 import { handleValidate } from "lib/handleValidate";
-import { Input } from "components/form/inputs/Input";
 import { useCitizen } from "context/CitizenContext";
 import { useRouter } from "next/router";
 import { useAuth } from "context/AuthContext";
 import { Toggle } from "components/form/Toggle";
 import { useFeatureEnabled } from "hooks/useFeatureEnabled";
-import { useBusinessState } from "state/businessState";
+import { useBusinessState } from "state/business-state";
 import { filterLicenseTypes } from "lib/utils";
 import { FormRow } from "components/form/FormRow";
 import { useVehicleLicenses } from "hooks/locale/useVehicleLicenses";
 import { toastMessage } from "lib/toastMessage";
-import { InputSuggestions } from "components/form/inputs/InputSuggestions";
 import { CitizenSuggestionsField } from "components/shared/CitizenSuggestionsField";
 import type { PostCitizenVehicleData, PutCitizenVehicleData } from "@snailycad/types/api";
+import shallow from "zustand/shallow";
 
 interface Props {
   vehicle: RegisteredVehicle | null;
@@ -50,7 +55,14 @@ export function RegisterVehicleModal({ vehicle, onClose, onCreate, onUpdate }: P
   const router = useRouter();
   const { cad } = useAuth();
   const { CUSTOM_TEXTFIELD_VALUES } = useFeatureEnabled();
-  const { currentBusiness, currentEmployee } = useBusinessState();
+  const { currentBusiness, currentEmployee } = useBusinessState(
+    (state) => ({
+      currentBusiness: state.currentBusiness,
+      currentEmployee: state.currentEmployee,
+    }),
+    shallow,
+  );
+
   const { INSPECTION_STATUS, TAX_STATUS } = useVehicleLicenses();
 
   const { vehicle: vehicles, license } = useValues();
@@ -129,25 +141,16 @@ export function RegisterVehicleModal({ vehicle, onClose, onCreate, onUpdate }: P
       className="w-[700px]"
     >
       <Formik validate={validate} onSubmit={onSubmit} initialValues={INITIAL_VALUES}>
-        {({ handleChange, setValues, errors, values, isValid }) => (
+        {({ handleChange, setFieldValue, setValues, errors, values, isValid }) => (
           <Form>
-            <FormField errorMessage={errors.plate} label={tVehicle("plate")}>
-              <Input
-                onChange={handleChange}
-                name="plate"
-                value={values.plate.toUpperCase()}
-                max={maxPlateLength}
-                maxLength={maxPlateLength}
-              />
-            </FormField>
-
-            {/* <FormField optional errorMessage={errors.vinNumber} label={tVehicle("vinNumber")}>
-              <Input
-                value={values.vinNumber.toUpperCase()}
-                name="vinNumber"
-                onChange={handleChange}
-              />
-            </FormField> */}
+            <TextField
+              errorMessage={errors.plate}
+              label={tVehicle("plate")}
+              onChange={(value) => setFieldValue("plate", value.toUpperCase())}
+              name="plate"
+              value={values.plate.toUpperCase()}
+              maxLength={maxPlateLength}
+            />
 
             {CUSTOM_TEXTFIELD_VALUES ? (
               <FormField errorMessage={errors.model} label={tVehicle("model")}>
@@ -172,41 +175,54 @@ export function RegisterVehicleModal({ vehicle, onClose, onCreate, onUpdate }: P
                 </datalist>
               </FormField>
             ) : (
-              <FormField errorMessage={errors.model} label={tVehicle("model")}>
-                <InputSuggestions<VehicleValue>
-                  onSuggestionClick={(suggestion) => {
-                    setValues({
-                      ...values,
-                      modelName: suggestion.value.value,
-                      model: suggestion.id,
-                    });
-                  }}
-                  Component={({ suggestion }) => (
-                    <p className="w-full text-left">{suggestion.value.value}</p>
-                  )}
-                  options={{
-                    apiPath: (value) => `/admin/values/vehicle/search?query=${value}`,
-                    method: "GET",
-                  }}
-                  inputProps={{
-                    value: values.modelName,
-                    name: "modelName",
-                    onChange: handleChange,
-                    errorMessage: errors.model,
-                  }}
-                />
-              </FormField>
+              <AsyncListSearchField<VehicleValue>
+                localValue={values.modelName}
+                setValues={({ localValue, node }) => {
+                  const modelName =
+                    typeof localValue !== "undefined" ? { modelName: localValue } : {};
+                  const model = node ? { model: node.key as string } : {};
+
+                  setValues({ ...values, ...modelName, ...model });
+                }}
+                errorMessage={errors.model}
+                label={tVehicle("model")}
+                selectedKey={values.model}
+                fetchOptions={{
+                  apiPath: (value) => `/admin/values/vehicle/search?query=${value}`,
+                  method: "GET",
+                }}
+              >
+                {(item) => {
+                  return <Item textValue={item.value.value}>{item.value.value}</Item>;
+                }}
+              </AsyncListSearchField>
             )}
 
-            <FormField errorMessage={errors.citizenId} label={tVehicle("owner")}>
-              <CitizenSuggestionsField
-                fromAuthUserOnly={!isLeo}
-                allowUnknown={isLeo}
-                labelFieldName="name"
-                valueFieldName="citizenId"
-                isDisabled={isDisabled}
-              />
-            </FormField>
+            <CitizenSuggestionsField
+              allowsCustomValue
+              label={tVehicle("owner")}
+              fromAuthUserOnly={!isLeo}
+              labelFieldName="name"
+              valueFieldName="citizenId"
+              isDisabled={isDisabled}
+            />
+
+            <TextField
+              errorMessage={errors.color}
+              label={tVehicle("color")}
+              onChange={(value) => setFieldValue("color", value)}
+              name="color"
+              value={values.color}
+            />
+
+            <TextField
+              errorMessage={errors.vinNumber}
+              label={tVehicle("vinNumber")}
+              onChange={(value) => setFieldValue("vinNumber", value.toUpperCase())}
+              name="vinNumber"
+              value={values.vinNumber.toUpperCase()}
+              isOptional
+            />
 
             <FormRow>
               <FormField
@@ -244,33 +260,28 @@ export function RegisterVehicleModal({ vehicle, onClose, onCreate, onUpdate }: P
             </FormRow>
 
             <FormRow>
-              <FormField
+              <SelectField
+                isOptional
                 errorMessage={errors.inspectionStatus}
                 label={tVehicle("inspectionStatus")}
-              >
-                <Select
-                  isClearable
-                  values={INSPECTION_STATUS}
-                  value={values.inspectionStatus}
-                  name="inspectionStatus"
-                  onChange={handleChange}
-                />
-              </FormField>
+                name="inspectionStatus"
+                options={INSPECTION_STATUS}
+                onSelectionChange={(key) => setFieldValue("inspectionStatus", key)}
+                selectedKey={values.inspectionStatus}
+                isClearable
+              />
 
-              <FormField errorMessage={errors.taxStatus} label={tVehicle("taxStatus")}>
-                <Select
-                  isClearable
-                  values={TAX_STATUS}
-                  value={values.taxStatus}
-                  name="taxStatus"
-                  onChange={handleChange}
-                />
-              </FormField>
+              <SelectField
+                isOptional
+                errorMessage={errors.taxStatus}
+                label={tVehicle("taxStatus")}
+                name="taxStatus"
+                options={TAX_STATUS}
+                onSelectionChange={(key) => setFieldValue("taxStatus", key)}
+                isClearable
+                selectedKey={values.taxStatus}
+              />
             </FormRow>
-
-            <FormField errorMessage={errors.color} label={tVehicle("color")}>
-              <Input onChange={handleChange} name="color" value={values.color} />
-            </FormField>
 
             {vehicle ? (
               <FormRow>
@@ -294,7 +305,7 @@ export function RegisterVehicleModal({ vehicle, onClose, onCreate, onUpdate }: P
             ) : null}
 
             <footer className="flex justify-end mt-5">
-              <Button type="reset" onClick={handleClose} variant="cancel">
+              <Button type="reset" onPress={handleClose} variant="cancel">
                 {common("cancel")}
               </Button>
               <Button

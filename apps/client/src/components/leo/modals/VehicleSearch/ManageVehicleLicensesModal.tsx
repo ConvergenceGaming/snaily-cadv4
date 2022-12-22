@@ -1,7 +1,6 @@
-import { Button } from "components/Button";
+import { Loader, Button, SelectField } from "@snailycad/ui";
 import { FormField } from "components/form/FormField";
 import { Select } from "components/form/Select";
-import { Loader } from "components/Loader";
 import { Modal } from "components/modal/Modal";
 import { useModal } from "state/modalState";
 import { useValues } from "context/ValuesContext";
@@ -11,17 +10,24 @@ import { filterLicenseTypes } from "lib/utils";
 import { useTranslations } from "next-intl";
 import { ModalIds } from "types/ModalIds";
 import { ValueLicenseType } from "@snailycad/types";
-import { useVehicleSearch } from "state/search/vehicleSearchState";
+import { useVehicleSearch } from "state/search/vehicle-search-state";
 import { useVehicleLicenses } from "hooks/locale/useVehicleLicenses";
-import { useNameSearch } from "state/search/nameSearchState";
+import { useNameSearch } from "state/search/name-search-state";
 import type { PutSearchActionsVehicleLicensesData } from "@snailycad/types/api";
+import shallow from "zustand/shallow";
 
 export function ManageVehicleLicensesModal() {
   const common = useTranslations("Common");
   const { isOpen, closeModal } = useModal();
   const { license } = useValues();
   const { currentResult, setCurrentResult } = useVehicleSearch();
-  const nameSearchState = useNameSearch();
+  const nameSearchState = useNameSearch(
+    (state) => ({
+      currentResult: state.currentResult,
+      setCurrentResult: state.setCurrentResult,
+    }),
+    shallow,
+  );
   const { state, execute } = useFetch();
 
   const t = useTranslations();
@@ -72,7 +78,7 @@ export function ManageVehicleLicensesModal() {
       className="min-w-[600px]"
     >
       <Formik onSubmit={onSubmit} initialValues={INITIAL_VALUES}>
-        {({ handleChange, errors, values }) => (
+        {({ handleChange, setFieldValue, errors, values }) => (
           <Form>
             <FormField
               errorMessage={errors.registrationStatus}
@@ -107,33 +113,32 @@ export function ManageVehicleLicensesModal() {
               />
             </FormField>
 
-            <FormField
+            <SelectField
+              isOptional
               errorMessage={errors.inspectionStatus}
               label={t("Vehicles.inspectionStatus")}
-            >
-              <Select
-                isClearable
-                values={INSPECTION_STATUS}
-                value={values.inspectionStatus}
-                name="inspectionStatus"
-                onChange={handleChange}
-              />
-            </FormField>
+              name="inspectionStatus"
+              options={INSPECTION_STATUS}
+              onSelectionChange={(key) => setFieldValue("inspectionStatus", key)}
+              isClearable
+              selectedKey={values.inspectionStatus}
+            />
 
-            <FormField errorMessage={errors.taxStatus} label={t("Vehicles.taxStatus")}>
-              <Select
-                isClearable
-                values={TAX_STATUS}
-                value={values.taxStatus}
-                name="taxStatus"
-                onChange={handleChange}
-              />
-            </FormField>
+            <SelectField
+              isOptional
+              errorMessage={errors.taxStatus}
+              label={t("Vehicles.taxStatus")}
+              name="taxStatus"
+              options={TAX_STATUS}
+              onSelectionChange={(key) => setFieldValue("taxStatus", key)}
+              isClearable
+              selectedKey={values.taxStatus}
+            />
 
             <footer className="flex items-center justify-end gap-2 mt-5">
               <Button
                 type="reset"
-                onClick={() => closeModal(ModalIds.ManageVehicleLicenses)}
+                onPress={() => closeModal(ModalIds.ManageVehicleLicenses)}
                 variant="cancel"
               >
                 {common("cancel")}

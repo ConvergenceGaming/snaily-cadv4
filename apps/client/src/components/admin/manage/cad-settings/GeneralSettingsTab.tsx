@@ -1,12 +1,10 @@
 import * as React from "react";
 import { useAuth } from "context/AuthContext";
-import { Rank } from "@snailycad/types";
 import { useTranslations } from "use-intl";
-import { Input, PasswordInput } from "components/form/inputs/Input";
+import { PasswordInput } from "components/form/inputs/Input";
 import { Toggle } from "components/form/Toggle";
-import { Button } from "components/Button";
 import useFetch from "lib/useFetch";
-import { Loader } from "components/Loader";
+import { Button, Input, Loader } from "@snailycad/ui";
 import { TabsContent } from "components/shared/TabList";
 import { handleValidate } from "lib/handleValidate";
 import { CAD_SETTINGS_SCHEMA } from "@snailycad/schemas";
@@ -21,7 +19,7 @@ import type { PutCADSettingsData } from "@snailycad/types/api";
 export function GeneralSettingsTab() {
   const [logo, setLogo] = React.useState<(File | string) | null>(null);
   const { state, execute } = useFetch();
-  const { user, cad, setCad } = useAuth();
+  const { cad, setCad } = useAuth();
   const { AOP } = useFeatureEnabled();
 
   const common = useTranslations("Common");
@@ -36,7 +34,7 @@ export function GeneralSettingsTab() {
     const validatedImage = validateFile(logo, helpers);
 
     if (validatedImage) {
-      if (typeof validatedImage === "object") {
+      if (typeof validatedImage !== "string") {
         fd.set("image", validatedImage, validatedImage.name);
       }
     }
@@ -57,6 +55,9 @@ export function GeneralSettingsTab() {
           method: "POST",
           data: fd,
           helpers,
+          headers: {
+            "content-type": "multipart/form-data",
+          },
         });
 
         json.logoId = logoId;
@@ -69,10 +70,6 @@ export function GeneralSettingsTab() {
       });
       setCad({ ...cad, ...json });
     }
-  }
-
-  if (user?.rank !== Rank.OWNER) {
-    return null;
   }
 
   if (!cad) {
