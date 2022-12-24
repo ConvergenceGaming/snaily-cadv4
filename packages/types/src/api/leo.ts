@@ -130,6 +130,12 @@ export type GetActiveOfficerData = Types.CombinedLeoUnit | Types.Officer;
 
 /**
  * @method GET
+ * @route /leo/:id
+ */
+export type GetOfficerData = Types.CombinedLeoUnit | Types.Officer;
+
+/**
+ * @method GET
  * @route /leo/active-officers
  */
 export type GetActiveOfficersData = (Types.CombinedLeoUnit | Types.Officer)[];
