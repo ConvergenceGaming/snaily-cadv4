@@ -66,6 +66,7 @@ export const citizenInclude = {
   pilotLicense: true,
   waterLicense: true,
   dlCategory: { include: { value: true } },
+  officers: true,
   Record: {
     include: {
       officer: {
