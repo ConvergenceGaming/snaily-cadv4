@@ -40,6 +40,27 @@ export class LeoController {
     return activeOfficer;
   }
 
+  @Get("/:id")
+  @Description("Get officer by their citizenId.")
+  @UsePermissions({
+    fallback: (u) => u.isLeo || u.isDispatch || u.isEmsFd,
+    permissions: [Permissions.Leo, Permissions.Dispatch, Permissions.EmsFd],
+  })
+  async getOfficerByCitizenId(
+    @PathParams("id") citizenId: string,
+  ): Promise<APITypes.GetOfficerData> {
+    const officer = await prisma.officer.findFirst({
+      where: {
+        citizenId,
+      },
+    });
+
+    if (!officer) {
+      throw new NotFound("no officer found.");
+    }
+    return officer as Officer;
+  }
+
   @Get("/active-officers")
   @Description("Get all the active officers")
   @UseAfter(HandleInactivity)
