@@ -349,6 +349,7 @@ export type Record = Prisma.Record & {
   violations: Violation[];
   seizedItems?: Prisma.SeizedItem[];
   courtEntry?: CourtEntry | null;
+  vehicle?: (Prisma.RegisteredVehicle & { model: VehicleValue }) | null;
 };
 
 export type RecordRelease = Prisma.RecordRelease & {
@@ -427,3 +428,7 @@ export type ValueWithValueObj = (
 };
 
 export type AnyValue = Value | PenalCode | ValueWithValueObj;
+
+export type ActiveTone = Prisma.ActiveTone & {
+  createdBy: { username: string };
+};

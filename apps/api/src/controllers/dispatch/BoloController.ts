@@ -7,7 +7,7 @@ import { prisma } from "lib/prisma";
 import { Use, UseBeforeEach } from "@tsed/platform-middlewares";
 import { IsAuth } from "middlewares/IsAuth";
 import { ActiveOfficer } from "middlewares/ActiveOfficer";
-import { Socket } from "services/SocketService";
+import { Socket } from "services/socket-service";
 import { leoProperties } from "lib/leo/activeOfficer";
 import { validateSchema } from "lib/validateSchema";
 import {
@@ -50,9 +50,11 @@ export class BoloController {
       this.endInactiveBolos(inactivityFilter.updatedAt);
     }
 
-    const where: Prisma.BoloWhereInput = {
-      OR: [{ plate: { contains: query, mode: "insensitive" } }],
-    };
+    const where: Prisma.BoloWhereInput = query
+      ? {
+          OR: [{ plate: { contains: query, mode: "insensitive" } }],
+        }
+      : {};
 
     const bolos = await prisma.bolo.findMany({
       where: { ...inactivityFilter?.filter, ...where },
