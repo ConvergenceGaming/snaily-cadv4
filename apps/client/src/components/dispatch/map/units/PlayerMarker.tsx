@@ -14,7 +14,7 @@ import { useGenerateCallsign } from "hooks/useGenerateCallsign";
 
 interface Props {
   player: MapPlayer | PlayerDataEventPayload;
-  handleToggle(playerId: string): void;
+  handleToggle(name: string): void;
 }
 
 const PLAYER_ICON = leafletIcon({
@@ -33,6 +33,17 @@ export function PlayerMarker({ player, handleToggle }: Props) {
   const { generateCallsign } = useGenerateCallsign();
 
   const playerIcon = React.useMemo(() => {
+    if (parseInt(player.icon, 10) === 56 && player.hasSirenEnabled) {
+      const blipSize = 35;
+
+      return leafletIcon({
+        iconUrl: "/map/siren.gif",
+        iconSize: [blipSize, blipSize],
+        iconAnchor: [blipSize / 2, 0],
+        popupAnchor: [0, 0],
+      });
+    }
+
     const playerIcon = markerTypes[parseInt(player.icon, 10)];
 
     if (playerIcon) {
@@ -40,7 +51,7 @@ export function PlayerMarker({ player, handleToggle }: Props) {
     }
 
     return PLAYER_ICON;
-  }, [player.icon, markerTypes]);
+  }, [player.icon, player.hasSirenEnabled, markerTypes]);
 
   const pos = React.useMemo(
     () => player.pos?.x && player.pos.y && convertToMap(player.pos.x, player.pos.y, map),
@@ -87,12 +98,7 @@ export function PlayerMarker({ player, handleToggle }: Props) {
   const unitNameAndCallsign = unitName && unitCallsign ? `${unitCallsign} ${unitName}` : unitName;
 
   return (
-    <Marker
-      ref={(ref) => (player.ref = ref)}
-      icon={playerIcon}
-      key={player.playerId}
-      position={pos}
-    >
+    <Marker ref={(ref) => (player.ref = ref)} icon={playerIcon} key={player.name} position={pos}>
       <Tooltip direction="top">{unitNameAndCallsign}</Tooltip>
 
       <Popup minWidth={500}>

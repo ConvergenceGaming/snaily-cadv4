@@ -14,7 +14,7 @@ import { prisma } from "lib/prisma";
 import { validateSchema } from "lib/validateSchema";
 import { IsAuth } from "middlewares/IsAuth";
 import { UsePermissions, Permissions } from "middlewares/UsePermissions";
-import { Socket } from "services/SocketService";
+import { Socket } from "services/socket-service";
 import { ExtendedBadRequest } from "src/exceptions/ExtendedBadRequest";
 import { manyToManyHelper } from "utils/manyToMany";
 import { isCuid } from "cuid";
@@ -56,24 +56,29 @@ export class AdminManageUnitsController {
     @QueryParams("includeAll", Boolean) includeAll = false,
     @QueryParams("query", String) query = "",
     @QueryParams("pendingOnly", Boolean) pendingOnly = false,
+    @QueryParams("departmentId", String) departmentId?: string,
   ): Promise<APITypes.GetManageUnitsData> {
     const [officerCount, _officers] = await prisma.$transaction([
-      prisma.officer.count({ where: this.createWhere({ query, pendingOnly }, "OFFICER") }),
+      prisma.officer.count({
+        where: this.createWhere({ departmentId, query, pendingOnly }, "OFFICER"),
+      }),
       prisma.officer.findMany({
         take: includeAll ? undefined : 35,
         skip: includeAll ? undefined : skip,
         include: leoProperties,
-        where: this.createWhere({ query, pendingOnly }, "OFFICER"),
+        where: this.createWhere({ departmentId, query, pendingOnly }, "OFFICER"),
       }),
     ]);
 
     const [emsFdDeputiesCount, _emsFdDeputies] = await prisma.$transaction([
-      prisma.emsFdDeputy.count({ where: this.createWhere({ query, pendingOnly }, "DEPUTY") }),
+      prisma.emsFdDeputy.count({
+        where: this.createWhere({ departmentId, query, pendingOnly }, "DEPUTY"),
+      }),
       prisma.emsFdDeputy.findMany({
         take: includeAll ? undefined : 35,
         skip: includeAll ? undefined : skip,
         include: unitProperties,
-        where: this.createWhere({ query, pendingOnly }, "DEPUTY"),
+        where: this.createWhere({ departmentId, query, pendingOnly }, "DEPUTY"),
       }),
     ]);
 
@@ -103,41 +108,61 @@ export class AdminManageUnitsController {
     const extraInclude = {
       qualifications: { include: { qualification: { include: { value: true } } } },
       logs: { take: 25, orderBy: { createdAt: "desc" } },
-    };
+    } as const;
 
     const isUnitId = isCuid(id);
-    const functionName = isUnitId ? "findFirst" : "findMany";
 
-    // @ts-expect-error same function properties
-    let unit: any = await prisma.officer[functionName]({
-      where: {
-        OR: [{ id }, { user: { discordId: id } }, { user: { steamId: id } }],
-      },
-      include: { ...leoProperties, ...extraInclude },
-    });
-
-    if (Array.isArray(unit) ? !unit.length : !unit) {
-      // @ts-expect-error same function properties
-      unit = await prisma.emsFdDeputy[functionName]({
-        where: {
-          OR: [{ id }, { user: { discordId: id } }, { user: { steamId: id } }],
-        },
-        include: { ...unitProperties, ...extraInclude },
-      });
-    }
-
-    if (Array.isArray(unit) ? !unit.length : !unit) {
-      unit = await prisma.combinedLeoUnit.findUnique({
+    if (isUnitId) {
+      let unit: any = await prisma.officer.findUnique({
         where: { id },
-        include: combinedUnitProperties,
+        include: { ...leoProperties, ...extraInclude },
       });
+
+      if (!unit) {
+        unit = await prisma.emsFdDeputy.findUnique({
+          where: { id },
+          include: { ...unitProperties, ...extraInclude },
+        });
+      }
+
+      if (!unit) {
+        unit = await prisma.combinedLeoUnit.findUnique({
+          where: { id },
+          include: combinedUnitProperties,
+        });
+      }
+
+      if (!unit) {
+        throw new NotFound("unitNotFound");
+      }
+
+      return unit;
     }
 
-    if (!unit) {
-      throw new NotFound("unitNotFound");
-    }
+    const where = {
+      OR: [{ user: { discordId: id } }, { user: { steamId: id } }],
+    };
 
-    return unit;
+    const [userOfficers, userDeputies, userCombinedUnits] = await prisma.$transaction([
+      prisma.officer.findMany({
+        where,
+        include: { ...unitProperties, ...extraInclude },
+      }),
+      prisma.officer.findMany({
+        where,
+        include: { ...unitProperties, ...extraInclude },
+      }),
+      prisma.combinedLeoUnit.findMany({
+        where: { officers: { some: where } },
+        include: { ...unitProperties },
+      }),
+    ]);
+
+    return {
+      userOfficers,
+      userDeputies,
+      userCombinedUnits,
+    } as any;
   }
 
   @Put("/off-duty")
@@ -603,22 +628,30 @@ export class AdminManageUnitsController {
   }
 
   private createWhere(
-    { query, pendingOnly }: { query: string; pendingOnly: boolean },
+    {
+      query,
+      pendingOnly,
+      departmentId,
+    }: { departmentId?: string; query: string; pendingOnly: boolean },
     type: "OFFICER" | "DEPUTY" = "OFFICER",
   ) {
     const [name, surname] = query.toString().toLowerCase().split(/ +/g);
+
+    const departmentIdWhere = departmentId ? { departmentId } : {};
 
     if (!query) {
       return pendingOnly
         ? {
             whitelistStatus: { status: WhitelistStatus.PENDING },
+            ...departmentIdWhere,
           }
-        : {};
+        : departmentIdWhere;
     }
 
     const where: any = {
       ...(pendingOnly ? { whitelistStatus: { status: WhitelistStatus.PENDING } } : {}),
       OR: [
+        departmentIdWhere,
         { callsign: query },
         { callsign2: query },
         { department: { value: { value: { contains: query, mode: "insensitive" } } } },
