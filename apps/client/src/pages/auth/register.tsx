@@ -63,7 +63,11 @@ function Register({ cad }: Props) {
       return helpers.setFieldError("confirmPassword", "Passwords do not match");
     }
 
-    const captchaResult = await executeRecaptcha?.("registerUserAccount");
+    let captchaResult = null;
+    if (hasGoogleCaptchaSiteKey) {
+      captchaResult = await executeRecaptcha?.("registerUserAccount");
+    }
+
     const { json } = await execute<PostRegisterUserData, typeof INITIAL_VALUES>({
       path: "/auth/register",
       data: { ...values, captchaResult },
@@ -209,6 +213,10 @@ function Register({ cad }: Props) {
 }
 
 export default function RegisterPage(props: Props) {
+  if (!hasGoogleCaptchaSiteKey) {
+    return <Register {...props} />;
+  }
+
   return (
     <GoogleReCaptchaProvider
       reCaptchaKey={process.env.NEXT_PUBLIC_GOOGLE_CAPTCHA_SITE_KEY ?? ""}

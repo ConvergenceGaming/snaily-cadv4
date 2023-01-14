@@ -3,11 +3,11 @@ import { Controller, UseBeforeEach, PlatformMulterFile, MultipartFile } from "@t
 import { ContentType, Delete, Get, Post, Put } from "@tsed/schema";
 import { CREATE_OFFICER_SCHEMA } from "@snailycad/schemas";
 import { QueryParams, BodyParams, Context, PathParams } from "@tsed/platform-params";
-import { NotFound } from "@tsed/exceptions";
+import { BadRequest, NotFound } from "@tsed/exceptions";
 import { prisma } from "lib/prisma";
 import { IsAuth } from "middlewares/IsAuth";
 import { getImageWebPPath, validateImgurURL } from "utils/images/image";
-import { cad, User, MiscCadSettings, Feature, CadFeature } from "@prisma/client";
+import { cad, User, MiscCadSettings, Feature, CadFeature, Rank } from "@prisma/client";
 import { validateSchema } from "lib/validateSchema";
 import { handleWhitelistStatus } from "lib/leo/handleWhitelistStatus";
 import { manyToManyHelper } from "utils/manyToMany";
@@ -23,6 +23,7 @@ import { ExtendedBadRequest } from "src/exceptions/ExtendedBadRequest";
 import type * as APITypes from "@snailycad/types/api";
 import { createOfficer } from "./create-officer";
 import generateBlurPlaceholder from "utils/images/generate-image-blur-data";
+import { hasPermission } from "@snailycad/permissions";
 
 @Controller("/leo")
 @UseBeforeEach(IsAuth)
@@ -225,7 +226,12 @@ export class MyOfficersController {
   @Get("/logs")
   @UsePermissions({
     fallback: (u) => u.isLeo,
-    permissions: [Permissions.Leo, Permissions.ViewUnits, Permissions.ManageUnits],
+    permissions: [
+      Permissions.Leo,
+      Permissions.ManageUnits,
+      Permissions.ViewUnits,
+      Permissions.DeleteUnits,
+    ],
   })
   async getOfficerLogs(
     @Context("user") user: User,
@@ -233,7 +239,14 @@ export class MyOfficersController {
     @QueryParams("includeAll", Boolean) includeAll = false,
     @QueryParams("officerId", String) officerId?: string,
   ): Promise<APITypes.GetMyOfficersLogsData> {
-    const where = { userId: user.id, emsFdDeputyId: null, officerId: officerId || undefined };
+    const hasManageUnitsPermissions = hasPermission({
+      permissionsToCheck: [Permissions.ManageUnits, Permissions.ViewUnits, Permissions.DeleteUnits],
+      userToCheck: user,
+      fallback: (u) => u.rank !== Rank.USER,
+    });
+    const userIdObj = hasManageUnitsPermissions ? {} : { userId: user.id };
+
+    const where = { ...userIdObj, emsFdDeputyId: null, officerId: officerId || undefined };
 
     const [totalCount, logs] = await prisma.$transaction([
       prisma.officerLog.count({ where }),
@@ -259,52 +272,56 @@ export class MyOfficersController {
     @PathParams("id") officerId: string,
     @MultipartFile("image") file?: PlatformMulterFile,
   ): Promise<APITypes.PostMyOfficerByIdData> {
-    const officer = await prisma.officer.findFirst({
-      where: {
-        userId: user.id,
-        id: officerId,
-      },
-    });
-
-    if (!officer) {
-      throw new NotFound("Not Found");
-    }
-
-    if (!file) {
-      throw new ExtendedBadRequest({ file: "No file provided." });
-    }
-
-    if (!allowedFileExtensions.includes(file.mimetype as AllowedFileExtension)) {
-      throw new ExtendedBadRequest({ image: "invalidImageType" });
-    }
-
-    const image = await getImageWebPPath({
-      buffer: file.buffer,
-      pathType: "units",
-      id: `${officer.id}-${file.originalname.split(".")[0]}`,
-    });
-
-    const previousImage = officer.imageId
-      ? `${process.cwd()}/public/units/${officer.imageId}`
-      : undefined;
-
-    if (previousImage) {
-      await fs.rm(previousImage, { force: true });
-    }
-
-    const [data] = await Promise.all([
-      prisma.officer.update({
-        where: { id: officer.id },
-        data: {
-          imageId: image.fileName,
-          imageBlurData: await generateBlurPlaceholder(image),
+    try {
+      const officer = await prisma.officer.findFirst({
+        where: {
+          userId: user.id,
+          id: officerId,
         },
-        select: { imageId: true },
-      }),
-      fs.writeFile(image.path, image.buffer),
-    ]);
+      });
 
-    return data;
+      if (!officer) {
+        throw new NotFound("Not Found");
+      }
+
+      if (!file) {
+        throw new ExtendedBadRequest({ file: "No file provided." });
+      }
+
+      if (!allowedFileExtensions.includes(file.mimetype as AllowedFileExtension)) {
+        throw new ExtendedBadRequest({ image: "invalidImageType" });
+      }
+
+      const image = await getImageWebPPath({
+        buffer: file.buffer,
+        pathType: "units",
+        id: `${officer.id}-${file.originalname.split(".")[0]}`,
+      });
+
+      const previousImage = officer.imageId
+        ? `${process.cwd()}/public/units/${officer.imageId}`
+        : undefined;
+
+      if (previousImage) {
+        await fs.rm(previousImage, { force: true });
+      }
+
+      const [data] = await Promise.all([
+        prisma.officer.update({
+          where: { id: officer.id },
+          data: {
+            imageId: image.fileName,
+            imageBlurData: await generateBlurPlaceholder(image),
+          },
+          select: { imageId: true },
+        }),
+        fs.writeFile(image.path, image.buffer),
+      ]);
+
+      return data;
+    } catch {
+      throw new BadRequest("errorUploadingImage");
+    }
   }
 }
 

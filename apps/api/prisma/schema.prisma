@@ -66,6 +66,7 @@ model MiscCadSettings {
   maxAssignmentsToIncidents Int?
   maxAssignmentsToCalls     Int?
   callsignTemplate          String         @default("{department}{callsign1} - {callsign2}{division}") @db.Text
+  caseNumberTemplate        String?
   pairedUnitTemplate        String?        @default("1A-{callsign1}") @db.Text
   pairedUnitSymbol          String?        @default("A") @db.VarChar(255)
   signal100Enabled          Boolean        @default(false)
@@ -246,6 +247,7 @@ model User {
   sessions                 UserSession[]
   toAddDefaultPermissions  ToAddDefaultPermissions[]
   fivemLicense             String?
+  lastSeen                 DateTime                  @default(now())
 
   // relational data
   citizens             Citizen[]
@@ -614,6 +616,7 @@ model DivisionValue {
   officerDivisionsToDivision Officer[]                    @relation("officerDivisionsToDivision")
   deputies                   EmsFdDeputy[]                @relation("emsFdDivisionToDivision")
   pairedUnitTemplate         String?
+  extraFields                Json?
   Call911                    Call911[]
   IndividualDivisionCallsign IndividualDivisionCallsign[]
   EmergencyVehicleValue      EmergencyVehicleValue[]

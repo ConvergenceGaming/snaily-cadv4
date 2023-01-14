@@ -11,6 +11,7 @@ import {
   type User,
   CadFeature,
   Feature,
+  Rank,
 } from "@prisma/client";
 import type { cad, EmsFdDeputy } from "@snailycad/types";
 import { AllowedFileExtension, allowedFileExtensions } from "@snailycad/config";
@@ -34,6 +35,7 @@ import { isFeatureEnabled } from "lib/cad";
 import { IsFeatureEnabled } from "middlewares/is-enabled";
 import { handlePanicButtonPressed } from "lib/leo/send-panic-button-webhook";
 import generateBlurPlaceholder from "utils/images/generate-image-blur-data";
+import { hasPermission } from "@snailycad/permissions";
 
 @Controller("/ems-fd")
 @UseBeforeEach(IsAuth)
@@ -72,7 +74,14 @@ export class EmsFdController {
     @QueryParams("includeAll", Boolean) includeAll = false,
     @QueryParams("emsFdDeputyId", String) emsFdDeputyId?: string,
   ): Promise<APITypes.GetMyDeputiesLogsData> {
-    const where = { userId: user.id, officerId: null, emsFdDeputyId: emsFdDeputyId || undefined };
+    const hasManageUnitsPermissions = hasPermission({
+      permissionsToCheck: [Permissions.ManageUnits, Permissions.ViewUnits, Permissions.DeleteUnits],
+      userToCheck: user,
+      fallback: (u) => u.rank !== Rank.USER,
+    });
+    const userIdObj = hasManageUnitsPermissions ? {} : { userId: user.id };
+
+    const where = { ...userIdObj, officerId: null, emsFdDeputyId: emsFdDeputyId || undefined };
 
     const [totalCount, logs] = await prisma.$transaction([
       prisma.officerLog.count({ where }),
@@ -552,51 +561,55 @@ export class EmsFdController {
     @PathParams("id") deputyId: string,
     @MultipartFile("image") file?: PlatformMulterFile,
   ): Promise<APITypes.PostMyDeputyByIdData> {
-    const deputy = await prisma.emsFdDeputy.findFirst({
-      where: {
-        userId: user.id,
-        id: deputyId,
-      },
-    });
-
-    if (!deputy) {
-      throw new NotFound("Not Found");
-    }
-
-    if (!file) {
-      throw new ExtendedBadRequest({ file: "No file provided." });
-    }
-
-    if (!allowedFileExtensions.includes(file.mimetype as AllowedFileExtension)) {
-      throw new BadRequest("invalidImageType");
-    }
-
-    const image = await getImageWebPPath({
-      buffer: file.buffer,
-      pathType: "units",
-      id: `${deputy.id}-${file.originalname.split(".")[0]}`,
-    });
-
-    const previousImage = deputy.imageId
-      ? `${process.cwd()}/public/units/${deputy.imageId}`
-      : undefined;
-
-    if (previousImage) {
-      await fs.rm(previousImage, { force: true });
-    }
-
-    const [data] = await Promise.all([
-      prisma.emsFdDeputy.update({
-        where: { id: deputy.id },
-        data: {
-          imageId: image.fileName,
-          imageBlurData: await generateBlurPlaceholder(image),
+    try {
+      const deputy = await prisma.emsFdDeputy.findFirst({
+        where: {
+          userId: user.id,
+          id: deputyId,
         },
-        select: { imageId: true },
-      }),
-      fs.writeFile(image.path, image.buffer),
-    ]);
+      });
 
-    return data;
+      if (!deputy) {
+        throw new NotFound("Not Found");
+      }
+
+      if (!file) {
+        throw new ExtendedBadRequest({ file: "No file provided." });
+      }
+
+      if (!allowedFileExtensions.includes(file.mimetype as AllowedFileExtension)) {
+        throw new BadRequest("invalidImageType");
+      }
+
+      const image = await getImageWebPPath({
+        buffer: file.buffer,
+        pathType: "units",
+        id: `${deputy.id}-${file.originalname.split(".")[0]}`,
+      });
+
+      const previousImage = deputy.imageId
+        ? `${process.cwd()}/public/units/${deputy.imageId}`
+        : undefined;
+
+      if (previousImage) {
+        await fs.rm(previousImage, { force: true });
+      }
+
+      const [data] = await Promise.all([
+        prisma.emsFdDeputy.update({
+          where: { id: deputy.id },
+          data: {
+            imageId: image.fileName,
+            imageBlurData: await generateBlurPlaceholder(image),
+          },
+          select: { imageId: true },
+        }),
+        fs.writeFile(image.path, image.buffer),
+      ]);
+
+      return data;
+    } catch {
+      throw new BadRequest("errorUploadingImage");
+    }
   }
 }
