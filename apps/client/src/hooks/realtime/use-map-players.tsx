@@ -29,22 +29,14 @@ export function useMapPlayers() {
 
   const { cad } = useAuth();
   const url = getCADURL(cad);
-  const { execute } = useFetch();
+  const { state, execute } = useFetch();
 
   const getCADUsers = React.useCallback(
-<<<<<<<< HEAD:apps/client/src/hooks/realtime/use-map-players.tsx
     async (options: {
       map: Map<string, MapPlayer | PlayerDataEventPayload>;
       fetchMore?: boolean;
     }) => {
       if (state === "loading") return;
-========
-    async (
-      playersToFetch: (Player & { discordId?: string | null; convertedSteamId?: string | null })[],
-      payload: PlayerDataEventPayload[],
-    ) => {
-      let _prevPlayerData = prevPlayerData;
->>>>>>>> 005210c0 (merge custom version):apps/client/src/hooks/realtime/useMapPlayers.ts
 
       const availablePlayersArray = Array.from(options.map.values());
       const newPlayers = options.map;
@@ -76,11 +68,7 @@ export function useMapPlayers() {
 
       setPlayers(newPlayers);
     },
-<<<<<<<< HEAD:apps/client/src/hooks/realtime/use-map-players.tsx
     [state], // eslint-disable-line
-========
-    [players, prevPlayerData], // eslint-disable-line react-hooks/exhaustive-deps
->>>>>>>> 005210c0 (merge custom version):apps/client/src/hooks/realtime/useMapPlayers.ts
   );
 
   const onPlayerData = React.useCallback(
@@ -122,12 +110,10 @@ export function useMapPlayers() {
   const onPlayerLeft = React.useCallback(
     (data: PlayerLeftEvent) => {
       const newPlayers = players;
-      players.delete(data.payload);
+      const player = Array.from(players.values()).find((player) => player.name === data.payload);
+      if (!player) return;
 
-<<<<<<<< HEAD:apps/client/src/hooks/realtime/use-map-players.tsx
       players.delete(player.identifier);
-========
->>>>>>>> 005210c0 (merge custom version):apps/client/src/hooks/realtime/useMapPlayers.ts
       setPlayers(newPlayers);
     },
     [players], // eslint-disable-line react-hooks/exhaustive-deps
@@ -152,7 +138,6 @@ export function useMapPlayers() {
     [onPlayerData, onPlayerLeft],
   );
 
-<<<<<<<< HEAD:apps/client/src/hooks/realtime/use-map-players.tsx
   const onError = React.useCallback(
     (reason: Error) => {
       console.log({ reason });
@@ -177,15 +162,6 @@ export function useMapPlayers() {
     },
     [url],
   );
-========
-  const onError = React.useCallback(() => {
-    toastMessage({
-      message: `Unable to make a Websocket connection to ${url}`,
-      title: "Connection Error",
-      duration: 10_000,
-    });
-  }, [url]);
->>>>>>>> 005210c0 (merge custom version):apps/client/src/hooks/realtime/useMapPlayers.ts
 
   React.useEffect(() => {
     if (!socket && url) {
@@ -202,11 +178,13 @@ export function useMapPlayers() {
     if (s) {
       s.onAny(onMessage);
       s.on("disconnect", console.log);
+      s.once("connect_error", onError);
     }
 
     return () => {
       s?.offAny(onMessage);
       s?.off("disconnect", console.log);
+      s?.off("connect_error", onError);
     };
   }, [socket, onError, onMessage]);
 
@@ -237,8 +215,12 @@ function getCADURL(cad: cad | null) {
 
 function makeSocketConnection(url: string) {
   try {
-    const _url = url.replace(/ws:\/\//, "http://").replace(/wss:\/\//, "https://");
-    return io(_url);
+    if (url.startsWith("ws")) {
+      const _url = url.replace(/ws:\/\//, "http://").replace(/wss:\/\//, "https://");
+      return io(_url);
+    }
+
+    return io(url);
   } catch (error) {
     const isSecurityError = error instanceof Error && error.name === "SecurityError";
 
@@ -250,6 +232,7 @@ function makeSocketConnection(url: string) {
         title: "Security Error",
         duration: Infinity,
       });
+      return;
     }
 
     toastMessage({

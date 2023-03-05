@@ -11,7 +11,6 @@ import {
   Item,
 } from "@snailycad/ui";
 import { FormRow } from "components/form/FormRow";
-import { FormField } from "components/form/FormField";
 import type { SelectValue } from "components/form/Select";
 import { ImageSelectInput, validateFile } from "components/form/inputs/ImageSelectInput";
 import { CREATE_CITIZEN_SCHEMA, CREATE_CITIZEN_WITH_OFFICER_SCHEMA } from "@snailycad/schemas";
@@ -179,7 +178,7 @@ export function ManageCitizenForm({
         id="basic-information"
         isRequired
       >
-        {({ values, errors, setValues, setFieldValue, handleChange }) => (
+        {({ values, errors, setValues, setFieldValue }) => (
           <>
             <ImageSelectInput image={image} setImage={setImage} />
 
