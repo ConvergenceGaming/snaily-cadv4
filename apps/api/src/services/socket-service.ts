@@ -15,12 +15,19 @@ import {
   Warrant,
   ActiveTone,
 } from "@prisma/client";
-import { prisma } from "lib/prisma";
-import { combinedUnitProperties, leoProperties, unitProperties } from "lib/leo/activeOfficer";
+import { prisma } from "lib/data/prisma";
+import {
+  combinedEmsFdUnitProperties,
+  combinedUnitProperties,
+  leoProperties,
+  unitProperties,
+} from "lib/leo/activeOfficer";
+import { Injectable } from "@tsed/di";
 
 type FullIncident = LeoIncident & { unitsInvolved: any[]; events?: IncidentEvent[] };
 
 @SocketService("/")
+@Injectable()
 export class Socket {
   @Nsp nsp!: SocketIO.Namespace;
   private io: SocketIO.Server;
@@ -33,7 +40,7 @@ export class Socket {
     this.io.sockets.emit(SocketEvents.Create911Call, call);
   }
 
-  emitUpdateActiveIncident(incident: FullIncident) {
+  emitUpdateActiveIncident(incident: Partial<FullIncident>) {
     this.io.sockets.emit(SocketEvents.UpdateActiveIncident, incident);
   }
 
@@ -53,7 +60,7 @@ export class Socket {
     this.io.sockets.emit(SocketEvents.Update911Call, call);
   }
 
-  emit911CallDelete(call: Call911) {
+  emit911CallDelete(call: Partial<Call911>) {
     this.io.sockets.emit(SocketEvents.End911Call, call);
   }
 
@@ -105,19 +112,29 @@ export class Socket {
       }),
     ]);
 
-    const data = [...officers, ...units];
+    const data = [...units, ...officers];
 
     this.io.sockets.emit(SocketEvents.UpdateOfficerStatus, data);
   }
 
-  async emitUpdateDeputyStatus() {
-    const deputies = await prisma.emsFdDeputy.findMany({
-      orderBy: { updatedAt: "desc" },
-      where: { status: { NOT: { shouldDo: ShouldDoType.SET_OFF_DUTY } } },
-      include: unitProperties,
-    });
+  async emitUpdateUnitStatus(unit: any) {
+    this.io.sockets.emit(SocketEvents.UpdateUnitStatus, unit);
+  }
 
-    this.io.sockets.emit(SocketEvents.UpdateEmsFdStatus, deputies);
+  async emitUpdateDeputyStatus() {
+    const [deputies, combinedEmsFdDeputies] = await prisma.$transaction([
+      prisma.emsFdDeputy.findMany({
+        where: {
+          status: { NOT: { shouldDo: ShouldDoType.SET_OFF_DUTY } },
+        },
+        include: unitProperties,
+      }),
+      prisma.combinedEmsFdUnit.findMany({
+        include: combinedEmsFdUnitProperties,
+      }),
+    ]);
+
+    this.io.sockets.emit(SocketEvents.UpdateEmsFdStatus, [...combinedEmsFdDeputies, ...deputies]);
   }
 
   emitUserBanned(userId: string) {

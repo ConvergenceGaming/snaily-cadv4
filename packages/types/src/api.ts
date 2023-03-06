@@ -28,13 +28,13 @@ export type GetBleeterByIdData = GetBleeterData[number];
  * @method Post
  * @route /bleeter/:id
  */
-export type PostBleeterByIdData = Prisma.BleeterPost;
+export type PostBleeterByIdData = GetBleeterByIdData;
 
 /**
  * @method Put
  * @route /bleeter/:id
  */
-export type PutBleeterByIdData = Prisma.BleeterPost;
+export type PutBleeterByIdData = GetBleeterByIdData;
 
 /**
  * @method Post
@@ -283,7 +283,10 @@ export type PostCitizensData = Prisma.Citizen;
  * @method PUT
  * @route /citizen/:id
  */
-export type PutCitizenByIdData = Prisma.Citizen & { ethnicity: Prisma.Value; gender: Prisma.Value };
+export type PutCitizenByIdData = Prisma.Citizen & {
+  ethnicity?: Prisma.Value | null;
+  gender?: Prisma.Value | null;
+};
 
 /**
  * @method POST
@@ -337,7 +340,8 @@ export interface GetCitizenVehiclesData {
 export type PostCitizenVehicleData = Prisma.RegisteredVehicle & {
   model: Types.VehicleValue;
   registrationStatus: Prisma.Value;
-  citizen: Prisma.Citizen;
+  citizen?: Prisma.Citizen | null;
+  trimLevels?: Prisma.Value[];
 };
 
 /**
@@ -347,6 +351,7 @@ export type PostCitizenVehicleData = Prisma.RegisteredVehicle & {
 export type PutCitizenVehicleData = Prisma.RegisteredVehicle & {
   model: Types.VehicleValue;
   registrationStatus: Prisma.Value;
+  trimLevels?: Prisma.Value[];
 };
 
 /**
@@ -408,7 +413,17 @@ export type GetBusinessByIdData = Prisma.Business & {
   employees: Omit<GetBusinessesData["businesses"][number], "business">[];
   citizen: Pick<Prisma.Citizen, "name" | "surname" | "id">;
   employee: Types.Employee | null;
+  roles: (Prisma.EmployeeValue & { value: Prisma.Value })[];
 };
+
+/**
+ * @method GET
+ * @route /businesses/:id/roles
+ */
+export interface GetBusinessRolesByBusinessIdData {
+  roles: (Prisma.EmployeeValue & { value: Prisma.Value })[];
+  totalCount: number;
+}
 
 /**
  * @method PUT

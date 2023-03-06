@@ -13,6 +13,7 @@ export const BASE_ARR = z.array(BASE_VALUE_SCHEMA).min(1);
 
 export const HASH_SCHEMA = BASE_VALUE_SCHEMA.extend({
   hash: z.string().max(255).optional(),
+  trimLevels: z.array(z.any()).nullish(),
 });
 
 export const HASH_SCHEMA_ARR = z.array(HASH_SCHEMA).min(1);
@@ -29,7 +30,7 @@ export const ADDRESS_SCHEMA_ARR = z.array(ADDRESS_SCHEMA);
  * codes_10
  */
 const SHOULD_DO_REGEX =
-  /SET_OFF_DUTY|SET_ON_DUTY|SET_ASSIGNED|SET_STATUS|PANIC_BUTTON|ON_SCENE|EN_ROUTE/;
+  /SET_OFF_DUTY|SET_ON_DUTY|SET_ASSIGNED|SET_STATUS|PANIC_BUTTON|ON_SCENE|EN_ROUTE|UNAVAILABLE/;
 const TYPE_REGEX = /STATUS_CODE|SITUATION_CODE/;
 
 export const CODES_10_SCHEMA = BASE_VALUE_SCHEMA.extend({

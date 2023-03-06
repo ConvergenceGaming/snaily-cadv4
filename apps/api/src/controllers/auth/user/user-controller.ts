@@ -3,16 +3,16 @@ import { Controller } from "@tsed/di";
 import { UseBefore } from "@tsed/platform-middlewares";
 import { ContentType, Delete, Description, Patch, Post } from "@tsed/schema";
 import { Cookie } from "@snailycad/config";
-import { prisma } from "lib/prisma";
-import { IsAuth } from "middlewares/IsAuth";
-import { setCookie } from "utils/setCookie";
+import { prisma } from "lib/data/prisma";
+import { IsAuth } from "middlewares/is-auth";
+import { setCookie } from "utils/set-cookie";
 import { cad, Rank, ShouldDoType, StatusViewMode, TableActionsAlignment } from "@prisma/client";
 import { NotFound } from "@tsed/exceptions";
 import { CHANGE_PASSWORD_SCHEMA, CHANGE_USER_SCHEMA } from "@snailycad/schemas";
 import { compareSync, genSaltSync, hashSync } from "bcrypt";
 import { userProperties } from "lib/auth/getSessionUser";
-import { validateSchema } from "lib/validateSchema";
-import { ExtendedBadRequest } from "src/exceptions/ExtendedBadRequest";
+import { validateSchema } from "lib/data/validate-schema";
+import { ExtendedBadRequest } from "src/exceptions/extended-bad-request";
 import { Socket } from "services/socket-service";
 import { handleStartEndOfficerLog } from "lib/leo/handleStartEndOfficerLog";
 import { setUserPreferencesCookies } from "lib/auth/setUserPreferencesCookies";
@@ -34,7 +34,9 @@ export class UserController {
     @Context("cad") cad: cad,
     @Context("user") user: User,
   ): Promise<APITypes.GetUserData> {
-    return { ...user, cad };
+    const cadWithoutDiscordRoles = { ...cad, discordRoles: undefined };
+
+    return { ...user, cad: cadWithoutDiscordRoles };
   }
 
   @Patch("/")
@@ -134,9 +136,10 @@ export class UserController {
       value: "",
     });
 
-    await prisma.activeDispatchers.deleteMany({
-      where: { userId },
-    });
+    await Promise.all([
+      prisma.activeDispatchers.deleteMany({ where: { userId } }),
+      prisma.userSession.deleteMany({ where: { userId } }),
+    ]);
 
     const officer = await prisma.officer.findFirst({
       where: {

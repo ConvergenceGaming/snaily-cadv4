@@ -44,6 +44,7 @@ export type PostLeoSearchCitizenData = (
       weapons: Types.Weapon[];
       notes: Types.Note[];
       Record: Types.Record[];
+      addressFlags: Types.Value[];
     })
   | (Pick<
       Types.Citizen,
@@ -78,6 +79,13 @@ export type PostLeoSearchVehicleData =
       TruckLog: Prisma.TruckLog[];
     })
   | null;
+
+export type PostLeoSearchBusinessData = (Types.Business & {
+  citizen: Types.BaseCitizen;
+  vehicles: Types.RegisteredVehicle[];
+  employees: Types.Employee[];
+  Record: Types.Record[];
+})[];
 
 /**
  * @method POST
@@ -116,6 +124,14 @@ export type PutSearchActionsVehicleFlagsData = Pick<Types.RegisteredVehicle, "id
  * @route /search/actions/citizen-flags/:citizenId
  */
 export type PutSearchActionsCitizenFlagsData = Pick<Types.Citizen, "id" | "flags">;
+
+/**
+ * @method PUT
+ * @route /search/actions/citizen-flags/:citizenId
+ */
+export type PutSearchActionsCitizenAddressFlagsData = Pick<Types.Citizen, "id"> & {
+  addressFlags: Types.Value[];
+};
 
 /**
  * @method PUT

@@ -15,14 +15,15 @@ import { useRouter } from "next/router";
 import { useTranslations } from "next-intl";
 import { useGenerateCallsign } from "hooks/useGenerateCallsign";
 import { makeUnitName } from "lib/utils";
-import { Draggable } from "components/shared/dnd/Draggable";
+import { Draggable } from "@snailycad/ui";
 import { DndActions } from "types/DndActions";
-import { useActiveDispatchers } from "hooks/realtime/useActiveDispatchers";
+import { useActiveDispatchers } from "hooks/realtime/use-active-dispatchers";
 import { classNames } from "lib/classNames";
 import { ActiveUnitsQualificationsCard } from "components/leo/qualifications/ActiveUnitsQualificationsCard";
 import type { PostDispatchStatusUnmergeUnitById } from "@snailycad/types/api";
-import Image from "next/image";
 import { useDispatchState } from "state/dispatch/dispatch-state";
+import { generateContrastColor } from "lib/table/get-contrasting-text-color";
+import { ImageWrapper } from "components/shared/image-wrapper";
 
 interface Props {
   officer: Officer | CombinedLeoUnit;
@@ -54,7 +55,7 @@ export function OfficerColumn({ officer, nameAndCallsign, setTempUnit }: Props) 
     .filter((v) => v.type === "STATUS_CODE")
     .map((v) => ({
       name: v.value.value,
-      onPress: () => setStatus(officer.id, v),
+      onClick: () => setStatus(officer.id, v),
       "aria-label": `Set status to ${v.value.value}`,
       title: `Set status to ${v.value.value}`,
     }));
@@ -94,6 +95,9 @@ export function OfficerColumn({ officer, nameAndCallsign, setTempUnit }: Props) 
     }
   }
 
+  const unitStatusColor = officer.status?.color ?? undefined;
+  const textColor = unitStatusColor && generateContrastColor(unitStatusColor);
+
   return (
     <ContextMenu
       canBeOpened={isEligiblePage ? canBeOpened ?? false : false}
@@ -123,7 +127,7 @@ export function OfficerColumn({ officer, nameAndCallsign, setTempUnit }: Props) 
                 style={{ minWidth: nameAndCallsign.length * 9 }} // todo: still necessary?
               >
                 {isUnitOfficer(officer) && officer.imageId ? (
-                  <Image
+                  <ImageWrapper
                     className="rounded-md w-[30px] h-[30px] object-cover mr-2 inline-block"
                     draggable={false}
                     src={makeImageUrl("units", officer.imageId)!}
@@ -135,7 +139,16 @@ export function OfficerColumn({ officer, nameAndCallsign, setTempUnit }: Props) 
                 ) : null}
                 {isUnitCombined(officer) ? (
                   <div className="flex items-center">
-                    {generateCallsign(officer, "pairedUnitTemplate")}
+                    <span
+                      style={{
+                        backgroundColor: unitStatusColor,
+                        color: textColor,
+                      }}
+                      className="px-1.5 py-0.5 rounded-md dark:bg-secondary"
+                    >
+                      {generateCallsign(officer, "pairedUnitTemplate")}
+                    </span>
+
                     <span className="mx-4">
                       <ArrowRight />
                     </span>
@@ -146,7 +159,15 @@ export function OfficerColumn({ officer, nameAndCallsign, setTempUnit }: Props) 
                     ))}
                   </div>
                 ) : (
-                  nameAndCallsign
+                  <span
+                    style={{
+                      backgroundColor: unitStatusColor,
+                      color: textColor,
+                    }}
+                    className="px-1.5 py-0.5 rounded-md dark:bg-secondary"
+                  >
+                    {nameAndCallsign}
+                  </span>
                 )}
               </span>
             </ActiveUnitsQualificationsCard>

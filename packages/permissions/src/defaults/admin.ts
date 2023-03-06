@@ -53,6 +53,8 @@ export const defaultValuePermissions = [
   Permissions.ManageValueCallType,
   Permissions.ManageValueAddress,
   Permissions.ManageValueEmergencyVehicle,
+  Permissions.ManageValueAddressFlag,
+  Permissions.ManageValueVehicleTrimLevel,
 ];
 
 export const defaultCourthousePermissions = [
@@ -60,6 +62,8 @@ export const defaultCourthousePermissions = [
   Permissions.ManageExpungementRequests,
   Permissions.ViewNameChangeRequests,
   Permissions.ManageNameChangeRequests,
+  Permissions.ManagePendingWarrants,
+  Permissions.ManageCourthousePosts,
 ];
 
 export const defaultOwnerPermissions = [Permissions.ManageCADSettings];

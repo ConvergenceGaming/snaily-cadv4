@@ -1,6 +1,5 @@
 import { useTranslations } from "use-intl";
-import { TabsContent } from "components/shared/TabList";
-import { Button } from "@snailycad/ui";
+import { Button, TabsContent } from "@snailycad/ui";
 import { useAuth } from "context/AuthContext";
 import { getAPIUrl } from "@snailycad/utils/api-url";
 import useFetch from "lib/useFetch";
@@ -15,7 +14,8 @@ export function ConnectionsTab() {
   const { user, setUser } = useAuth();
   const t = useTranslations("Account");
   const { state, execute } = useFetch();
-  const { ALLOW_REGULAR_LOGIN, STEAM_OAUTH, DISCORD_AUTH } = useFeatureEnabled();
+  const { ALLOW_REGULAR_LOGIN, FORCE_DISCORD_AUTH, FORCE_STEAM_AUTH, STEAM_OAUTH, DISCORD_AUTH } =
+    useFeatureEnabled();
 
   const CONNECTIONS = [
     {
@@ -55,6 +55,9 @@ export function ConnectionsTab() {
     }
   }
 
+  const isDisabled =
+    !ALLOW_REGULAR_LOGIN || FORCE_DISCORD_AUTH || FORCE_STEAM_AUTH || state === "loading";
+
   return (
     <TabsContent aria-label={t("connections")} value="connections">
       <h1 className="text-2xl font-semibold">{t("connections")}</h1>
@@ -83,7 +86,7 @@ export function ConnectionsTab() {
                 {connection.value ? (
                   <Button
                     onPress={() => handleUnlink(connection.key)}
-                    disabled={!ALLOW_REGULAR_LOGIN || state === "loading"}
+                    disabled={isDisabled}
                     variant="danger"
                     className="text-base"
                   >

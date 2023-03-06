@@ -1,19 +1,19 @@
 import { Controller } from "@tsed/di";
 import { Get, Description, ContentType } from "@tsed/schema";
-import { prisma } from "lib/prisma";
-import glob from "glob";
+import { prisma } from "lib/data/prisma";
+import { glob } from "glob";
 import { join } from "node:path";
 import { stat } from "node:fs/promises";
 import { Res, UseBefore } from "@tsed/common";
-import { IsAuth } from "middlewares/IsAuth";
+import { IsAuth } from "middlewares/is-auth";
 import { Prisma, Rank, WhitelistStatus } from "@prisma/client";
-import { UsePermissions } from "middlewares/UsePermissions";
+import { UsePermissions } from "middlewares/use-permissions";
 import { defaultPermissions, Permissions } from "@snailycad/permissions";
 import type { GetAdminDashboardData } from "@snailycad/types/api";
 import axios from "axios";
 import { getCADVersion } from "@snailycad/utils/version";
 
-const ONE_DAY = 60 * 60 * 24;
+export const ONE_DAY = 60 * 60 * 24;
 
 @Controller("/admin")
 @ContentType("application/json")
@@ -25,6 +25,7 @@ export class AdminController {
     fallback: (u) => u.rank !== Rank.USER,
     permissions: [
       ...defaultPermissions.allDefaultAdminPermissions,
+      ...defaultPermissions.defaultCourthousePermissions,
       Permissions.ManageAwardsAndQualifications,
     ],
   })
@@ -70,7 +71,7 @@ export class AdminController {
 
     res.setHeader(
       "Cache-Control",
-      `private, max-age=${ONE_DAY} stale-while-revalidate=${ONE_DAY / 2}`,
+      `private, max-age=${ONE_DAY}, stale-while-revalidate=${ONE_DAY / 2}`,
     );
 
     const imageData = await this.imageData().catch(() => null);
@@ -128,7 +129,7 @@ export class AdminController {
   private async imageData() {
     try {
       const path = join(__dirname, "../../../", "public");
-      const items = glob.sync(`${path}/**/*.*`);
+      const items = await glob(`${path}/**/*.*`);
       let totalSize = 0;
 
       await Promise.all(

@@ -1,12 +1,12 @@
 import { Controller, BodyParams, Post, Res, Response } from "@tsed/common";
 import { hashSync, genSaltSync, compareSync } from "bcrypt";
 import { BadRequest } from "@tsed/exceptions";
-import { prisma } from "lib/prisma";
+import { prisma } from "lib/data/prisma";
 import { findOrCreateCAD, isFeatureEnabled } from "lib/cad";
 import { REGISTER_SCHEMA, AUTH_SCHEMA } from "@snailycad/schemas";
-import { validateSchema } from "lib/validateSchema";
-import { ExtendedNotFound } from "src/exceptions/ExtendedNotFound";
-import { ExtendedBadRequest } from "src/exceptions/ExtendedBadRequest";
+import { validateSchema } from "lib/data/validate-schema";
+import { ExtendedNotFound } from "src/exceptions/extended-not-found";
+import { ExtendedBadRequest } from "src/exceptions/extended-bad-request";
 import { validateUser2FA } from "lib/auth/2fa";
 import { ContentType, Description, Returns } from "@tsed/schema";
 import { User, WhitelistStatus, Rank, AutoSetUserProperties, cad, Feature } from "@prisma/client";
@@ -16,6 +16,7 @@ import type * as APITypes from "@snailycad/types/api";
 import { setUserTokenCookies } from "lib/auth/setUserTokenCookies";
 import { validateGoogleCaptcha } from "lib/auth/validate-google-captcha";
 import { validateDiscordAndSteamId } from "lib/auth/validate-discord-steam-id";
+import { createFeaturesObject } from "middlewares/is-enabled";
 
 @Controller("/auth")
 @ContentType("application/json")
@@ -61,7 +62,7 @@ export class AuthController {
     // only allow Discord auth (if enabled)
     const cad = await prisma.cad.findFirst({ include: { features: true } });
     const regularAuthEnabled = isFeatureEnabled({
-      features: cad?.features,
+      features: createFeaturesObject(cad?.features),
       feature: Feature.ALLOW_REGULAR_LOGIN,
       defaultReturn: true,
     });
@@ -148,7 +149,7 @@ export class AuthController {
 
     // only allow Discord auth
     const regularAuthEnabled = isFeatureEnabled({
-      features: preCad?.features,
+      features: createFeaturesObject(preCad?.features),
       feature: Feature.ALLOW_REGULAR_LOGIN,
       defaultReturn: true,
     });
@@ -170,6 +171,7 @@ export class AuthController {
         password: password ?? "",
         steamId: data.steamId ?? null,
         discordId: data.discordId ?? null,
+        fivemLicense: data.fivemLicense,
       },
     });
 

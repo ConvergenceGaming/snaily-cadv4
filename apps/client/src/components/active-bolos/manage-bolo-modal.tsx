@@ -16,7 +16,7 @@ import { classNames } from "lib/classNames";
 import { useSSRSafeId } from "@react-aria/ssr";
 import type { PostBolosData, PutBolosData } from "@snailycad/types/api";
 import { CitizenSuggestionsField } from "components/shared/CitizenSuggestionsField";
-import shallow from "zustand/shallow";
+import { shallow } from "zustand/shallow";
 
 interface Props {
   onClose?(): void;
@@ -42,11 +42,20 @@ export function ManageBoloModal({ onClose, bolo }: Props) {
   const otherTypeId = useSSRSafeId();
 
   async function onSubmit(values: typeof INITIAL_VALUES) {
+    const updatedPlate = values.vehicleId ? values.plate : values.plateSearch;
+    const updatedName = values.citizenId ? values.name : values.nameSearch;
+
+    const data = {
+      ...values,
+      name: updatedName || "",
+      plate: updatedPlate || "",
+    };
+
     if (bolo) {
       const { json } = await execute<PutBolosData>({
         path: `/bolos/${bolo.id}`,
         method: "PUT",
-        data: values,
+        data,
       });
 
       if (json.id) {
@@ -65,7 +74,7 @@ export function ManageBoloModal({ onClose, bolo }: Props) {
       const { json } = await execute<PostBolosData>({
         path: "/bolos",
         method: "POST",
-        data: values,
+        data,
       });
 
       if (json.id) {
@@ -85,7 +94,10 @@ export function ManageBoloModal({ onClose, bolo }: Props) {
     type: bolo?.type ?? BoloType.PERSON,
     nameSearch: bolo?.name ?? "",
     name: bolo?.name ?? "",
+    citizenId: null as string | null,
+
     plateSearch: bolo?.plate ?? "",
+    vehicleId: null as string | null,
     plate: bolo?.plate ?? "",
     color: bolo?.color ?? "",
     description: bolo?.description ?? "",
@@ -174,6 +186,7 @@ export function ManageBoloModal({ onClose, bolo }: Props) {
                           plate: node.value.plate,
                           color: node.value.color,
                           model: node.value.model.value.value,
+                          vehicleId: node.value.id,
                         }
                       : {};
 
@@ -213,6 +226,9 @@ export function ManageBoloModal({ onClose, bolo }: Props) {
 
             {values.type === BoloType.PERSON ? (
               <CitizenSuggestionsField
+                onNodeChange={(v) => {
+                  setFieldValue("citizenId", v?.value?.id ?? null);
+                }}
                 isOptional
                 allowsCustomValue
                 autoFocus

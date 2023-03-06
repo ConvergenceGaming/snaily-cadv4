@@ -21,6 +21,7 @@ export function useLoadValuesClientSide(options: Options) {
     queryKey: ["valueTypes", options.valueTypes],
     queryFn: fetchValues,
     enabled: isEnabled,
+    refetchOnWindowFocus: false,
   });
 
   function transformValueTypesToString() {
@@ -50,7 +51,11 @@ export function useLoadValuesClientSide(options: Options) {
     });
 
     if (Array.isArray(json)) {
-      setValues((prev) => [...prev, ...json]);
+      setValues((prev) => {
+        const filtered = prev.filter((v) => !options.valueTypes.includes(v.type as ValueType));
+
+        return [...filtered, ...json];
+      });
       return json;
     }
 

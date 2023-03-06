@@ -2,13 +2,12 @@ import * as React from "react";
 import { Form, Formik, FormikHelpers } from "formik";
 import { useTranslations } from "use-intl";
 
-import { Textarea, Loader, Input, Button } from "@snailycad/ui";
+import { Textarea, Loader, Input, Button, TabsContent } from "@snailycad/ui";
 import { useAuth } from "context/AuthContext";
 import useFetch from "lib/useFetch";
 import { JailTimeScale, MiscCadSettings } from "@snailycad/types";
 import { ImageSelectInput, validateFile } from "components/form/inputs/ImageSelectInput";
 import { SettingsFormField } from "components/form/SettingsFormField";
-import { TabsContent } from "components/shared/TabList";
 import { SettingsTabs } from "src/pages/admin/manage/cad-settings";
 import { Select } from "components/form/Select";
 import { toastMessage } from "lib/toastMessage";
@@ -33,9 +32,15 @@ export function MiscFeatures() {
   function cleanValues(values: typeof INITIAL_VALUES) {
     const newValues: Record<string, any> = {};
     const excluded = ["heightPrefix", "weightPrefix", "callsignTemplate"];
+    const toBeRemoved = ["authScreenHeaderImageId", "authScreenBgImageId"];
 
     for (const key in values) {
       const value = values[key as keyof typeof INITIAL_VALUES];
+
+      if (toBeRemoved.includes(key)) {
+        newValues[key] = undefined;
+        continue;
+      }
 
       if (excluded.includes(key)) {
         newValues[key] = value;
@@ -131,9 +136,16 @@ export function MiscFeatures() {
     activeDispatchersInactivityTimeout: miscSettings.activeDispatchersInactivityTimeout ?? "",
 
     driversLicenseNumberLength: miscSettings.driversLicenseNumberLength ?? 8,
+    driversLicenseTemplate: miscSettings.driversLicenseTemplate ?? "",
+
     weaponLicenseNumberLength: miscSettings.weaponLicenseNumberLength ?? 8,
+    pilotLicenseTemplate: miscSettings.pilotLicenseTemplate ?? "",
+
     pilotLicenseNumberLength: miscSettings.pilotLicenseNumberLength ?? 6,
+    weaponLicenseTemplate: miscSettings.weaponLicenseTemplate ?? "",
+
     waterLicenseNumberLength: miscSettings.waterLicenseNumberLength ?? 8,
+    waterLicenseTemplate: miscSettings.waterLicenseTemplate ?? "",
   };
 
   return (
@@ -179,7 +191,7 @@ export function MiscFeatures() {
                     <Link
                       className="mt-1 underline inline-flex items-center gap-1 text-neutral-700 dark:text-gray-200"
                       target="_blank"
-                      href="https://cad-docs.caspertheghost.me/docs/fivem-integrations/live-map"
+                      href="https://docs.snailycad.org/docs/fivem-integrations/live-map"
                     >
                       Learn more
                       <BoxArrowUpRight className="inline-block" />

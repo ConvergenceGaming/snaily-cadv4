@@ -3,18 +3,17 @@ import {
   LICENSE_SCHEMA,
   LEO_VEHICLE_LICENSE_SCHEMA,
   CREATE_CITIZEN_SCHEMA,
-  VEHICLE_SCHEMA,
   IMPOUND_VEHICLE_SCHEMA,
+  LEO_VEHICLE_SCHEMA,
 } from "@snailycad/schemas";
 import { BodyParams, PathParams } from "@tsed/platform-params";
 import { BadRequest, NotFound } from "@tsed/exceptions";
-import { prisma } from "lib/prisma";
-import { IsAuth } from "middlewares/IsAuth";
+import { prisma } from "lib/data/prisma";
+import { IsAuth } from "middlewares/is-auth";
 import { citizenInclude } from "controllers/citizen/CitizenController";
 import { updateCitizenLicenseCategories } from "lib/citizen/licenses";
 import {
   cad,
-  CadFeature,
   Feature,
   MiscCadSettings,
   ValueType,
@@ -30,24 +29,24 @@ import {
 } from "@prisma/client";
 import { UseBeforeEach, Context, UseBefore } from "@tsed/common";
 import { ContentType, Description, Post, Put } from "@tsed/schema";
-import { UsePermissions, Permissions } from "middlewares/UsePermissions";
-import { validateSchema } from "lib/validateSchema";
-import { manyToManyHelper } from "utils/manyToMany";
-import { validateCustomFields } from "lib/custom-fields";
+import { UsePermissions, Permissions } from "middlewares/use-permissions";
+import { validateSchema } from "lib/data/validate-schema";
+import { manyToManyHelper } from "lib/data/many-to-many";
+import { validateCustomFields } from "lib/validate-custom-fields";
 import { isFeatureEnabled } from "lib/cad";
-import { ExtendedBadRequest } from "src/exceptions/ExtendedBadRequest";
+import { ExtendedBadRequest } from "src/exceptions/extended-bad-request";
 import {
   appendCustomFields,
   citizenSearchIncludeOrSelect,
   vehicleSearchInclude,
 } from "./SearchController";
 import { citizenObjectFromData } from "lib/citizen";
-import { generateString } from "utils/generateString";
+import { generateString } from "utils/generate-string";
 import type * as APITypes from "@snailycad/types/api";
 import { createVehicleImpoundedWebhookData } from "controllers/calls/TowController";
-import { sendDiscordWebhook } from "lib/discord/webhooks";
+import { sendDiscordWebhook, sendRawWebhook } from "lib/discord/webhooks";
 import { getFirstOfficerFromActiveOfficer } from "lib/leo/utils";
-import { ActiveOfficer } from "middlewares/ActiveOfficer";
+import { ActiveOfficer } from "middlewares/active-officer";
 
 @Controller("/search/actions")
 @UseBeforeEach(IsAuth)
@@ -230,6 +229,44 @@ export class SearchActionsController {
     return updated;
   }
 
+  @Put("/citizen-address-flags/:citizenId")
+  @Description("Update the citizen's address flags by their id")
+  @UsePermissions({
+    fallback: (u) => u.isDispatch,
+    permissions: [Permissions.Dispatch],
+  })
+  async updateCitizenAddressFlags(
+    @BodyParams("addressFlags") addressFlags: string[],
+    @PathParams("citizenId") citizenId: string,
+  ): Promise<APITypes.PutSearchActionsCitizenFlagsData> {
+    const citizen = await prisma.citizen.findUnique({
+      where: { id: citizenId },
+      select: { id: true, addressFlags: true },
+    });
+
+    if (!citizen) {
+      throw new NotFound("notFound");
+    }
+
+    const disconnectConnectArr = manyToManyHelper(
+      citizen.addressFlags.map((v) => v.id),
+      addressFlags,
+    );
+
+    await prisma.$transaction(
+      disconnectConnectArr.map((v) =>
+        prisma.citizen.update({ where: { id: citizen.id }, data: { addressFlags: v } }),
+      ),
+    );
+
+    const updated = await prisma.citizen.findUniqueOrThrow({
+      where: { id: citizen.id },
+      select: { id: true, addressFlags: true },
+    });
+
+    return updated;
+  }
+
   @Put("/custom-fields/citizen/:citizenId")
   @UsePermissions({
     fallback: (u) => u.isLeo,
@@ -329,7 +366,8 @@ export class SearchActionsController {
     permissions: [Permissions.Leo],
   })
   async createCitizen(
-    @Context("cad") cad: cad & { features?: CadFeature[]; miscCadSettings: MiscCadSettings | null },
+    @Context("cad")
+    cad: cad & { features?: Record<Feature, boolean>; miscCadSettings: MiscCadSettings | null },
     @Context("user") user: User,
     @BodyParams() body: unknown,
   ): Promise<APITypes.PostSearchActionsCreateCitizen> {
@@ -429,6 +467,7 @@ export class SearchActionsController {
     try {
       const data = await createVehicleImpoundedWebhookData(impoundedVehicle, user.locale);
       await sendDiscordWebhook({ type: DiscordWebhookType.VEHICLE_IMPOUNDED, data });
+      await sendRawWebhook({ type: DiscordWebhookType.VEHICLE_IMPOUNDED, data: impoundedVehicle });
     } catch (error) {
       console.error("Could not send Discord webhook.", error);
     }
@@ -440,19 +479,22 @@ export class SearchActionsController {
   @Description("Register a new vehicle to a citizen as LEO")
   async registerVehicle(
     @Context("user") user: User,
-    @Context("cad") cad: cad & { miscCadSettings?: MiscCadSettings; features?: CadFeature[] },
+    @Context("cad")
+    cad: cad & { miscCadSettings?: MiscCadSettings; features?: Record<Feature, boolean> },
     @BodyParams() body: unknown,
   ): Promise<APITypes.PostSearchActionsCreateVehicle> {
-    const data = validateSchema(VEHICLE_SCHEMA, body);
+    const data = validateSchema(LEO_VEHICLE_SCHEMA, body);
 
-    const citizen = await prisma.citizen.findUnique({
-      where: {
-        id: data.citizenId,
-      },
-    });
+    if (data.citizenId) {
+      const citizen = await prisma.citizen.findUnique({
+        where: {
+          id: data.citizenId,
+        },
+      });
 
-    if (!citizen) {
-      throw new NotFound("NotFound");
+      if (!citizen) {
+        throw new NotFound("NotFound");
+      }
     }
 
     const existing = await prisma.registeredVehicle.findUnique({
@@ -504,7 +546,7 @@ export class SearchActionsController {
       data: {
         plate: data.plate.toUpperCase(),
         color: data.color,
-        citizenId: citizen.id,
+        citizenId: data.citizenId || null,
         modelId,
         registrationStatusId: data.registrationStatus,
         vinNumber: data.vinNumber || generateString(17),

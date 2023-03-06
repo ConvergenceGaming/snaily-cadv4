@@ -1,4 +1,4 @@
-import { Button } from "@snailycad/ui";
+import { Button, TabsContent } from "@snailycad/ui";
 import { useTranslations } from "use-intl";
 import { yesOrNoText } from "lib/utils";
 import { classNames } from "lib/classNames";
@@ -7,7 +7,6 @@ import { FullDate } from "components/shared/FullDate";
 import { useVehicleSearch } from "state/search/vehicle-search-state";
 import { Pencil } from "react-bootstrap-icons";
 import { Status } from "components/shared/Status";
-import { TabsContent } from "components/shared/TabList";
 import { TruckLogsTable } from "../TruckLogsTable";
 import { CustomFieldsArea } from "../../CustomFieldsArea";
 import { useVehicleLicenses } from "hooks/locale/useVehicleLicenses";
@@ -36,7 +35,7 @@ export function ResultsTab() {
   }
 
   function handleNameClick() {
-    if (!currentResult) return;
+    if (!currentResult?.citizen) return;
 
     openModal(ModalIds.NameSearch, {
       ...currentResult.citizen,
@@ -62,7 +61,9 @@ export function ResultsTab() {
               type="button"
               onPress={handleNameClick}
             >
-              {currentResult.citizen.name} {currentResult.citizen.surname}
+              {currentResult.citizen
+                ? `${currentResult.citizen.name} ${currentResult.citizen.surname}`
+                : common("unknown")}
             </Button>
           </Infofield>
         </li>
@@ -130,9 +131,7 @@ export function ResultsTab() {
         {DMV ? (
           <li>
             <Infofield label={vT("dmvStatus")}>
-              <Status state={currentResult.dmvStatus}>
-                {currentResult.dmvStatus?.toLowerCase()}
-              </Status>
+              <Status fallback="—">{currentResult.dmvStatus}</Status>
             </Infofield>
           </li>
         ) : null}

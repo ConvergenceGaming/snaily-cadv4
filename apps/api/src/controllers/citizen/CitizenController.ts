@@ -2,29 +2,30 @@ import { UseBeforeEach, Context, MultipartFile, PlatformMulterFile } from "@tsed
 import { Controller } from "@tsed/di";
 import { ContentType, Delete, Description, Get, Post, Put } from "@tsed/schema";
 import { QueryParams, BodyParams, PathParams } from "@tsed/platform-params";
-import { prisma } from "lib/prisma";
-import { IsAuth } from "middlewares/IsAuth";
+import { prisma } from "lib/data/prisma";
+import { IsAuth } from "middlewares/is-auth";
 import { BadRequest, Forbidden, NotFound } from "@tsed/exceptions";
 import { CREATE_CITIZEN_SCHEMA, CREATE_OFFICER_SCHEMA } from "@snailycad/schemas";
 import fs from "node:fs/promises";
 import { AllowedFileExtension, allowedFileExtensions } from "@snailycad/config";
 import { leoProperties } from "lib/leo/activeOfficer";
-import { generateString } from "utils/generateString";
-import { CadFeature, User, ValueType, Feature, cad, MiscCadSettings, Prisma } from "@prisma/client";
-import { ExtendedBadRequest } from "src/exceptions/ExtendedBadRequest";
+import { generateString } from "utils/generate-string";
+import { User, ValueType, Feature, cad, MiscCadSettings, Prisma } from "@prisma/client";
+import { ExtendedBadRequest } from "src/exceptions/extended-bad-request";
 import { canManageInvariant, userProperties } from "lib/auth/getSessionUser";
-import { validateSchema } from "lib/validateSchema";
+import { validateSchema } from "lib/data/validate-schema";
 import { updateCitizenLicenseCategories } from "lib/citizen/licenses";
 import { isFeatureEnabled } from "lib/cad";
 import { shouldCheckCitizenUserId } from "lib/citizen/hasCitizenAccess";
 import { citizenObjectFromData } from "lib/citizen";
 import type * as APITypes from "@snailycad/types/api";
-import { getImageWebPPath } from "utils/images/image";
+import { getImageWebPPath } from "lib/images/get-image-webp-path";
 import { validateSocialSecurityNumber } from "lib/citizen/validateSSN";
 import { setEndedSuspendedLicenses } from "lib/citizen/setEndedSuspendedLicenses";
-import { createOfficer } from "controllers/leo/my-officers/create-officer";
+import { upsertOfficer } from "controllers/leo/my-officers/upsert-officer";
 import { createCitizenViolations } from "lib/records/create-citizen-violations";
-import generateBlurPlaceholder from "utils/images/generate-image-blur-data";
+import generateBlurPlaceholder from "lib/images/generate-image-blur-data";
+import { z } from "zod";
 
 export const citizenInclude = {
   user: { select: userProperties },
@@ -33,8 +34,9 @@ export const citizenInclude = {
   vehicles: {
     orderBy: { createdAt: "desc" },
     include: {
+      trimLevels: true,
       flags: true,
-      model: { include: { value: true } },
+      model: { include: { trimLevels: true, value: true } },
       registrationStatus: true,
       insuranceStatus: true,
       TruckLog: true,
@@ -86,7 +88,7 @@ export class CitizenController {
   @Get("/")
   @Description("Get all the citizens of the authenticated user")
   async getCitizens(
-    @Context("cad") cad: { features?: CadFeature[] },
+    @Context("cad") cad: { features?: Record<Feature, boolean> },
     @Context("user") user: User,
     @QueryParams("query", String) query = "",
     @QueryParams("skip", Number) skip = 0,
@@ -135,7 +137,7 @@ export class CitizenController {
 
   @Get("/:id")
   async getCitizen(
-    @Context("cad") cad: { features?: CadFeature[]; miscCadSettings: MiscCadSettings },
+    @Context("cad") cad: { features?: Record<Feature, boolean>; miscCadSettings: MiscCadSettings },
     @Context("user") user: User,
     @PathParams("id") citizenId: string,
   ): Promise<APITypes.GetCitizenByIdData> {
@@ -164,7 +166,7 @@ export class CitizenController {
   @Delete("/:id")
   async deleteCitizen(
     @Context("user") user: User,
-    @Context("cad") cad: cad & { features?: CadFeature[] },
+    @Context("cad") cad: cad & { features?: Record<Feature, boolean> },
     @PathParams("id") citizenId: string,
   ): Promise<APITypes.DeleteCitizenByIdData> {
     const checkCitizenUserId = shouldCheckCitizenUserId({ cad, user });
@@ -202,7 +204,7 @@ export class CitizenController {
   @Post("/:id/deceased")
   async markCitizenDeceased(
     @Context("user") user: User,
-    @Context("cad") cad: cad & { features?: CadFeature[] },
+    @Context("cad") cad: cad & { features?: Record<Feature, boolean> },
     @PathParams("id") citizenId: string,
   ): Promise<APITypes.DeleteCitizenByIdData> {
     const checkCitizenUserId = shouldCheckCitizenUserId({ cad, user });
@@ -238,11 +240,17 @@ export class CitizenController {
 
   @Post("/")
   async createCitizen(
-    @Context("cad") cad: cad & { features: CadFeature[]; miscCadSettings: MiscCadSettings },
+    @Context("cad")
+    cad: cad & { features?: Record<Feature, boolean>; miscCadSettings: MiscCadSettings },
     @Context("user") user: User,
     @BodyParams() body: unknown,
   ): Promise<APITypes.PostCitizensData> {
-    const data = validateSchema(CREATE_CITIZEN_SCHEMA, body);
+    const data = validateSchema(
+      CREATE_CITIZEN_SCHEMA.extend({
+        department: z.string().nullish(),
+      }),
+      body,
+    );
 
     const miscSettings = cad.miscCadSettings;
     if (miscSettings.maxCitizensPerUser) {
@@ -316,8 +324,8 @@ export class CitizenController {
       });
     }
 
-    if ((data as any).callsign2) {
-      await createOfficer({
+    if (data.department) {
+      await upsertOfficer({
         body,
         citizen,
         cad,
@@ -334,7 +342,8 @@ export class CitizenController {
   async updateCitizen(
     @PathParams("id") citizenId: string,
     @Context("user") user: User,
-    @Context("cad") cad: cad & { features?: CadFeature[]; miscCadSettings: MiscCadSettings | null },
+    @Context("cad")
+    cad: cad & { features?: Record<Feature, boolean>; miscCadSettings: MiscCadSettings | null },
     @BodyParams() body: unknown,
   ): Promise<APITypes.PutCitizenByIdData> {
     const data = validateSchema(CREATE_CITIZEN_SCHEMA.partial(), body);
@@ -361,7 +370,13 @@ export class CitizenController {
       }
     }
 
-    if (data.socialSecurityNumber) {
+    const isEditableSSNEnabled = isFeatureEnabled({
+      features: cad.features,
+      feature: Feature.EDITABLE_SSN,
+      defaultReturn: true,
+    });
+
+    if (data.socialSecurityNumber && isEditableSSNEnabled) {
       await validateSocialSecurityNumber({
         socialSecurityNumber: data.socialSecurityNumber,
         citizenId: citizen.id,
@@ -378,8 +393,11 @@ export class CitizenController {
           cad,
         })),
         socialSecurityNumber:
-          data.socialSecurityNumber ??
-          (!citizen.socialSecurityNumber ? generateString(9, { numbersOnly: true }) : undefined),
+          data.socialSecurityNumber && isEditableSSNEnabled
+            ? data.socialSecurityNumber
+            : !citizen.socialSecurityNumber
+            ? generateString(9, { type: "numbers-only" })
+            : undefined,
       },
       include: { gender: true, ethnicity: true },
     });
@@ -390,7 +408,7 @@ export class CitizenController {
   @Post("/:id")
   async uploadImageToCitizen(
     @Context("user") user: User,
-    @Context("cad") cad: cad & { features?: CadFeature[] },
+    @Context("cad") cad: cad & { features?: Record<Feature, boolean> },
     @PathParams("id") citizenId: string,
     @MultipartFile("image") file?: PlatformMulterFile,
   ): Promise<APITypes.PostCitizenImageByIdData> {

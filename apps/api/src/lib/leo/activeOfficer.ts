@@ -3,7 +3,7 @@ import { defaultPermissions, hasPermission } from "@snailycad/permissions";
 import type { Req, Context } from "@tsed/common";
 import { BadRequest, Forbidden } from "@tsed/exceptions";
 import { userProperties } from "lib/auth/getSessionUser";
-import { prisma } from "lib/prisma";
+import { prisma } from "lib/data/prisma";
 import { getInactivityFilter } from "./utils";
 
 export const unitProperties = {
@@ -36,6 +36,12 @@ export const _leoProperties = {
 export const leoProperties = {
   ..._leoProperties,
   activeIncident: { include: { events: true } },
+};
+
+export const combinedEmsFdUnitProperties = {
+  status: { include: { value: true } },
+  department: { include: { value: true } },
+  deputies: { include: unitProperties },
 };
 
 export const combinedUnitProperties = {

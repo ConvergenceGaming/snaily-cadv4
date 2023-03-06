@@ -40,15 +40,20 @@ export function ImageSelectInput({ label, hideLabel, valueKey = "image", image, 
 
   useDebounce(fetchImageData, 500, [values[valueKey]]);
   async function fetchImageData() {
-    const url = values[valueKey];
+    try {
+      const url = values[valueKey];
 
-    if (!url) return;
-    if (!IMAGES_REGEX.test(url)) return;
+      if (!url) return;
+      if (!IMAGES_REGEX.test(url)) return;
 
-    const res = await fetch(url);
-    const blob = await res.blob();
+      const res = await fetch(url).catch(() => null);
+      if (!res?.ok) return;
+      const blob = await res.blob();
 
-    setURLImageData(new File([blob], "image", { type: blob.type }));
+      setURLImageData(new File([blob], "image", { type: blob.type }));
+    } catch (error) {
+      console.error(error);
+    }
   }
 
   return useURL ? (
@@ -70,6 +75,7 @@ export function ImageSelectInput({ label, hideLabel, valueKey = "image", image, 
         />
 
         <Button
+          className="min-w-fit"
           disabled={!urlImageData}
           type="button"
           onPress={() => {
@@ -86,7 +92,7 @@ export function ImageSelectInput({ label, hideLabel, valueKey = "image", image, 
       <Link
         className="mt-1 underline flex items-center gap-1 text-neutral-700 dark:text-gray-400"
         target="_blank"
-        href="https://cad-docs.caspertheghost.me/docs/features/general/supported-images"
+        href="https://docs.snailycad.org/docs/features/general/supported-images"
       >
         {common("supportedImages")}
         <BoxArrowUpRight className="inline-block" />
@@ -118,7 +124,7 @@ export function ImageSelectInput({ label, hideLabel, valueKey = "image", image, 
             value={typeof values[valueKey] === "string" ? undefined : values[valueKey]}
           />
           <Button
-            className="mr-2"
+            className="mr-2 min-w-fit"
             type="button"
             onPress={() => {
               openModal(ModalIds.CropImageModal);
@@ -130,6 +136,7 @@ export function ImageSelectInput({ label, hideLabel, valueKey = "image", image, 
             {common("url")}
           </Button>
           <Button
+            className="min-w-fit"
             type="button"
             variant="danger"
             onPress={() => {
@@ -144,7 +151,7 @@ export function ImageSelectInput({ label, hideLabel, valueKey = "image", image, 
         <Link
           className="mt-1 underline flex items-center gap-1 text-neutral-700 dark:text-gray-400"
           target="_blank"
-          href="https://cad-docs.caspertheghost.me/docs/features/general/supported-images"
+          href="https://docs.snailycad.org/docs/features/general/supported-images"
         >
           {common("supportedImages")}
           <BoxArrowUpRight className="inline-block" />

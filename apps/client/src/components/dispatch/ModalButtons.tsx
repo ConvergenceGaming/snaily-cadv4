@@ -3,13 +3,11 @@ import { Button } from "@snailycad/ui";
 import useFetch from "lib/useFetch";
 import { useSignal100 } from "hooks/shared/useSignal100";
 import { useFeatureEnabled } from "hooks/useFeatureEnabled";
-import { useAuth } from "context/AuthContext";
-import { useActiveDispatchers } from "hooks/realtime/useActiveDispatchers";
+import { useActiveDispatchers } from "hooks/realtime/use-active-dispatchers";
 import * as modalButtons from "components/modal-buttons/buttons";
 import { ModalButton } from "components/modal-buttons/ModalButton";
 import { ModalIds } from "types/ModalIds";
 import { useModal } from "state/modalState";
-import { TonesModal } from "./modals/tones-modal";
 import type {
   PostDispatchDispatchersStateData,
   PostDispatchSignal100Data,
@@ -17,11 +15,18 @@ import type {
 
 import dynamic from "next/dynamic";
 import { useCall911State } from "state/dispatch/call-911-state";
-import shallow from "zustand/shallow";
+import { shallow } from "zustand/shallow";
 import { ActiveToneType } from "@snailycad/types";
+import { useActiveDispatcherState } from "state/dispatch/active-dispatcher-state";
+
 const EnableSignal100Modal = dynamic(
   async () => (await import("./modals/EnableSignal100Modal")).EnableSignal100Modal,
+  { ssr: false },
 );
+
+const TonesModal = dynamic(async () => (await import("./modals/tones-modal")).TonesModal, {
+  ssr: false,
+});
 
 const buttons: modalButtons.ModalButton[] = [
   modalButtons.nameSearchBtn,
@@ -39,8 +44,10 @@ export function DispatchModalButtons() {
   const { execute } = useFetch();
   const { enabled: signal100Enabled } = useSignal100();
   const features = useFeatureEnabled();
-  const { activeDispatchers, setActiveDispatchers } = useActiveDispatchers();
-  const { user } = useAuth();
+
+  const { userActiveDispatcher } = useActiveDispatchers();
+  const setUserActiveDispatcher = useActiveDispatcherState((s) => s.setUserActiveDispatcher);
+
   const { ACTIVE_DISPATCHERS, TONES } = useFeatureEnabled();
   const { openModal } = useModal();
   const { calls, setCalls } = useCall911State(
@@ -51,7 +58,7 @@ export function DispatchModalButtons() {
     shallow,
   );
 
-  const isActive = ACTIVE_DISPATCHERS ? activeDispatchers.some((v) => v.userId === user?.id) : true;
+  const isActive = ACTIVE_DISPATCHERS ? !!userActiveDispatcher : true;
 
   async function handleStateChangeDispatcher() {
     const newState = !isActive;
@@ -62,11 +69,7 @@ export function DispatchModalButtons() {
       data: { value: newState },
     });
 
-    if (json.dispatcher && newState) {
-      setActiveDispatchers([...activeDispatchers, json.dispatcher]);
-    } else {
-      setActiveDispatchers(activeDispatchers.filter((v) => v.userId !== user?.id));
-    }
+    setUserActiveDispatcher(json.dispatcher, json.activeDispatchersCount);
   }
 
   async function handleSignal100() {

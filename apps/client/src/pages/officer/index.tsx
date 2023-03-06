@@ -33,13 +33,11 @@ import type {
   GetActiveOfficersData,
   GetBolosData,
   GetEmsFdActiveDeputies,
-  GetMyOfficersData,
 } from "@snailycad/types/api";
 import { CreateWarrantModal } from "components/leo/modals/CreateWarrantModal";
 import { useCall911State } from "state/dispatch/call-911-state";
-import { DndProvider } from "components/shared/dnd/DndProvider";
 import { usePermission } from "hooks/usePermission";
-import shallow from "zustand/shallow";
+import { shallow } from "zustand/shallow";
 
 const Modals = {
   CreateWarrantModal: dynamic(
@@ -74,6 +72,13 @@ const Modals = {
     },
     { ssr: false },
   ),
+  BusinessSearchModal: dynamic(
+    async () => {
+      return (await import("components/leo/modals/business-search-modal/business-search-modal"))
+        .BusinessSearchModal;
+    },
+    { ssr: false },
+  ),
   NotepadModal: dynamic(
     async () => {
       return (await import("components/shared/NotepadModal")).NotepadModal;
@@ -102,7 +107,6 @@ const Modals = {
 interface Props {
   activeOfficer: GetActiveOfficerData;
   activeOfficers: GetActiveOfficersData;
-  userOfficers: GetMyOfficersData["officers"];
   calls: Get911CallsData;
   bolos: GetBolosData;
   activeDeputies: GetEmsFdActiveDeputies;
@@ -114,7 +118,6 @@ export default function OfficerDashboard({
   activeOfficer,
   activeOfficers,
   activeDeputies,
-  userOfficers,
 }: Props) {
   useLoadValuesClientSide({
     valueTypes: [
@@ -170,7 +173,6 @@ export default function OfficerDashboard({
 
     dispatchState.setActiveDeputies(activeDeputies);
     dispatchState.setActiveOfficers(activeOfficers);
-    leoState.setUserOfficers(userOfficers);
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bolos, calls, activeOfficers, activeDeputies, activeOfficer]);
@@ -200,16 +202,12 @@ export default function OfficerDashboard({
         />
       </UtilityPanel>
 
-      <div id="officer">
-        <DndProvider id="officer">
-          {CALLS_911 ? <ActiveCalls initialData={calls} /> : null}
-          <ActiveBolos initialBolos={bolos} />
-          {ACTIVE_WARRANTS ? <ActiveWarrants /> : null}
-          <div className="mt-3">
-            <ActiveOfficers initialOfficers={activeOfficers} />
-            <ActiveDeputies initialDeputies={activeDeputies} />
-          </div>
-        </DndProvider>
+      {CALLS_911 ? <ActiveCalls initialData={calls} /> : null}
+      <ActiveBolos initialBolos={bolos} />
+      {ACTIVE_WARRANTS ? <ActiveWarrants /> : null}
+      <div className="mt-3">
+        <ActiveOfficers initialOfficers={activeOfficers} />
+        <ActiveDeputies initialDeputies={activeDeputies} />
       </div>
 
       <Modals.SelectOfficerModal />
@@ -218,25 +216,30 @@ export default function OfficerDashboard({
         <>
           <Modals.SwitchDivisionCallsignModal />
           <Modals.NotepadModal />
+
           {/* name search have their own vehicle/weapon search modal */}
           {isOpen(ModalIds.NameSearch) ? null : (
             <>
               <Modals.WeaponSearchModal />
               <Modals.VehicleSearchModal id={ModalIds.VehicleSearch} />
+              <Modals.BusinessSearchModal />
+
+              {LEO_TICKETS ? (
+                <Modals.ManageRecordModal onCreate={handleRecordCreate} type={RecordType.TICKET} />
+              ) : null}
+              <Modals.ManageRecordModal
+                onCreate={handleRecordCreate}
+                type={RecordType.ARREST_REPORT}
+              />
+              <Modals.ManageRecordModal
+                onCreate={handleRecordCreate}
+                type={RecordType.WRITTEN_WARNING}
+              />
             </>
           )}
           <Modals.NameSearchModal />
           {!ACTIVE_WARRANTS ? <CreateWarrantModal warrant={null} /> : null}
           <Modals.CustomFieldSearch />
-
-          {LEO_TICKETS ? (
-            <Modals.ManageRecordModal onCreate={handleRecordCreate} type={RecordType.TICKET} />
-          ) : null}
-          <Modals.ManageRecordModal onCreate={handleRecordCreate} type={RecordType.ARREST_REPORT} />
-          <Modals.ManageRecordModal
-            onCreate={handleRecordCreate}
-            type={RecordType.WRITTEN_WARNING}
-          />
         </>
       ) : null}
     </Layout>
@@ -245,23 +248,17 @@ export default function OfficerDashboard({
 
 export const getServerSideProps: GetServerSideProps<Props> = async ({ req, locale }) => {
   const user = await getSessionUser(req);
-  const [
-    activeOfficer,
-    { officers: userOfficers },
-    values,
-    calls,
-    bolos,
-    activeOfficers,
-    activeDeputies,
-  ] = await requestAll(req, [
-    ["/leo/active-officer", null],
-    ["/leo", { officers: [] }],
-    ["/admin/values/codes_10", []],
-    ["/911-calls", { calls: [], totalCount: 0 }],
-    ["/bolos", { bolos: [], totalCount: 0 }],
-    ["/leo/active-officers", []],
-    ["/ems-fd/active-deputies", []],
-  ]);
+  const [activeOfficer, values, calls, bolos, activeOfficers, activeDeputies] = await requestAll(
+    req,
+    [
+      ["/leo/active-officer", null],
+      ["/admin/values/codes_10", []],
+      ["/911-calls", { calls: [], totalCount: 0 }],
+      ["/bolos", { bolos: [], totalCount: 0 }],
+      ["/leo/active-officers", []],
+      ["/ems-fd/active-deputies", []],
+    ],
+  );
 
   return {
     props: {
@@ -269,13 +266,12 @@ export const getServerSideProps: GetServerSideProps<Props> = async ({ req, local
       activeOfficers,
       activeDeputies,
       activeOfficer,
-      userOfficers,
       calls,
       bolos,
       values,
       messages: {
         ...(await getTranslations(
-          ["citizen", "leo", "truck-logs", "ems-fd", "calls", "common", "courthouse"],
+          ["citizen", "leo", "truck-logs", "ems-fd", "calls", "common", "business", "courthouse"],
           user?.locale ?? locale,
         )),
       },

@@ -1,4 +1,4 @@
-import type {
+import {
   Officer,
   EmsFdDeputy,
   Citizen,
@@ -6,9 +6,8 @@ import type {
   MiscCadSettings,
   StatusValue,
   Value,
-  CadFeature,
+  Feature,
 } from "@prisma/client";
-import { Feature } from "@snailycad/types";
 import { generateCallsign } from "@snailycad/utils";
 import { isFeatureEnabled } from "lib/cad";
 import type { HandlePanicButtonPressedOptions } from "lib/leo/send-panic-button-webhook";
@@ -24,7 +23,7 @@ export type Unit = { status: V<StatusValue> | null } & (
 );
 
 interface CreateWebhookDataOptions<Unit> {
-  cad: { features?: CadFeature[]; miscCadSettings: MiscCadSettings };
+  cad: { features?: Record<Feature, boolean>; miscCadSettings: MiscCadSettings };
   unit: Unit;
   locale?: string | null;
 }
@@ -38,6 +37,7 @@ export async function createWebhookData(options: CreateWebhookDataOptions<Unit>)
     features: options.cad.features,
   });
   const translator = await getTranslator({
+    type: "webhooks",
     locale: options.locale,
     namespace: "Statuses",
   });
@@ -75,6 +75,7 @@ export async function createPanicButtonEmbed(
 ) {
   const unit = options.unit;
   const translator = await getTranslator({
+    type: "webhooks",
     locale: options.locale,
     namespace: "PanicButton",
   });

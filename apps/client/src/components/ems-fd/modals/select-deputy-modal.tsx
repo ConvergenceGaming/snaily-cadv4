@@ -16,16 +16,12 @@ import { useGenerateCallsign } from "hooks/useGenerateCallsign";
 import { isUnitDisabled, makeUnitName } from "lib/utils";
 import type { PutDispatchStatusByUnitId } from "@snailycad/types/api";
 import type { EmergencyVehicleValue } from "@snailycad/types";
-import shallow from "zustand/shallow";
+import { useGetUserDeputies } from "hooks/ems-fd/use-get-user-deputies";
 
 export function SelectDeputyModal() {
-  const { setActiveDeputy, deputies } = useEmsFdState(
-    (state) => ({
-      setActiveDeputy: state.setActiveDeputy,
-      deputies: state.deputies,
-    }),
-    shallow,
-  );
+  const { userDeputies, isLoading } = useGetUserDeputies();
+  const setActiveDeputy = useEmsFdState((state) => state.setActiveDeputy);
+
   const { isOpen, closeModal } = useModal();
   const common = useTranslations("Common");
   const t = useTranslations("Ems");
@@ -43,10 +39,12 @@ export function SelectDeputyModal() {
     if (!onDutyCode) return;
 
     const { json } = await execute<PutDispatchStatusByUnitId, typeof INITIAL_VALUES>({
-      path: `/dispatch/status/${values.deputy}`,
+      path: `/dispatch/status/${values.deputy?.id}`,
       method: "PUT",
       data: {
         ...values,
+        deputyId: values.deputy?.id,
+        deputy: values.deputy?.id,
         status: onDutyCode.id,
       },
       helpers,
@@ -60,7 +58,8 @@ export function SelectDeputyModal() {
 
   const validate = handleValidate(SELECT_DEPUTY_SCHEMA);
   const INITIAL_VALUES = {
-    deputy: "",
+    deputyId: "",
+    deputy: null as EmsFdDeputy | null,
     vehicleId: null as string | null,
     vehicleSearch: "",
   };
@@ -77,13 +76,18 @@ export function SelectDeputyModal() {
           <Form>
             <FormField errorMessage={errors.deputy} label={t("deputy")}>
               <Select
-                value={values.deputy}
+                isLoading={isLoading}
+                value={
+                  values.deputy
+                    ? `${generateCallsign(values.deputy)} ${makeUnitName(values.deputy)}`
+                    : null
+                }
                 name="deputy"
                 onChange={handleChange}
                 isClearable
-                values={deputies.map((deputy) => ({
+                values={userDeputies.map((deputy) => ({
                   label: `${generateCallsign(deputy)} ${makeUnitName(deputy)}`,
-                  value: deputy.id,
+                  value: deputy,
                   isDisabled: isUnitDisabled(deputy),
                 }))}
               />
@@ -102,7 +106,8 @@ export function SelectDeputyModal() {
                 setValues({ ...values, ...vehicleId, ...searchValue });
               }}
               fetchOptions={{
-                apiPath: (query) => `/admin/values/emergency_vehicle/search?query=${query}`,
+                apiPath: (query) =>
+                  `/admin/values/emergency_vehicle/search?query=${query}&department=${values.deputy?.departmentId}`,
                 filterTextRequired: true,
               }}
             >

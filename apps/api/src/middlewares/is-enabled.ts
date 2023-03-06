@@ -1,18 +1,18 @@
-import { Middleware, MiddlewareMethods, Context } from "@tsed/common";
+import { Middleware, MiddlewareMethods, Context, Next } from "@tsed/common";
 import { UseBefore } from "@tsed/platform-middlewares";
 import { StoreSet, useDecorators } from "@tsed/core";
-import type { Feature as DatabaseFeature } from "@prisma/client";
-import { Feature as TypesFeature } from "@snailycad/types";
-import { setDiscordAuth } from "./IsAuth";
-import { prisma } from "lib/prisma";
+import { CadFeature, Feature as DatabaseFeature, Feature } from "@prisma/client";
+import type { Feature as TypesFeature } from "@snailycad/types";
+import { setCADFeatures } from "./is-auth";
+import { prisma } from "lib/data/prisma";
 import { FeatureNotEnabled } from "src/exceptions/feature-not-enabled";
 
 export interface IsFeatureEnabledOptions {
-  feature: TypesFeature | DatabaseFeature;
+  feature: TypesFeature | DatabaseFeature | (TypesFeature | DatabaseFeature)[];
 }
 
 export const DEFAULT_DISABLED_FEATURES: Partial<
-  Record<IsFeatureEnabledOptions["feature"], { isEnabled: boolean }>
+  Record<TypesFeature | DatabaseFeature, { isEnabled: boolean }>
 > = {
   CUSTOM_TEXTFIELD_VALUES: { isEnabled: false },
   DISCORD_AUTH: { isEnabled: false },
@@ -26,14 +26,47 @@ export const DEFAULT_DISABLED_FEATURES: Partial<
   CITIZEN_DELETE_ON_DEAD: { isEnabled: false },
   WARRANT_STATUS_APPROVAL: { isEnabled: false },
   LICENSE_EXAMS: { isEnabled: false },
+  CALL_911_APPROVAL: { isEnabled: false },
+  FORCE_DISCORD_AUTH: { isEnabled: false },
+  FORCE_STEAM_AUTH: { isEnabled: false },
+  SIGNAL_100_CITIZEN: { isEnabled: false },
 };
+
+export function createFeaturesObject(features?: CadFeature[] | undefined) {
+  const obj: Record<TypesFeature | DatabaseFeature, boolean> = {} as Record<
+    TypesFeature | DatabaseFeature,
+    boolean
+  >;
+
+  Object.keys(Feature).map((feature) => {
+    const cadFeature = features?.find((v) => v.feature === feature);
+
+    const isEnabled =
+      // @ts-expect-error - this is fine
+      cadFeature?.isEnabled ?? DEFAULT_DISABLED_FEATURES[feature]?.isEnabled ?? true;
+
+    obj[feature as TypesFeature | DatabaseFeature] = isEnabled;
+  });
+
+  return obj;
+}
+
+export function overwriteFeatures(options: {
+  features: ReturnType<typeof createFeaturesObject>;
+  featuresToOverwrite: Partial<Record<Feature, boolean>>;
+}) {
+  return {
+    ...options.features,
+    ...options.featuresToOverwrite,
+  };
+}
 
 @Middleware()
 class IsFeatureEnabledMiddleware implements MiddlewareMethods {
-  async use(@Context() ctx: Context) {
+  async use(@Context() ctx: Context, @Next() next: Next) {
     const options = ctx.endpoint.get<IsFeatureEnabledOptions>(IsFeatureEnabledMiddleware);
 
-    const cad = setDiscordAuth(
+    const cad = setCADFeatures(
       await prisma.cad.findFirst({
         select: {
           id: true,
@@ -42,16 +75,24 @@ class IsFeatureEnabledMiddleware implements MiddlewareMethods {
       }),
     );
 
-    const cadFeature = cad?.features?.find((v) => v.feature === options.feature);
+    let isEnabled = Array.isArray(options.feature)
+      ? false
+      : cad.features[options.feature as TypesFeature];
 
-    const isEnabled =
-      cadFeature?.isEnabled ??
-      DEFAULT_DISABLED_FEATURES[options.feature as IsFeatureEnabledOptions["feature"]]?.isEnabled ??
-      true;
+    if (Array.isArray(options.feature)) {
+      for (const feature of options.feature) {
+        if (cad.features[feature as TypesFeature] === true) {
+          isEnabled = true;
+          break;
+        }
+      }
+    }
 
     if (!isEnabled) {
       throw new FeatureNotEnabled(options);
     }
+
+    next();
   }
 }
 
@@ -62,4 +103,4 @@ export function IsFeatureEnabled(data: IsFeatureEnabledOptions) {
   );
 }
 
-export { TypesFeature as Feature };
+export { DatabaseFeature as Feature };

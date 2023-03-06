@@ -9,23 +9,29 @@ import { isUnitCombined, isUnitOfficer } from "@snailycad/utils";
 import * as modalButtons from "components/modal-buttons/buttons";
 import { ModalButton } from "components/modal-buttons/ModalButton";
 import type { PostLeoTogglePanicButtonData } from "@snailycad/types/api";
-import { useActiveDispatchers } from "hooks/realtime/useActiveDispatchers";
+import { useActiveDispatchers } from "hooks/realtime/use-active-dispatchers";
 import { ModalIds } from "types/ModalIds";
 import { useModal } from "state/modalState";
-import { TonesModal } from "components/dispatch/modals/tones-modal";
 import { useFeatureEnabled } from "hooks/useFeatureEnabled";
 import { useImageUrl } from "hooks/useImageUrl";
-import Image from "next/image";
 import { useMounted } from "@casper124578/useful";
 import { usePermission } from "hooks/usePermission";
 import { defaultPermissions } from "@snailycad/permissions";
 import { useValues } from "context/ValuesContext";
+import dynamic from "next/dynamic";
+import { ImageWrapper } from "components/shared/image-wrapper";
+
+const TonesModal = dynamic(
+  async () => (await import("components/dispatch/modals/tones-modal")).TonesModal,
+  { ssr: false },
+);
 
 const buttons: modalButtons.ModalButton[] = [
   modalButtons.switchDivision,
   modalButtons.nameSearchBtn,
   modalButtons.plateSearchBtn,
   modalButtons.weaponSearchBtn,
+  modalButtons.businessSearchBtn,
   modalButtons.customFieldSearchBtn,
   modalButtons.create911CallBtn,
   modalButtons.createWrittenWarningBtn,
@@ -90,7 +96,7 @@ export function ModalButtons({ initialActiveOfficer }: { initialActiveOfficer: A
           <span className="font-semibold">{t("Leo.activeOfficer")}: </span>
 
           {isUnitOfficer(activeOfficer) && activeOfficer.imageId ? (
-            <Image
+            <ImageWrapper
               className="rounded-md w-[30px] h-[30px] object-cover mx-2 inline"
               draggable={false}
               src={makeImageUrl("units", activeOfficer.imageId)!}
@@ -128,7 +134,7 @@ export function ModalButtons({ initialActiveOfficer }: { initialActiveOfficer: A
           </Button>
         ) : null}
 
-        {activeDispatchersState !== "loading" && !hasActiveDispatchers && TONES ? (
+        {activeDispatchersState === "loading" ? null : !hasActiveDispatchers && TONES ? (
           <>
             <Button disabled={isButtonDisabled} onPress={() => openModal(ModalIds.Tones)}>
               {t("Leo.tones")}

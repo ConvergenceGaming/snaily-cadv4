@@ -5,12 +5,11 @@ import { Controller } from "@tsed/di";
 import { URL } from "node:url";
 import { request } from "undici";
 import type { RESTPostOAuth2AccessTokenResult, APIUser } from "discord-api-types/v10";
-import { encode } from "utils/discord";
-import { prisma } from "lib/prisma";
+import { prisma } from "lib/data/prisma";
 import { getSessionUser } from "lib/auth/getSessionUser";
-import { cad, CadFeature, Feature, Rank, WhitelistStatus, type User } from "@prisma/client";
+import { cad, Feature, Rank, WhitelistStatus, type User } from "@prisma/client";
 import { getDefaultPermissionsForNewUser } from "./auth-controller";
-import { IsAuth } from "middlewares/IsAuth";
+import { IsAuth } from "middlewares/is-auth";
 import { DISCORD_API_URL } from "lib/discord/config";
 import { updateMemberRolesLogin } from "lib/discord/auth";
 import { ContentType, Description } from "@tsed/schema";
@@ -18,6 +17,7 @@ import { isFeatureEnabled } from "lib/cad";
 import { setUserTokenCookies } from "lib/auth/setUserTokenCookies";
 import { getAPIUrl } from "@snailycad/utils/api-url";
 import { IsFeatureEnabled } from "middlewares/is-enabled";
+import { encode } from "lib/discord/utils";
 
 const callbackUrl = makeCallbackURL(getAPIUrl());
 const DISCORD_CLIENT_ID = process.env["DISCORD_CLIENT_ID"];
@@ -25,7 +25,7 @@ const DISCORD_CLIENT_SECRET = process.env["DISCORD_CLIENT_SECRET"];
 
 @Controller("/auth/discord")
 @ContentType("application/json")
-@IsFeatureEnabled({ feature: Feature.DISCORD_AUTH })
+@IsFeatureEnabled({ feature: [Feature.DISCORD_AUTH, Feature.FORCE_DISCORD_AUTH] })
 export class DiscordAuth {
   @Get("/")
   @Description("Redirect to Discord OAuth2 URL")
@@ -34,7 +34,7 @@ export class DiscordAuth {
 
     if (!DISCORD_CLIENT_ID || !DISCORD_CLIENT_SECRET) {
       throw new BadRequest(
-        "No `DISCORD_CLIENT_ID` was specified in the .env file. Please refer to the documentation: https://cad-docs.caspertheghost.me/docs/discord-integration/discord-authentication",
+        "No `DISCORD_CLIENT_ID` was specified in the .env file. Please refer to the documentation: https://docs.snailycad.org/docs/discord-integration/discord-authentication",
       );
     }
 
@@ -65,7 +65,7 @@ export class DiscordAuth {
       getSessionUser({ req, res, returnNullOnError: true }),
     ]);
 
-    if (!data || !data.id) {
+    if (!data?.id) {
       return res.redirect(`${redirectURL}/auth/login?error=could not fetch discord data`);
     }
 
@@ -188,7 +188,7 @@ export class DiscordAuth {
   @Description("Remove Discord OAuth2 from from authenticated user")
   async removeDiscordAuth(
     @Context("user") user: User,
-    @Context("cad") cad: cad & { features?: CadFeature[] },
+    @Context("cad") cad: cad & { features?: Record<Feature, boolean> },
   ) {
     const regularAuthEnabled = isFeatureEnabled({
       features: cad.features,

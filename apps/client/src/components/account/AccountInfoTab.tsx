@@ -1,12 +1,18 @@
-import { TabsContent } from "components/shared/TabList";
 import { useTranslations } from "use-intl";
 import { Form, Formik } from "formik";
 import { useAuth } from "context/AuthContext";
 import { FormRow } from "components/form/FormRow";
-import { Button, TextField } from "@snailycad/ui";
+import { Button, TextField, TabsContent } from "@snailycad/ui";
 import { useModal } from "state/modalState";
 import { ModalIds } from "types/ModalIds";
-import { ManagePermissionsModal } from "components/admin/manage/users/ManagePermissionsModal";
+import dynamic from "next/dynamic";
+
+const ManagePermissionsModal = dynamic(
+  async () =>
+    (await import("components/admin/manage/users/modals/manage-permissions-modal"))
+      .ManagePermissionsModal,
+  { ssr: false },
+);
 
 export function AccountInfoTab() {
   const { user } = useAuth();

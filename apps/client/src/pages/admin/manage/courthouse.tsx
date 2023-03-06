@@ -1,3 +1,4 @@
+import { defaultPermissions } from "@snailycad/permissions";
 import { Rank } from "@snailycad/types";
 import type {
   GetManageExpungementRequests,
@@ -8,7 +9,7 @@ import { AdminLayout } from "components/admin/AdminLayout";
 import { ExpungementRequestsTab } from "components/admin/manage/courthouse/ExpungementRequestsTab";
 import { NameChangeRequestsTab } from "components/admin/manage/courthouse/NameChangeRequestsTab";
 import { PendingWarrantsTab } from "components/admin/manage/courthouse/PendingWarrantsTab";
-import { TabList } from "components/shared/TabList";
+import { TabList } from "@snailycad/ui";
 import { Title } from "components/shared/Title";
 import { Permissions, usePermission } from "hooks/usePermission";
 import { getSessionUser } from "lib/auth";
@@ -61,13 +62,7 @@ export default function ManageCourthouse({
     <AdminLayout
       permissions={{
         fallback: (u) => u.rank !== Rank.USER,
-        permissions: [
-          Permissions.ViewNameChangeRequests,
-          Permissions.ManageNameChangeRequests,
-          Permissions.ViewExpungementRequests,
-          Permissions.ManageExpungementRequests,
-          Permissions.ManagePendingWarrants,
-        ],
+        permissions: defaultPermissions.defaultCourthousePermissions,
       }}
     >
       <header className="mb-5">

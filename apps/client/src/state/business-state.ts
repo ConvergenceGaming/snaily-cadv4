@@ -6,7 +6,7 @@ import type {
   EmployeeValue,
   RegisteredVehicle,
 } from "@snailycad/types";
-import create from "zustand";
+import { create } from "zustand";
 
 export type FullEmployee = Employee & {
   citizen: Pick<Citizen, "id" | "name" | "surname">;
@@ -18,6 +18,7 @@ export type FullBusiness = Business & {
   citizen: Pick<Citizen, "id" | "name" | "surname">;
   businessPosts: BusinessPost[];
   vehicles: RegisteredVehicle[];
+  roles: EmployeeValue[];
 };
 
 interface BusinessState {

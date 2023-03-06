@@ -1,9 +1,9 @@
 import * as React from "react";
 import { Rank, ValueType } from "@snailycad/types";
-import { Table, useAsyncTable, useTableState } from "components/shared/Table";
+import { getSelectedTableRows, Table, useAsyncTable, useTableState } from "components/shared/Table";
 import { getSessionUser } from "lib/auth";
 import { getTranslations } from "lib/getTranslation";
-import { requestAll, yesOrNoText } from "lib/utils";
+import { getObjLength, isEmpty, requestAll, yesOrNoText } from "lib/utils";
 import type { GetServerSideProps } from "next";
 import { SearchArea } from "components/shared/search/search-area";
 import { Title } from "components/shared/Title";
@@ -17,12 +17,17 @@ import Link from "next/link";
 import { useTemporaryItem } from "hooks/shared/useTemporaryItem";
 import { useModal } from "state/modalState";
 import { classNames } from "lib/classNames";
-import type { DeleteValueByIdData, GetValuesPenalCodesData } from "@snailycad/types/api";
+import type {
+  DeleteValueByIdData,
+  DeleteValuesBulkData,
+  GetValuesPenalCodesData,
+} from "@snailycad/types/api";
 import useFetch from "lib/useFetch";
 import { useRouter } from "next/router";
 import { CallDescription } from "components/dispatch/active-calls/CallDescription";
-import { ArrowLeft } from "react-bootstrap-icons";
+import { ArrowLeft, BoxArrowUpRight } from "react-bootstrap-icons";
 import { toastMessage } from "lib/toastMessage";
+import { createValueDocumentationURL } from "../[path]";
 
 const ManagePenalCode = dynamic(
   async () =>
@@ -55,7 +60,7 @@ export default function PenalCodeGroupsPage(props: Props) {
         data: json[0]?.values ?? [],
         totalCount: json[0]?.totalCount ?? 0,
       }),
-      path: `/admin/values/penal_code?groupId=${groupId}&includeAll=false`,
+      path: `/admin/values/penal_code?groupId=${groupId}&includeAll=false&cache=false`,
       requireFilterText: true,
     },
     initialData: props.penalCodes.values,
@@ -76,6 +81,32 @@ export default function PenalCodeGroupsPage(props: Props) {
   function handleEditClick(penalCodeId: string) {
     penalCodeState.setTempId(penalCodeId);
     openModal(ModalIds.ManageValue);
+  }
+
+  async function handleDeleteSelected() {
+    const selectedRows = getSelectedTableRows(asyncTable.items, tableState.rowSelection);
+
+    const { json } = await execute<DeleteValuesBulkData>({
+      path: "/admin/values/penal_code/bulk-delete",
+      method: "DELETE",
+      data: selectedRows,
+    });
+
+    if (json) {
+      asyncTable.remove(...selectedRows);
+
+      tableState.setRowSelection({});
+      closeModal(ModalIds.AlertDeleteSelectedValues);
+
+      toastMessage({
+        title: "Delete Values",
+        icon: "info",
+        message: valuesT("deletedSelectedValues", {
+          failed: json.failed,
+          deleted: json.success,
+        }),
+      });
+    }
   }
 
   async function handleDelete() {
@@ -114,9 +145,24 @@ export default function PenalCodeGroupsPage(props: Props) {
       }}
     >
       <header className="flex items-center justify-between">
-        <Title className="!mb-0">{t("MANAGE")}</Title>
+        <div>
+          <Title className="!mb-0">{t("MANAGE")}</Title>
+          <Link
+            className="mt-1 underline flex items-center gap-1 text-blue-500"
+            target="_blank"
+            href={createValueDocumentationURL(ValueType.PENAL_CODE)}
+          >
+            {common("learnMore")}
+            <BoxArrowUpRight className="inline-block" />
+          </Link>
+        </div>
 
         <div className="flex gap-2">
+          {isEmpty(tableState.rowSelection) ? null : (
+            <Button onPress={() => openModal(ModalIds.AlertDeleteSelectedValues)} variant="danger">
+              {valuesT("deleteSelectedValues")}
+            </Button>
+          )}
           <Link
             href="/admin/values/penal-code"
             className={classNames(
@@ -127,6 +173,7 @@ export default function PenalCodeGroupsPage(props: Props) {
           >
             <ArrowLeft /> View all groups
           </Link>
+
           <Button onPress={() => openModal(ModalIds.ManageValue)}>{t("ADD")}</Button>
         </div>
       </header>
@@ -134,6 +181,7 @@ export default function PenalCodeGroupsPage(props: Props) {
       <SearchArea search={{ search, setSearch }} asyncTable={asyncTable} totalCount={0} />
 
       <Table
+        features={{ rowSelection: true }}
         tableState={tableState}
         data={asyncTable.items.map((penalCode) => ({
           id: penalCode.id,
@@ -195,6 +243,16 @@ export default function PenalCodeGroupsPage(props: Props) {
           setTimeout(() => penalCodeState.setTempId(null), 100);
         }}
       />
+
+      <AlertModal
+        id={ModalIds.AlertDeleteSelectedValues}
+        description={valuesT("alert_deleteSelectedValues", {
+          length: getObjLength(tableState.rowSelection),
+        })}
+        onDeleteClick={handleDeleteSelected}
+        title={t("DELETE")}
+        state={state}
+      />
     </AdminLayout>
   );
 }
@@ -203,7 +261,7 @@ export const getServerSideProps: GetServerSideProps = async ({ locale, req, quer
   const user = await getSessionUser(req);
   const [penalCodes] = await requestAll(req, [
     [
-      `/admin/values/penal_code?groupId=${query.groupId}&includeAll=false`,
+      `/admin/values/penal_code?groupId=${query.groupId}&includeAll=false&cache=false`,
       { totalCount: 0, values: [], type: "PENAL_CODE" },
     ],
   ]);

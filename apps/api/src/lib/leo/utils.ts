@@ -5,17 +5,18 @@ import {
   Officer,
   AssignedUnit,
   IncidentInvolvedUnit,
+  Feature,
+  cad,
 } from "@prisma/client";
 import type { INDIVIDUAL_CALLSIGN_SCHEMA } from "@snailycad/schemas";
-import type { cad } from "@snailycad/types";
-import { prisma } from "lib/prisma";
-import { ExtendedBadRequest } from "src/exceptions/ExtendedBadRequest";
-import type { DisconnectOrConnect } from "utils/manyToMany";
+import { prisma } from "lib/data/prisma";
+import { ExtendedBadRequest } from "src/exceptions/extended-bad-request";
+import type { DisconnectOrConnect } from "lib/data/many-to-many";
 
 interface MaxDepartmentOptions {
   type: "emsFdDeputy" | "officer";
   userId: string;
-  cad: cad & { miscCadSettings: MiscCadSettings };
+  cad: cad & { features?: Record<Feature, boolean>; miscCadSettings: MiscCadSettings };
   departmentId: string;
   unitId?: string;
 }
@@ -147,11 +148,12 @@ interface GetPrismaNameActiveCallIncidentOptions {
 export function getPrismaNameActiveCallIncident(options: GetPrismaNameActiveCallIncidentOptions) {
   const prismaNames = {
     officerId: "officer",
-    combinedLeoId: "combinedLeoUnit",
     emsFdDeputyId: "emsFdDeputy",
+    combinedLeoId: "combinedLeoUnit",
+    combinedEmsFdId: "combinedEmsFdUnit",
   } as const;
 
-  let prismaName: typeof prismaNames[keyof typeof prismaNames] | null = null;
+  let prismaName: (typeof prismaNames)[keyof typeof prismaNames] | null = null;
   let unitId = null;
   for (const name in prismaNames) {
     const _unitId = options.unit[name as keyof typeof prismaNames];

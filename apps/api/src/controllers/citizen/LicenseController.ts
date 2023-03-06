@@ -1,13 +1,13 @@
-import { cad, CadFeature, Feature, User } from "@prisma/client";
+import { cad, Feature, User } from "@prisma/client";
 import { LICENSE_SCHEMA } from "@snailycad/schemas";
 import { UseBeforeEach, Context, BodyParams, PathParams } from "@tsed/common";
 import { Controller } from "@tsed/di";
 import { Forbidden, NotFound } from "@tsed/exceptions";
 import { ContentType, Description, Put } from "@tsed/schema";
 import { canManageInvariant } from "lib/auth/getSessionUser";
-import { prisma } from "lib/prisma";
-import { validateSchema } from "lib/validateSchema";
-import { IsAuth } from "middlewares/IsAuth";
+import { prisma } from "lib/data/prisma";
+import { validateSchema } from "lib/data/validate-schema";
+import { IsAuth } from "middlewares/is-auth";
 import { updateCitizenLicenseCategories } from "lib/citizen/licenses";
 import { isFeatureEnabled } from "lib/cad";
 import { shouldCheckCitizenUserId } from "lib/citizen/hasCitizenAccess";
@@ -25,7 +25,7 @@ export class LicensesController {
   async updateCitizenLicenses(
     @PathParams("id") citizenId: string,
     @Context("user") user: User,
-    @Context("cad") cad: cad & { features?: CadFeature[] },
+    @Context("cad") cad: cad & { features?: Record<Feature, boolean> },
     @BodyParams() body: unknown,
   ): Promise<APITypes.PutCitizenLicensesByIdData> {
     const data = validateSchema(LICENSE_SCHEMA, body);

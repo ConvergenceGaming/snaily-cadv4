@@ -11,29 +11,30 @@ import {
 } from "@tsed/common";
 import fs from "node:fs/promises";
 import { ContentType, Delete, Description, Patch, Post, Put } from "@tsed/schema";
-import { prisma } from "lib/prisma";
-import { IsValidPath, validValuePaths } from "middlewares/ValidPath";
+import { prisma } from "lib/data/prisma";
+import { IsValidPath, validValuePaths } from "middlewares/valid-path";
 import { BadRequest, NotFound } from "@tsed/exceptions";
-import { IsAuth } from "middlewares/IsAuth";
+import { IsAuth } from "middlewares/is-auth";
 import { typeHandlers } from "./Import";
-import { ExtendedBadRequest } from "src/exceptions/ExtendedBadRequest";
+import { ExtendedBadRequest } from "src/exceptions/extended-bad-request";
 import { ValuesSelect, getTypeFromPath, getPermissionsForValuesRequest } from "lib/values/utils";
 import { ValueType } from "@prisma/client";
-import { UsePermissions } from "middlewares/UsePermissions";
+import { UsePermissions } from "middlewares/use-permissions";
 import { AllowedFileExtension, allowedFileExtensions } from "@snailycad/config";
 import type * as APITypes from "@snailycad/types/api";
-import { getImageWebPPath } from "utils/images/image";
+import { getImageWebPPath } from "lib/images/get-image-webp-path";
 import { BULK_DELETE_SCHEMA } from "@snailycad/schemas";
-import { validateSchema } from "lib/validateSchema";
+import { validateSchema } from "lib/data/validate-schema";
 import { createSearchWhereObject } from "lib/values/create-where-object";
-import generateBlurPlaceholder from "utils/images/generate-image-blur-data";
+import generateBlurPlaceholder from "lib/images/generate-image-blur-data";
+import { AuditLogActionType, createAuditLogEntry } from "@snailycad/audit-logger/server";
 
 export const GET_VALUES: Partial<Record<ValueType, ValuesSelect>> = {
   QUALIFICATION: {
     name: "qualificationValue",
     include: { departments: { include: { value: true } } },
   },
-  VEHICLE: { name: "vehicleValue" },
+  VEHICLE: { name: "vehicleValue", include: { trimLevels: true } },
   WEAPON: { name: "weaponValue" },
   BUSINESS_ROLE: { name: "employeeValue" },
   CODES_10: { name: "statusValue", include: { departments: { include: { value: true } } } },
@@ -210,6 +211,7 @@ export class ValuesController {
 
     const values = prisma.value.findMany({
       orderBy: { position: "asc" },
+      where: { type },
     });
 
     return values;
@@ -329,6 +331,7 @@ export class ValuesController {
     @Context() context: Context,
     @BodyParams() body: any,
     @PathParams("path") path: string,
+    @Context("sessionUserId") sessionUserId: string,
   ): Promise<APITypes.PostValuesData> {
     const type = getTypeFromPath(path);
 
@@ -349,6 +352,13 @@ export class ValuesController {
     const handler = typeHandlers[type];
     const [value] = await handler({ body: [body], context });
 
+    await createAuditLogEntry({
+      translationKey: "createdEntry",
+      action: { type: AuditLogActionType.ValueAdd, new: value },
+      prisma,
+      executorId: sessionUserId,
+    });
+
     return value as APITypes.PostValuesData;
   }
 
@@ -357,17 +367,39 @@ export class ValuesController {
   @UsePermissions(getPermissionsForValuesRequest)
   async bulkDeleteByPathAndIds(
     @PathParams("path") path: string,
+    @Context("sessionUserId") sessionUserId: string,
     @BodyParams() body: unknown,
   ): Promise<APITypes.DeleteValuesBulkData> {
     const type = getTypeFromPath(path);
     const data = validateSchema(BULK_DELETE_SCHEMA, body);
 
-    const arr = await Promise.all(data.map(async (id) => this.deleteById(type, id)));
+    let arr = [];
 
-    const successfullyDeleted = arr.filter((v) => v === true).length;
-    const failedToDeleteIds = arr.filter((v) => typeof v === "string").map((v) => v as string);
+    if (typeof data === "object" && "all" in data) {
+      const data = GET_VALUES[type];
+      const values: { id: string }[] = data
+        ? // @ts-expect-error ignore
+          await prisma[data.name].findMany({ select: { id: true } })
+        : await prisma.value.findMany({ where: { type }, select: { id: true } });
 
-    return { success: successfullyDeleted, failedIds: failedToDeleteIds };
+      arr = await Promise.all(values.map(async (item) => this.deleteById(type, item.id)));
+    } else {
+      arr = await Promise.all(data.map(async (id) => this.deleteById(type, id)));
+    }
+
+    const successfullyDeleted = arr.filter((v) => v !== false) as string[];
+    const successfullyDeletedCount = successfullyDeleted.length;
+
+    const failedToDeleteCount = arr.filter((v) => v === false).length;
+
+    await createAuditLogEntry({
+      translationKey: "bulkRemoveValues",
+      action: { type: AuditLogActionType.ValueBulkRemove, new: successfullyDeleted },
+      prisma,
+      executorId: sessionUserId,
+    });
+
+    return { success: successfullyDeletedCount, failed: failedToDeleteCount };
   }
 
   @Delete("/:id")
@@ -376,9 +408,10 @@ export class ValuesController {
   async deleteValueByPathAndId(
     @PathParams("id") id: string,
     @PathParams("path") path: string,
+    @Context("sessionUserId") sessionUserId: string,
   ): Promise<APITypes.DeleteValueByIdData> {
     const type = getTypeFromPath(path);
-    return this.deleteById(type, id);
+    return !!this.deleteById(type, id, sessionUserId);
   }
 
   @Patch("/:id")
@@ -436,7 +469,11 @@ export class ValuesController {
     return true;
   }
 
-  private async deleteById(type: ValueType, id: string) {
+  private async deleteById(
+    type: ValueType,
+    id: string,
+    sessionUserId?: string,
+  ): Promise<string | false> {
     try {
       const data = GET_VALUES[type];
 
@@ -445,19 +482,37 @@ export class ValuesController {
         const deleted = await prisma[data.name].delete({ where: { id } });
         await prisma.value.delete({ where: { id: deleted.valueId } });
 
-        return true;
+        if (sessionUserId) {
+          await createAuditLogEntry({
+            translationKey: "deletedEntry",
+            action: { type: AuditLogActionType.ValueAdd, new: deleted },
+            prisma,
+            executorId: sessionUserId,
+          });
+        }
+
+        return id;
       }
 
       if (type === "PENAL_CODE") {
         await prisma.penalCode.delete({ where: { id } });
-        return true;
+        return id;
       }
 
-      await prisma.value.delete({ where: { id } });
+      const value = await prisma.value.delete({ where: { id } });
 
-      return true;
-    } catch {
+      if (sessionUserId) {
+        await createAuditLogEntry({
+          translationKey: "deletedEntry",
+          action: { type: AuditLogActionType.ValueAdd, new: value },
+          prisma,
+          executorId: sessionUserId,
+        });
+      }
+
       return id;
+    } catch {
+      return false;
     }
   }
 }

@@ -1,13 +1,13 @@
-import type { CadFeature, User } from "@prisma/client";
+import type { User } from "@prisma/client";
 import { CREATE_TRUCK_LOG_SCHEMA } from "@snailycad/schemas";
 import { Controller } from "@tsed/di";
 import { NotFound } from "@tsed/exceptions";
 import { BodyParams, Context, PathParams, QueryParams } from "@tsed/platform-params";
 import { ContentType, Delete, Get, Post, Put } from "@tsed/schema";
-import { prisma } from "lib/prisma";
-import { IsAuth } from "middlewares/IsAuth";
+import { prisma } from "lib/data/prisma";
+import { IsAuth } from "middlewares/is-auth";
 import { UseBeforeEach } from "@tsed/platform-middlewares";
-import { validateSchema } from "lib/validateSchema";
+import { validateSchema } from "lib/data/validate-schema";
 import { shouldCheckCitizenUserId } from "lib/citizen/hasCitizenAccess";
 import type * as APITypes from "@snailycad/types/api";
 import { citizenInclude } from "./CitizenController";
@@ -41,7 +41,7 @@ export class TruckLogsController {
   @Post("/")
   async createTruckLog(
     @Context("user") user: User,
-    @Context("cad") cad: { features: CadFeature[] },
+    @Context("cad") cad: { features?: Record<Feature, boolean> },
     @BodyParams() body: unknown,
   ): Promise<APITypes.PostTruckLogsData> {
     const data = validateSchema(CREATE_TRUCK_LOG_SCHEMA, body);
@@ -91,7 +91,7 @@ export class TruckLogsController {
   @Put("/:id")
   async updateTruckLog(
     @Context("user") user: User,
-    @Context("cad") cad: { features: CadFeature[] },
+    @Context("cad") cad: { features?: Record<Feature, boolean> },
     @BodyParams() body: unknown,
     @PathParams("id") id: string,
   ): Promise<APITypes.PutTruckLogsData> {
@@ -153,7 +153,7 @@ export class TruckLogsController {
 
   @Delete("/:id")
   async deleteTruckLog(
-    @Context("cad") cad: { features: CadFeature[] },
+    @Context("cad") cad: { features?: Record<Feature, boolean> },
     @Context("user") user: User,
     @PathParams("id") id: string,
   ): Promise<APITypes.DeleteTruckLogsData> {

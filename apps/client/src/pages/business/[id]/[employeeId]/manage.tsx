@@ -7,14 +7,13 @@ import { getTranslations } from "lib/getTranslation";
 
 import { FullBusiness, FullEmployee, useBusinessState } from "state/business-state";
 import { useTranslations } from "use-intl";
-import { TabList } from "components/shared/TabList";
 import { EmployeeAsEnum } from "@snailycad/types";
 import dynamic from "next/dynamic";
 import { requestAll } from "lib/utils";
 import { Title } from "components/shared/Title";
-import { EmployeesTab } from "components/business/manage/EmployeesTab";
-import { BreadcrumbItem, Breadcrumbs } from "@snailycad/ui";
-import shallow from "zustand/shallow";
+import { EmployeesTab } from "components/business/manage/tabs/employees-tab/employees-tab";
+import { TabList, BreadcrumbItem, Breadcrumbs } from "@snailycad/ui";
+import { shallow } from "zustand/shallow";
 
 interface Props {
   employee: FullEmployee | null;
@@ -22,15 +21,21 @@ interface Props {
 }
 
 const ManageBusinessTab = dynamic(
-  async () => (await import("components/business/manage/BusinessTab")).ManageBusinessTab,
+  async () => (await import("components/business/manage/tabs/business-tab")).ManageBusinessTab,
 );
 
 const PendingEmployeesTab = dynamic(
-  async () => (await import("components/business/manage/PendingEmployeesTab")).PendingEmployeesTab,
+  async () =>
+    (await import("components/business/manage/tabs/pending-employees-tab")).PendingEmployeesTab,
 );
 
 const VehiclesTab = dynamic(
-  async () => (await import("components/business/manage/VehiclesTab")).VehiclesTab,
+  async () => (await import("components/business/manage/tabs/vehicles-tab")).VehiclesTab,
+);
+
+const BusinessRolesTab = dynamic(
+  async () =>
+    (await import("components/business/manage/tabs/roles-tab/business-roles-tab")).BusinessRolesTab,
 );
 
 export default function BusinessId(props: Props) {
@@ -69,11 +74,13 @@ export default function BusinessId(props: Props) {
     );
   }
 
+  const isBusinessOwner = currentEmployee.role.as === EmployeeAsEnum.OWNER;
+
   const tabsObj = [
     { enabled: true, name: t("allEmployees"), value: "allEmployees" },
     { enabled: true, name: t("businessVehicles"), value: "businessVehicles" },
     {
-      enabled: currentEmployee.role.as === EmployeeAsEnum.OWNER,
+      enabled: isBusinessOwner,
       name: t("business"),
       value: "business",
     },
@@ -81,6 +88,11 @@ export default function BusinessId(props: Props) {
       enabled: currentBusiness.whitelisted,
       name: t("pendingEmployees"),
       value: "pendingEmployees",
+    },
+    {
+      enabled: isBusinessOwner,
+      name: t("businessRoles"),
+      value: "businessRoles",
     },
   ];
 
@@ -104,8 +116,9 @@ export default function BusinessId(props: Props) {
         <TabList tabs={tabs}>
           <EmployeesTab />
           <VehiclesTab />
-          <ManageBusinessTab />
+          {isBusinessOwner ? <ManageBusinessTab /> : null}
           {currentBusiness.whitelisted ? <PendingEmployeesTab /> : null}
+          {isBusinessOwner ? <BusinessRolesTab /> : null}
         </TabList>
       </div>
     </Layout>
@@ -119,8 +132,7 @@ export const getServerSideProps: GetServerSideProps = async ({ query, locale, re
     ["/admin/values/business_role?paths=license", []],
   ]);
 
-  const notFound =
-    !business || !business?.employee || business.employee.citizenId !== business.citizenId;
+  const notFound = !business?.employee || business.employee.citizenId !== business.citizenId;
 
   return {
     notFound,

@@ -8,13 +8,20 @@ import { useGenerateCallsign } from "hooks/useGenerateCallsign";
 import { makeUnitName } from "lib/utils";
 import useFetch from "lib/useFetch";
 import type { PostEmsFdTogglePanicButtonData } from "@snailycad/types/api";
-import { useActiveDispatchers } from "hooks/realtime/useActiveDispatchers";
-import { TonesModal } from "components/dispatch/modals/tones-modal";
+import { useActiveDispatchers } from "hooks/realtime/use-active-dispatchers";
 import { useFeatureEnabled } from "hooks/useFeatureEnabled";
 import { useMounted } from "@casper124578/useful";
 import { usePermission } from "hooks/usePermission";
 import { defaultPermissions } from "@snailycad/permissions";
 import { useValues } from "context/ValuesContext";
+import { isUnitCombinedEmsFd } from "@snailycad/utils";
+
+import dynamic from "next/dynamic";
+
+const TonesModal = dynamic(
+  async () => (await import("components/dispatch/modals/tones-modal")).TonesModal,
+  { ssr: false },
+);
 
 interface MButton {
   nameKey: [string, string];
@@ -71,7 +78,9 @@ export function ModalButtons({
   const nameAndCallsign =
     activeDeputy &&
     !isButtonDisabled &&
-    `${generateCallsign(activeDeputy)} ${makeUnitName(activeDeputy)}`;
+    (isUnitCombinedEmsFd(activeDeputy)
+      ? generateCallsign(activeDeputy, "pairedUnitTemplate")
+      : `${generateCallsign(activeDeputy)} ${makeUnitName(activeDeputy)}`);
 
   async function handlePanic() {
     if (!activeDeputy) return;
@@ -85,7 +94,7 @@ export function ModalButtons({
 
   return (
     <div className="py-2">
-      {!isButtonDisabled ? (
+      {nameAndCallsign && activeDeputy ? (
         <p className="text-lg">
           <span className="font-semibold">{t("Ems.activeDeputy")}: </span>
           {nameAndCallsign}

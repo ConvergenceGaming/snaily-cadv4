@@ -1,8 +1,8 @@
 import * as React from "react";
-import { CadFeature, Feature } from "@snailycad/types";
+import { Feature } from "@snailycad/types";
 import { useAuth } from "context/AuthContext";
 
-export const DEFAULT_DISABLED_FEATURES: Partial<Record<Feature, { isEnabled: boolean }>> = {
+export const DEFAULT_DISABLED_FEATURES = {
   CUSTOM_TEXTFIELD_VALUES: { isEnabled: false },
   DISCORD_AUTH: { isEnabled: false },
   DMV: { isEnabled: false },
@@ -17,9 +17,13 @@ export const DEFAULT_DISABLED_FEATURES: Partial<Record<Feature, { isEnabled: boo
   LICENSE_EXAMS: { isEnabled: false },
   CITIZEN_CREATION_RECORDS: { isEnabled: false },
   BUREAU_OF_FIREARMS: { isEnabled: false },
-};
+  CALL_911_APPROVAL: { isEnabled: false },
+  FORCE_DISCORD_AUTH: { isEnabled: false },
+  FORCE_STEAM_AUTH: { isEnabled: false },
+  SIGNAL_100_CITIZEN: { isEnabled: false },
+} satisfies Partial<Record<Feature, { isEnabled: boolean }>>;
 
-export function useFeatureEnabled(features?: CadFeature[]) {
+export function useFeatureEnabled(features?: Record<Feature, boolean>) {
   const { cad } = useAuth();
   const _features = features ?? cad?.features;
 
@@ -27,9 +31,10 @@ export function useFeatureEnabled(features?: CadFeature[]) {
     const obj: Record<Feature, boolean> = {} as Record<Feature, boolean>;
 
     Object.keys(Feature).map((feature) => {
-      const cadFeature = _features?.find((v) => v.feature === feature);
-      const isEnabled =
-        cadFeature?.isEnabled ?? DEFAULT_DISABLED_FEATURES[feature as Feature]?.isEnabled ?? true;
+      const cadFeature = _features?.[feature as Feature];
+
+      // @ts-expect-error - this is fine
+      const isEnabled = cadFeature ?? DEFAULT_DISABLED_FEATURES[feature]?.isEnabled ?? true;
 
       obj[feature as Feature] = isEnabled;
     });

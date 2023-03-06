@@ -3,9 +3,9 @@ import { Context, Delete, Get, QueryParams, Req, Res, UseBefore } from "@tsed/co
 import { BadRequest } from "@tsed/exceptions";
 import { Controller } from "@tsed/di";
 import { URL } from "node:url";
-import { prisma } from "lib/prisma";
+import { prisma } from "lib/data/prisma";
 import { Rank, User, WhitelistStatus } from "@prisma/client";
-import { IsAuth } from "middlewares/IsAuth";
+import { IsAuth } from "middlewares/is-auth";
 import { ContentType, Description } from "@tsed/schema";
 import { request } from "undici";
 import { findRedirectURL } from "./discord-auth-controller";
@@ -21,14 +21,14 @@ export const STEAM_API_URL = "https://api.steampowered.com";
 
 @Controller("/auth/steam")
 @ContentType("application/json")
-@IsFeatureEnabled({ feature: Feature.STEAM_OAUTH })
+@IsFeatureEnabled({ feature: [Feature.STEAM_OAUTH, Feature.FORCE_STEAM_AUTH] })
 export class SteamOAuthController {
   @Get("/")
   @Description("Redirect to Steam's OAuth2 URL")
   async handleRedirectToSteamOAuthAPI(@Res() res: Res) {
     if (!STEAM_API_KEY) {
       throw new BadRequest(
-        "No `STEAM_API_KEY` was specified in the .env file. Please refer to the documentation: https://cad-docs.caspertheghost.me/docs/steam-integration/steam-authentication",
+        "No `STEAM_API_KEY` was specified in the .env file. Please refer to the documentation: https://docs.snailycad.org/docs/steam-integration/steam-authentication",
       );
     }
 

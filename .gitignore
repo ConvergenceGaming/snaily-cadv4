@@ -49,3 +49,9 @@ test.mjs
 .gitold
 .env.bck
 /batch/*
+
+# Added
+*.code-workspace
+.gitold
+.env.bck
+/batch/*

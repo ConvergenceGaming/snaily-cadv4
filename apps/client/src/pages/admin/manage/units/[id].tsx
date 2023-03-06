@@ -9,10 +9,9 @@ import { Title } from "components/shared/Title";
 import { Permissions } from "@snailycad/permissions";
 import { useLoadValuesClientSide } from "hooks/useLoadValuesClientSide";
 import type { GetManageUnitByIdData } from "@snailycad/types/api";
-import { TabList } from "components/shared/TabList";
 import { ManageUnitTab } from "components/admin/manage/units/tabs/manage-unit-tab/manage-unit-tab";
 import { UnitLogsTab } from "components/admin/manage/units/tabs/manage-unit-tab/unit-logs-tab";
-import { BreadcrumbItem, Breadcrumbs } from "@snailycad/ui";
+import { TabList, BreadcrumbItem, Breadcrumbs } from "@snailycad/ui";
 import { useGenerateCallsign } from "hooks/useGenerateCallsign";
 import { usePermission } from "hooks/usePermission";
 
@@ -36,14 +35,16 @@ export default function SupervisorPanelPage({ unit: data }: Props) {
   const tAdmin = useTranslations("Management");
 
   const TABS = [];
+  let index = 0;
 
   if (hasManageAwardsPermissions || hasManagePermissions) {
-    TABS[0] = { name: "Manage Unit", value: "manage-unit" };
+    TABS[index] = { name: "Manage Unit", value: "manage-unit" };
+    index += 1;
   }
 
   if (hasManageCallsignPermissions) {
-    const idx = hasManageAwardsPermissions || hasManagePermissions ? 1 : 0;
-    TABS[idx] = { name: "Unit Logs", value: "unit-logs" };
+    TABS[index] = { name: "Unit Logs", value: "unit-logs" };
+    index += 1;
   }
 
   return (

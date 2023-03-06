@@ -43,6 +43,8 @@ export interface ValueContext {
   qualification: ContextValue<QualificationValue>;
   callType: ContextValue<CallTypeValue>;
   address: ContextValue<AddressValue>;
+  addressFlag: ContextValue;
+  vehicleTrimLevel: ContextValue;
   setValues: React.Dispatch<React.SetStateAction<GetValuesData>>;
 }
 

@@ -30,7 +30,7 @@ type CADPick =
 
 export type cad = Pick<
   Omit<Prisma.cad, "registrationCode"> & {
-    features: CadFeature[];
+    features: Record<Enums.Feature, boolean>;
     miscCadSettings: MiscCadSettings | null;
     apiToken?: ApiToken | null;
     autoSetUserProperties?: AutoSetUserProperties | null;
@@ -64,6 +64,7 @@ export type ApiToken = Prisma.ApiToken & {
 export type ApiTokenLog = Prisma.ApiTokenLog;
 
 export type DiscordRoles = Prisma.DiscordRoles & {
+  adminRoles?: DiscordRole[];
   leoRoles?: DiscordRole[];
   emsFdRoles?: DiscordRole[];
   dispatchRoles?: DiscordRole[];
@@ -117,8 +118,8 @@ type UserPicks =
   | "twoFactorEnabled"
   | "hasTempPassword"
   | "roles"
-  | "fivemLicense"
-  | "lastSeen";
+  | "lastSeen"
+  | "fivemLicense";
 
 export type User = Pick<
   Prisma.User & {
@@ -137,8 +138,8 @@ export type UserSoundSettings = Prisma.UserSoundSettings;
 
 export type BaseCitizen = Prisma.Citizen;
 export type Citizen = Prisma.Citizen & {
-  gender: Prisma.Value;
-  ethnicity: Prisma.Value;
+  gender?: Prisma.Value | null;
+  ethnicity?: Prisma.Value | null;
   driversLicense: Prisma.Value | null;
   weaponLicense: Prisma.Value | null;
   pilotLicense: Prisma.Value | null;
@@ -156,7 +157,7 @@ export type Note = Prisma.Note & {
 };
 
 export type RegisteredVehicle = Prisma.RegisteredVehicle & {
-  citizen: Prisma.Citizen;
+  citizen?: Prisma.Citizen | null;
   model: VehicleValue;
   registrationStatus: Prisma.Value;
   insuranceStatus?: Prisma.Value | null;
@@ -164,6 +165,7 @@ export type RegisteredVehicle = Prisma.RegisteredVehicle & {
   notes?: Prisma.Note[];
   TruckLogs?: TruckLog[];
   Business?: Business[];
+  trimLevels?: Value[];
 };
 
 export type Weapon = Prisma.Weapon & {
@@ -221,11 +223,9 @@ export type DriversLicenseCategoryValue = Prisma.DriversLicenseCategoryValue & {
   value: Value;
 };
 
-export type VehicleValue = Prisma.VehicleValue & { value: Value };
+export type VehicleValue = Prisma.VehicleValue & { trimLevels?: Value[]; value: Value };
 
 export type WeaponValue = Prisma.WeaponValue & { value: Value };
-
-export type Notification = Prisma.Notification;
 
 export type BleeterPost = Prisma.BleeterPost;
 
@@ -260,7 +260,7 @@ export type Officer = Prisma.Officer & {
   status: StatusValue | null;
   citizen: Pick<Prisma.Citizen, "name" | "surname" | "id">;
   whitelistStatus?: (Prisma.LeoWhitelistStatus & { department: Officer["department"] }) | null;
-  user: User;
+  user?: User | null;
   rank: Prisma.Value | null;
   activeIncident?: Prisma.LeoIncident | null;
   callsigns?: IndividualDivisionCallsign[];
@@ -292,7 +292,7 @@ export type OfficerLog = Prisma.OfficerLog;
 
 export type ImpoundedVehicle = Prisma.ImpoundedVehicle & {
   officer?: Officer | null;
-  vehicle: Prisma.RegisteredVehicle & { citizen: BaseCitizen; model: VehicleValue };
+  vehicle: Prisma.RegisteredVehicle & { citizen?: BaseCitizen | null; model: VehicleValue };
   location: Prisma.Value;
 };
 
@@ -345,13 +345,15 @@ export type Bolo = Prisma.Bolo & {
   officer: Officer | null;
 };
 
-export type Record = Prisma.Record & {
+type _Record = Prisma.Record & {
   officer?: Officer | null;
   violations: Violation[];
   seizedItems?: Prisma.SeizedItem[];
   courtEntry?: CourtEntry | null;
   vehicle?: (Prisma.RegisteredVehicle & { model: VehicleValue }) | null;
+  release?: Partial<RecordRelease> | null;
 };
+export { _Record as Record };
 
 export type RecordRelease = Prisma.RecordRelease & {
   releasedBy: Citizen | null;
@@ -362,7 +364,7 @@ export type Warrant = Prisma.Warrant & {
 };
 
 export type RecordLog = Prisma.RecordLog & {
-  records: Record | null;
+  records: _Record | null;
   warrant: Warrant | null;
 };
 
@@ -384,9 +386,16 @@ export type EmsFdDeputy = Prisma.EmsFdDeputy & {
   rank: Officer["rank"];
   status: Officer["status"];
   citizen: Officer["citizen"];
-  user: Officer["user"];
+  user?: Officer["user"] | null;
   whitelistStatus?: Officer["whitelistStatus"];
   activeVehicle: EmergencyVehicleValue | null;
+};
+
+export type CombinedEmsFdUnit = Prisma.CombinedEmsFdUnit & {
+  status: EmsFdDeputy["status"];
+  department: EmsFdDeputy["department"];
+  deputies: Omit<EmsFdDeputy, "activeIncident">[];
+  activeVehicle?: EmsFdDeputy["activeVehicle"];
 };
 
 export type TruckLog = Prisma.TruckLog & {
@@ -432,4 +441,9 @@ export type AnyValue = Value | PenalCode | ValueWithValueObj;
 
 export type ActiveTone = Prisma.ActiveTone & {
   createdBy: { username: string };
+};
+
+export type AuditLog = Prisma.AuditLog & {
+  executor?: User | null;
+  action: { previous: any; new: any; type: any };
 };

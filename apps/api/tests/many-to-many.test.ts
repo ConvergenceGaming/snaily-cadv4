@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { getLastOfArray, merge, manyToManyHelper } from "../src/utils/manyToMany";
+import { getLastOfArray, merge, manyToManyHelper } from "../src/lib/data/many-to-many";
 
 test("Should return correct many-to-many array ({id: Number}) for Prisma -> addition ", () => {
   const currentArr = [{ id: 1 }, { id: 2 }, { id: 3 }];
@@ -53,6 +53,36 @@ test("Should return correct many-to-many array (id: String) for Prisma -> additi
 
   expect(manyToManyHelper(currentArr, newArr)).toMatchInlineSnapshot(`
     [
+      {
+        "disconnect": {
+          "id": "c",
+        },
+      },
+      {
+        "connect": {
+          "id": "d",
+        },
+      },
+    ]
+  `);
+});
+
+test("Should return correct many-to-many array (id: String) for Prisma -> addition & disconnect & `showExisting`", () => {
+  const currentArr = ["a", "b", "c"];
+  const newArr = ["a", "b", "d"];
+
+  expect(manyToManyHelper(currentArr, newArr, { showExisting: true })).toMatchInlineSnapshot(`
+    [
+      {
+        "existing": {
+          "id": "a",
+        },
+      },
+      {
+        "existing": {
+          "id": "b",
+        },
+      },
       {
         "disconnect": {
           "id": "c",

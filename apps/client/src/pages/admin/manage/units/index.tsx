@@ -6,7 +6,7 @@ import { requestAll } from "lib/utils";
 import type { GetServerSideProps } from "next";
 import { useTranslations } from "use-intl";
 import { Title } from "components/shared/Title";
-import { TabList } from "components/shared/TabList";
+import { TabList } from "@snailycad/ui";
 import { Rank, ValueType } from "@snailycad/types";
 import { usePermission, Permissions } from "hooks/usePermission";
 import type { GetManageUnitsData } from "@snailycad/types/api";
@@ -23,6 +23,16 @@ const DepartmentWhitelistingTab = dynamic(
 const CallsignsTab = dynamic(
   async () =>
     (await import("components/admin/manage/units/tabs/callsigns-tab/callsigns-tab")).CallsignsTab,
+  { ssr: false },
+);
+
+const DepartmentTimeLogsTab = dynamic(
+  async () =>
+    (
+      await import(
+        "components/admin/manage/units/tabs/department-time-logs/department-time-logs-table"
+      )
+    ).DepartmentTimeLogsTab,
   { ssr: false },
 );
 
@@ -74,6 +84,11 @@ export default function SupervisorPanelPage(props: Props) {
     });
   }
 
+  TABS.push({
+    name: t("Management.departmentTimeLogs"),
+    value: "departmentTimeLogs",
+  });
+
   return (
     <AdminLayout
       permissions={{
@@ -95,6 +110,7 @@ export default function SupervisorPanelPage(props: Props) {
         {props.pendingUnits.totalCount > 0 && hasManagePermissions ? (
           <DepartmentWhitelistingTab pendingUnits={props.pendingUnits} />
         ) : null}
+        <DepartmentTimeLogsTab />
       </TabList>
     </AdminLayout>
   );

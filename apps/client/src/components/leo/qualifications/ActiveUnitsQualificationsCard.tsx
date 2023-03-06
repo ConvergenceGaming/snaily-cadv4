@@ -1,16 +1,30 @@
 import * as React from "react";
-import type { CombinedLeoUnit, EmsFdDeputy, Officer, UnitQualification } from "@snailycad/types";
+import type {
+  CombinedEmsFdUnit,
+  CombinedLeoUnit,
+  EmsFdDeputy,
+  Officer,
+  UnitQualification,
+} from "@snailycad/types";
 import { useDebounce, useHoverDirty } from "react-use";
-import { isUnitCombined } from "@snailycad/utils";
+import { isUnitCombined, isUnitCombinedEmsFd } from "@snailycad/utils";
 import { HoverCard } from "components/shared/HoverCard";
 import useFetch from "lib/useFetch";
-import create from "zustand";
+import { create } from "zustand";
 import { Loader } from "@snailycad/ui";
-import { UnitQualificationsTable } from "./UnitQualificationsTable";
 import type { GetUnitQualificationsByUnitIdData } from "@snailycad/types/api";
+import dynamic from "next/dynamic";
+
+const UnitQualificationsTable = dynamic(
+  async () => (await import("./UnitQualificationsTable")).UnitQualificationsTable,
+  { ssr: false },
+);
 
 interface Props {
-  unit: ((Officer | EmsFdDeputy) & { qualifications?: UnitQualification[] }) | CombinedLeoUnit;
+  unit:
+    | ((Officer | EmsFdDeputy) & { qualifications?: UnitQualification[] })
+    | CombinedLeoUnit
+    | CombinedEmsFdUnit;
   children: React.ReactNode;
   canBeOpened?: boolean;
 }
@@ -61,7 +75,7 @@ export function ActiveUnitsQualificationsCard({ canBeOpened = true, unit, childr
     [hovered, state],
   );
 
-  if (isUnitCombined(unit) || !canBeOpened) {
+  if (isUnitCombined(unit) || isUnitCombinedEmsFd(unit) || !canBeOpened) {
     // eslint-disable-next-line react/jsx-no-useless-fragment
     return <>{children}</>;
   }

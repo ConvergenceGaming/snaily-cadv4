@@ -25,6 +25,8 @@ export const enum ModalIds {
   ManageCustomRole = "ManageCustomRoleModal",
   ManageRoles = "ManageRolesModal",
   PruneUsers = "PruneUsersModal",
+  ViewAuditLogData = "ViewAuditLogDataModal",
+  PruneUnits = "PruneUnitsModal",
 
   ManageTowCall = "ManageTowCallModal",
   AssignToTowCall = "AssignToTowCallModal",
@@ -40,6 +42,7 @@ export const enum ModalIds {
   CreateBusinessPost = "CreateBusinessPostModal",
   ManageEmployee = "ManageEmployeeModal",
   AlertDeleteBusiness = "AlertDeleteBusinessModal",
+  ManageBusinessRole = "ManageBusinessRoleModal",
 
   ManageOfficer = "ManageOfficerModal",
   SelectOfficer = "SelectOfficerModal",
@@ -49,6 +52,7 @@ export const enum ModalIds {
 
   ManageVehicleFlags = "ManageVehicleFlagsModal",
   ManageCitizenFlags = "ManageCitizenFlagsModal",
+  ManageAddressFlags = "ManageAddressFlagsModal",
   ManageVehicleLicenses = "ManageVehicleLicensesModal",
   AddressSearch = "AddressSearchModal",
 
@@ -75,13 +79,16 @@ export const enum ModalIds {
   CustomFieldSearch = "CustomFieldSearchModal",
   AddAssignedUnit = "AddAssignedUnitModal",
   ImpoundVehicle = "ImpoundVehicleModal",
+  AddInvolvedUnit = "AddInvolvedUnitModal",
+  CreateTemporaryUnit = "CreateTemporaryUnitModal",
+  BusinessSearch = "BusinessSearchModal",
 
   SearchMedicalRecord = "SearchMedicalRecordModal",
   CreateMedicalRecord = "CreateMedicalRecordModal",
   SelectDeputy = "SelectDeputyModal",
   ManageDeputy = "ManageDeputyModal",
   ManageAOP = "ManageAOPModal",
-  EnableSignal100 = "EnableSignal100",
+  EnableSignal100 = "EnableSignal100Modal",
 
   ManageTruckLog = "ManageTruckLogModal",
 
@@ -133,5 +140,6 @@ export const enum ModalIds {
   AlertDeleteCustomRole = "AlertDeleteCustomRoleModal",
   AlertDeleteCourthousePost = "AlertDeleteCourthousePostModal",
   AlertDisableUser2FA = "AlertDisableUser2FAModal",
-  AlertCancelExpungementRequest = "AlertCancelExpungementRequest",
+  AlertCancelExpungementRequest = "AlertCancelExpungementRequestModal",
+  AlertDeleteBusinessRole = "AlertDeleteBusinessRoleModal",
 }

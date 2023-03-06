@@ -7,10 +7,10 @@ import {
   Context,
 } from "@tsed/common";
 import { ContentType, Post } from "@tsed/schema";
-import { prisma } from "lib/prisma";
-import { IsValidPath } from "middlewares/ValidPath";
+import { prisma } from "lib/data/prisma";
+import { IsValidPath } from "middlewares/valid-path";
 import { BadRequest } from "@tsed/exceptions";
-import { IsAuth } from "middlewares/IsAuth";
+import { IsAuth } from "middlewares/is-auth";
 
 import {
   HASH_SCHEMA_ARR,
@@ -37,19 +37,19 @@ import {
   WhatPages,
   ValueType,
   Value,
-  CadFeature,
   cad,
   PenalCodeType,
+  Feature,
 } from "@prisma/client";
-import { validateSchema } from "lib/validateSchema";
+import { validateSchema } from "lib/data/validate-schema";
 import { upsertWarningApplicable } from "lib/records/penal-code";
-import { getLastOfArray, manyToManyHelper } from "utils/manyToMany";
+import { getLastOfArray, manyToManyHelper } from "lib/data/many-to-many";
 import { getPermissionsForValuesRequest } from "lib/values/utils";
-import { UsePermissions } from "middlewares/UsePermissions";
-import { validateImgurURL } from "utils/images/image";
+import { UsePermissions } from "middlewares/use-permissions";
+import { validateImageURL } from "lib/images/validate-image-url";
 import type * as APITypes from "@snailycad/types/api";
-import { ExtendedBadRequest } from "src/exceptions/ExtendedBadRequest";
-import generateBlurPlaceholder from "utils/images/generate-image-blur-data";
+import { ExtendedBadRequest } from "src/exceptions/extended-bad-request";
+import generateBlurPlaceholder from "lib/images/generate-image-blur-data";
 
 @Controller("/admin/values/import/:path")
 @UseBeforeEach(IsAuth, IsValidPath)
@@ -95,7 +95,7 @@ export class ImportValuesViaFileController {
   }
 
   private getTypeFromPath(path: string): ValueType {
-    return path.replace("-", "_").toUpperCase() as ValueType;
+    return path.replace(/-/g, "_").toUpperCase() as ValueType;
   }
 }
 
@@ -127,19 +127,39 @@ export const typeHandlers = {
   VEHICLE: async ({ body, id }: HandlerOptions) => {
     const data = validateSchema(HASH_SCHEMA_ARR, body);
 
-    return prisma.$transaction(
-      data.map((item) => {
-        return prisma.vehicleValue.upsert({
-          where: { id: String(id) },
-          ...makePrismaData(ValueType.VEHICLE, {
-            hash: item.hash,
-            value: item.value,
-            isDisabled: item.isDisabled,
-          }),
-          include: { value: true },
-        });
-      }),
-    );
+    return handlePromiseAll(data, async (item) => {
+      const updatedValue = await prisma.vehicleValue.upsert({
+        where: { id: String(id) },
+        ...makePrismaData(ValueType.VEHICLE, {
+          hash: item.hash,
+          value: item.value,
+          isDisabled: item.isDisabled,
+        }),
+        include: { value: true, trimLevels: true },
+      });
+
+      const disconnectConnectArr = manyToManyHelper(
+        updatedValue.trimLevels.map((v) => v.id),
+        item.trimLevels ?? [],
+      );
+
+      const updated = getLastOfArray(
+        await prisma.$transaction(
+          disconnectConnectArr.map((v, idx) =>
+            prisma.vehicleValue.update({
+              where: { id: updatedValue.id },
+              data: { trimLevels: v },
+              include:
+                idx + 1 === disconnectConnectArr.length
+                  ? { value: true, trimLevels: true }
+                  : undefined,
+            }),
+          ),
+        ),
+      );
+
+      return updated || updatedValue;
+    });
   },
   WEAPON: async ({ body, id }: HandlerOptions) => {
     const data = validateSchema(HASH_SCHEMA_ARR, body);
@@ -284,7 +304,7 @@ export const typeHandlers = {
   PENAL_CODE: async ({ body, id, context }: HandlerOptions) => {
     const data = validateSchema(PENAL_CODE_ARR, body);
     const penalCode = id && (await prisma.penalCode.findUnique({ where: { id: String(id) } }));
-    const cad = context.get("cad") as cad & { features?: CadFeature[] };
+    const cad = context.get("cad") as cad & { features?: Record<Feature, boolean> };
 
     const groups = new Map<string, { name: string; id: string; position: number | null }>();
 
@@ -345,7 +365,7 @@ export const typeHandlers = {
     const data = validateSchema(QUALIFICATION_ARR, body);
 
     return handlePromiseAll(data, async (item) => {
-      const validatedImageURL = validateImgurURL(item.image);
+      const validatedImageURL = validateImageURL(item.image);
       const updatedValue = await prisma.qualificationValue.upsert({
         where: { id: String(id) },
         ...makePrismaData(ValueType.QUALIFICATION, {
@@ -387,7 +407,7 @@ export const typeHandlers = {
     const data = validateSchema(BASE_ARR, body);
 
     return handlePromiseAll(data, async (item) => {
-      const validatedImageURL = validateImgurURL(item.officerRankImageId);
+      const validatedImageURL = validateImageURL(item.officerRankImageId);
       const createUpdateData = {
         officerRankImageId: validatedImageURL,
         officerRankImageBlurData: await generateBlurPlaceholder(validatedImageURL),
@@ -510,8 +530,12 @@ export const typeHandlers = {
   LICENSE: async (options: HandlerOptions) => typeHandlers.GENERIC({ ...options, type: "LICENSE" }),
   VEHICLE_FLAG: async (options: HandlerOptions) =>
     typeHandlers.GENERIC({ ...options, type: "VEHICLE_FLAG" }),
+  ADDRESS_FLAG: async (options: HandlerOptions) =>
+    typeHandlers.GENERIC({ ...options, type: "ADDRESS_FLAG" }),
   CITIZEN_FLAG: async (options: HandlerOptions) =>
     typeHandlers.GENERIC({ ...options, type: "CITIZEN_FLAG" }),
+  VEHICLE_TRIM_LEVEL: async (options: HandlerOptions) =>
+    typeHandlers.GENERIC({ ...options, type: "VEHICLE_TRIM_LEVEL" }),
 
   GENERIC: async ({ body, type, id }: HandlerOptions & { type: ValueType }): Promise<Value[]> => {
     const data = validateSchema(BASE_ARR, body);

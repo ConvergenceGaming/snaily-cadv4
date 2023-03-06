@@ -88,12 +88,12 @@ export type Delete911CallEventByIdData = Get911CallsData["calls"][number];
  * @route /dispatch
  */
 export interface GetDispatchData {
-  deputies: Types.EmsFdDeputy[];
-  officers: (Types.Officer | Types.CombinedLeoUnit)[];
+  areaOfPlay: string | null;
+  activeDispatchersCount: number;
+  userActiveDispatcher:
+    | (Prisma.ActiveDispatchers & { user: Pick<Types.User, "id" | "username"> })
+    | null;
   activeIncidents: Types.LeoIncident[];
-  activeDispatchers: (Prisma.ActiveDispatchers & {
-    user: Pick<Types.User, "id" | "rank" | "username" | "isLeo" | "isEmsFd">;
-  })[];
 }
 
 /**
@@ -115,7 +115,8 @@ export interface PostDispatchSignal100Data {
  * @route /dispatch/dispatchers-state
  */
 export interface PostDispatchDispatchersStateData {
-  dispatcher: GetDispatchData["activeDispatchers"][number] | null;
+  activeDispatchersCount: number;
+  dispatcher: (Prisma.ActiveDispatchers & { user: Pick<Types.User, "id" | "username"> }) | null;
 }
 
 /**
@@ -150,9 +151,15 @@ export type PutDispatchStatusByUnitId = Types.Officer | Types.EmsFdDeputy | Type
 
 /**
  * @method POST
- * @route /dispatch/status/merge
+ * @route /dispatch/status/merge/leo
  */
 export type PostDispatchStatusMergeOfficers = Types.CombinedLeoUnit;
+
+/**
+ * @method POST
+ * @route /dispatch/status/merge/ems-fd
+ */
+export type PostDispatchStatusMergeDeputies = Types.CombinedEmsFdUnit;
 
 /**
  * @method POST
@@ -178,3 +185,10 @@ export type GetDispatchPlayerBySteamIdData = Pick<
 > & {
   unit: Types.Officer | Types.CombinedLeoUnit | Types.EmsFdDeputy | null;
 };
+
+export type PostDispatchUnitsSearchData = (
+  | Types.Officer
+  | Types.CombinedLeoUnit
+  | Types.EmsFdDeputy
+  | Types.CombinedEmsFdUnit
+)[];

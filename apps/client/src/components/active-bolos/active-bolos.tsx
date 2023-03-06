@@ -17,10 +17,11 @@ import { CallDescription } from "components/dispatch/active-calls/CallDescriptio
 import { useLeoState } from "state/leo-state";
 import { useRouter } from "next/router";
 import { usePermission } from "hooks/usePermission";
-import { useActiveDispatchers } from "hooks/realtime/useActiveDispatchers";
+import { useActiveDispatchers } from "hooks/realtime/use-active-dispatchers";
 import { defaultPermissions } from "@snailycad/permissions";
 import { useGenerateCallsign } from "hooks/useGenerateCallsign";
 import { makeUnitName } from "lib/utils";
+import { FullDate } from "components/shared/FullDate";
 
 const BoloFilters = dynamic(async () => (await import("./bolo-filters")).BoloFilters, {
   ssr: false,
@@ -82,8 +83,8 @@ export function ActiveBolos({ initialBolos }: Props) {
     totalCount: initialBolos.totalCount,
     initialData: initialBolos.bolos,
   });
-  const tableState = useTableState({ pagination: asyncTable.pagination });
-  const [tempBolo, boloState] = useTemporaryItem(asyncTable.items);
+  const tableState = useTableState({ tableId: "active-bolos", pagination: asyncTable.pagination });
+  const [tempBolo, boloState] = useTemporaryItem(bolos);
 
   React.useEffect(() => {
     bolosState.setBolos(asyncTable.items);
@@ -118,7 +119,7 @@ export function ActiveBolos({ initialBolos }: Props) {
   return (
     <div className="mt-3 card">
       <header className="flex items-center justify-between p-2 px-4 bg-gray-200 dark:bg-secondary">
-        <h1 className="text-xl font-semibold">{t("Bolos.activeBolos")}</h1>
+        <h3 className="text-xl font-semibold">{t("Bolos.activeBolos")}</h3>
 
         <div>
           <Button
@@ -161,7 +162,8 @@ export function ActiveBolos({ initialBolos }: Props) {
                 model: bolo.model || "—",
                 plate: bolo.plate || "—",
                 color: bolo.color || "—",
-                description: <CallDescription data={descriptionData} nonCard />,
+                description: <CallDescription data={descriptionData} />,
+                createdAt: <FullDate>{bolo.createdAt}</FullDate>,
                 officer: bolo.officer
                   ? `${generateCallsign(bolo.officer)} ${makeUnitName(bolo.officer)}`
                   : t("Leo.dispatch"),
@@ -196,6 +198,7 @@ export function ActiveBolos({ initialBolos }: Props) {
               { header: t("Leo.color"), accessorKey: "color" },
               { header: t("Leo.officer"), accessorKey: "officer" },
               { header: common("description"), accessorKey: "description" },
+              { header: common("createdAt"), accessorKey: "createdAt" },
               { header: common("actions"), accessorKey: "actions" },
             ]}
           />

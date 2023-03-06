@@ -1,6 +1,5 @@
 import * as React from "react";
-import { Button } from "@snailycad/ui";
-import { TabsContent } from "components/shared/TabList";
+import { Button, TabsContent } from "@snailycad/ui";
 import { useModal } from "state/modalState";
 import { useTranslations } from "next-intl";
 import { ModalIds } from "types/ModalIds";
@@ -44,7 +43,7 @@ export function NameChangeRequestTab(props: Props) {
             },
             citizen: `${request.citizen.name} ${request.citizen.surname}`,
             newName: `${request.newName} ${request.newSurname}`,
-            status: <Status state={request.status}>{request.status.toLowerCase()}</Status>,
+            status: <Status>{request.status}</Status>,
             createdAt: <FullDate>{request.createdAt}</FullDate>,
           }))}
           columns={[

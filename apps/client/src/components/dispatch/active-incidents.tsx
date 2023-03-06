@@ -1,14 +1,13 @@
 import * as React from "react";
 import { useTranslations } from "use-intl";
-import { Button } from "@snailycad/ui";
+import { Button, Droppable } from "@snailycad/ui";
 import compareDesc from "date-fns/compareDesc";
-import { useActiveDispatchers } from "hooks/realtime/useActiveDispatchers";
+import { useActiveDispatchers } from "hooks/realtime/use-active-dispatchers";
 import { Table, useTableState } from "components/shared/Table";
 import { yesOrNoText } from "lib/utils";
 import { FullDate } from "components/shared/FullDate";
 import { ModalIds } from "types/ModalIds";
 import { useModal } from "state/modalState";
-import { ManageIncidentModal } from "components/leo/incidents/manage-incident-modal";
 import { useActiveIncidents } from "hooks/realtime/useActiveIncidents";
 import { AlertModal } from "components/modal/AlertModal";
 import useFetch from "lib/useFetch";
@@ -16,10 +15,16 @@ import type { LeoIncident } from "@snailycad/types";
 import { InvolvedUnitsColumn } from "./active-incidents/InvolvedUnitsColumn";
 import { DndActions } from "types/DndActions";
 import { classNames } from "lib/classNames";
-import { Droppable } from "components/shared/dnd/Droppable";
 import { useDispatchState } from "state/dispatch/dispatch-state";
 import type { PostIncidentsData, PutIncidentByIdData } from "@snailycad/types/api";
 import { CallDescription } from "./active-calls/CallDescription";
+
+import dynamic from "next/dynamic";
+
+const ManageIncidentModal = dynamic(
+  async () => (await import("components/leo/incidents/manage-incident-modal")).ManageIncidentModal,
+  { ssr: false },
+);
 
 export function ActiveIncidents() {
   /**
@@ -34,7 +39,7 @@ export function ActiveIncidents() {
   const { activeIncidents, setActiveIncidents } = useActiveIncidents();
   const { state, execute } = useFetch();
   const draggingUnit = useDispatchState((state) => state.draggingUnit);
-  const tableState = useTableState();
+  const tableState = useTableState({ tableId: "active-incidents" });
 
   async function handleAssignUnassignToIncident(
     incident: LeoIncident,
@@ -196,7 +201,13 @@ export function ActiveIncidents() {
         <ManageIncidentModal
           onCreate={(incident) => {
             setActiveIncidents([incident, ...activeIncidents]);
-            setTempIncident(undefined);
+
+            if (incident.openModalAfterCreation) {
+              setTempIncident(incident);
+              openModal(ModalIds.ManageIncident);
+            } else {
+              setTempIncident(undefined);
+            }
           }}
           onUpdate={(old, incident) => {
             if (incident.isActive) {

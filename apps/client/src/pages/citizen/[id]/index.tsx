@@ -9,7 +9,7 @@ import { useModal } from "state/modalState";
 import { BreadcrumbItem, Breadcrumbs, Button } from "@snailycad/ui";
 import useFetch from "lib/useFetch";
 import { getTranslations } from "lib/getTranslation";
-import { VehiclesCard } from "components/citizen/vehicles/VehiclesCard";
+import { VehiclesCard } from "components/citizen/vehicles/vehicles-card";
 import { LicensesCard } from "components/citizen/licenses/LicensesCard";
 import { MedicalRecords } from "components/citizen/medical-records/MedicalRecords";
 import { calculateAge, formatCitizenAddress, requestAll } from "lib/utils";
@@ -24,8 +24,8 @@ import { ModalIds } from "types/ModalIds";
 import { FullDate } from "components/shared/FullDate";
 import { RecordsTab } from "components/leo/modals/NameSearchModal/tabs/records-tab";
 import type { DeleteCitizenByIdData } from "@snailycad/types/api";
-import Image from "next/image";
 import { Dropdown } from "components/Dropdown";
+import { ImageWrapper } from "components/shared/image-wrapper";
 
 const AlertModal = dynamic(async () => (await import("components/modal/AlertModal")).AlertModal);
 const CitizenImageModal = dynamic(
@@ -120,7 +120,7 @@ export default function CitizenId() {
               className="cursor-pointer"
               aria-label="View citizen image"
             >
-              <Image
+              <ImageWrapper
                 placeholder={citizen.imageBlurData ? "blur" : "empty"}
                 blurDataURL={citizen.imageBlurData ?? undefined}
                 alt={`${citizen.name} ${citizen.surname}`}
@@ -153,8 +153,10 @@ export default function CitizenId() {
               </FullDate>{" "}
               ({t("age")}: {calculateAge(citizen.dateOfBirth)})
             </Infofield>
-            <Infofield label={t("gender")}>{citizen.gender.value}</Infofield>
-            <Infofield label={t("ethnicity")}>{citizen.ethnicity.value}</Infofield>
+            <Infofield label={t("gender")}>{citizen.gender?.value ?? common("none")}</Infofield>
+            <Infofield label={t("ethnicity")}>
+              {citizen.ethnicity?.value ?? common("none")}
+            </Infofield>
             <Infofield label={t("hairColor")}>{citizen.hairColor}</Infofield>
             <Infofield label={t("eyeColor")}>{citizen.eyeColor}</Infofield>
           </div>

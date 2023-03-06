@@ -19,18 +19,19 @@ import dynamic from "next/dynamic";
 import {
   LicenseInitialValues,
   ManageLicensesModal,
-} from "components/citizen/licenses/ManageLicensesModal";
+} from "components/citizen/licenses/manage-licenses-modal";
 import { ManageCitizenFlagsModal } from "./ManageCitizenFlagsModal";
 import { CitizenImageModal } from "components/citizen/modals/CitizenImageModal";
 import { ManageCustomFieldsModal } from "./ManageCustomFieldsModal";
 import { CustomFieldsArea } from "../CustomFieldsArea";
 import { useBolos } from "hooks/realtime/useBolos";
 import type { PostLeoSearchCitizenData, PutSearchActionsLicensesData } from "@snailycad/types/api";
-import Image from "next/image";
 import { NameSearchBasicInformation } from "./sections/basic-information";
 import { NameSearchLicensesSection } from "./sections/licenses-section";
 import { NameSearchFooter } from "./sections/footer";
-import shallow from "zustand/shallow";
+import { shallow } from "zustand/shallow";
+import { SpeechAlert } from "./speech-alert";
+import { ImageWrapper } from "components/shared/image-wrapper";
 
 const VehicleSearchModal = dynamic(
   async () => (await import("components/leo/modals/VehicleSearchModal")).VehicleSearchModal,
@@ -42,6 +43,10 @@ const WeaponSearchModal = dynamic(
 
 const CreateCitizenModal = dynamic(
   async () => (await import("./CreateCitizenModal")).CreateCitizenModal,
+);
+
+const ManageCitizenAddressFlagsModal = dynamic(
+  async () => (await import("./manage-citizen-address-flags-modal")).ManageCitizenAddressFlagsModal,
 );
 
 function AutoSubmit() {
@@ -73,6 +78,8 @@ export function NameSearchModal() {
 
   const { openModal } = useModal();
   const isLeo = router.pathname === "/officer";
+  const isDispatch = router.pathname === "/dispatch";
+
   const { results, currentResult, setCurrentResult, setResults } = useNameSearch(
     (state) => ({
       results: state.results,
@@ -214,7 +221,7 @@ export function NameSearchModal() {
                   <Item key={item.id} textValue={name}>
                     <div className="flex items-center">
                       {item.imageId ? (
-                        <Image
+                        <ImageWrapper
                           alt={`${item.name} ${item.surname}`}
                           className="rounded-md w-[30px] h-[30px] object-cover mr-2"
                           draggable={false}
@@ -249,7 +256,7 @@ export function NameSearchModal() {
                     <div className="flex items-center">
                       <div className="mr-2 min-w-[50px]">
                         {result.imageId ? (
-                          <Image
+                          <ImageWrapper
                             placeholder={result.imageBlurData ? "blur" : "empty"}
                             blurDataURL={result.imageBlurData ?? undefined}
                             className="rounded-md w-[50px] h-[50px] object-cover"
@@ -301,31 +308,47 @@ export function NameSearchModal() {
                   </header>
 
                   {currentResult.dead && currentResult.dateOfDead ? (
-                    <div className="p-2 my-2 font-semibold text-black rounded-md bg-amber-500">
-                      {t("citizenDead", {
+                    <SpeechAlert
+                      text={t("citizenDead", {
                         date: format(new Date(currentResult.dateOfDead), "MMMM do yyyy"),
                       })}
-                    </div>
+                    >
+                      <div className="p-2 my-2 font-semibold text-black rounded-md bg-amber-500">
+                        {t("citizenDead", {
+                          date: format(new Date(currentResult.dateOfDead), "MMMM do yyyy"),
+                        })}
+                      </div>
+                    </SpeechAlert>
                   ) : null}
 
                   {currentResult.missing && currentResult.dateOfMissing ? (
-                    <div className="p-2 my-2 font-semibold text-black rounded-md bg-amber-500">
-                      {t("citizenMissing", {
+                    <SpeechAlert
+                      text={t("citizenMissing", {
                         date: format(new Date(currentResult.dateOfMissing), "MMMM do yyyy"),
                       })}
-                    </div>
+                    >
+                      <div className="p-2 my-2 font-semibold text-black rounded-md bg-amber-500">
+                        {t("citizenMissing", {
+                          date: format(new Date(currentResult.dateOfMissing), "MMMM do yyyy"),
+                        })}
+                      </div>
+                    </SpeechAlert>
                   ) : null}
 
                   {bolo ? (
-                    <div className="p-2 my-2 font-semibold text-black rounded-md bg-amber-500">
-                      {t("citizenBoloPlaced")}
-                    </div>
+                    <SpeechAlert text={t("citizenBoloPlaced")}>
+                      <div className="p-2 my-2 font-semibold text-black rounded-md bg-amber-500">
+                        {t("citizenBoloPlaced")}
+                      </div>
+                    </SpeechAlert>
                   ) : null}
 
                   {hasActiveWarrants ? (
-                    <div className="p-2 my-2 font-semibold bg-red-700 rounded-md">
-                      {t("hasWarrants")}
-                    </div>
+                    <SpeechAlert text={t("hasWarrants")}>
+                      <div className="p-2 my-2 font-semibold bg-red-700 rounded-md">
+                        {t("hasWarrants")}
+                      </div>
+                    </SpeechAlert>
                   ) : null}
 
                   <div className="flex flex-col md:flex-row">
@@ -336,7 +359,7 @@ export function NameSearchModal() {
                           onClick={() => openModal(ModalIds.CitizenImage)}
                           className="cursor-pointer"
                         >
-                          <Image
+                          <ImageWrapper
                             placeholder={currentResult.imageBlurData ? "blur" : "empty"}
                             blurDataURL={currentResult.imageBlurData ?? undefined}
                             className="rounded-md w-[100px] h-[100px] object-cover"
@@ -375,6 +398,24 @@ export function NameSearchModal() {
                         ) : null}
                       </div>
 
+                      <div className="mt-4">
+                        <Infofield label={cT("addressFlags")}>
+                          {currentResult.addressFlags?.map((v) => v.value).join(", ") ||
+                            common("none")}
+                        </Infofield>
+
+                        {isDispatch ? (
+                          <Button
+                            size="xs"
+                            type="button"
+                            className="mt-2"
+                            onPress={() => openModal(ModalIds.ManageAddressFlags)}
+                          >
+                            {t("manageAddressFlags")}
+                          </Button>
+                        ) : null}
+                      </div>
+
                       <CustomFieldsArea currentResult={currentResult} isLeo={isLeo} />
                     </div>
                   </div>
@@ -395,6 +436,7 @@ export function NameSearchModal() {
             {currentResult && !currentResult.isConfidential ? (
               <>
                 <ManageCitizenFlagsModal />
+                <ManageCitizenAddressFlagsModal />
                 <ManageCustomFieldsModal
                   category={CustomFieldCategory.CITIZEN}
                   url={`/search/actions/custom-fields/citizen/${currentResult.id}`}

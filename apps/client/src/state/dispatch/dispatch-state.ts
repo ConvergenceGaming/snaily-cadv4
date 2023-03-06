@@ -2,14 +2,14 @@ import type {
   Bolo,
   Call911,
   Call911Event,
-  ActiveDispatchers,
   AssignedUnit,
   CombinedLeoUnit,
   Officer,
   EmsFdDeputy,
   LeoIncident,
+  CombinedEmsFdUnit,
 } from "@snailycad/types";
-import create from "zustand";
+import { create } from "zustand";
 
 export type Full911Call = Call911 & { assignedUnits: AssignedUnit[]; events: Call911Event[] };
 
@@ -20,17 +20,8 @@ interface DispatchState {
   activeOfficers: (Officer | CombinedLeoUnit)[];
   setActiveOfficers(officers: (Officer | CombinedLeoUnit)[]): void;
 
-  activeDeputies: EmsFdDeputy[];
-  setActiveDeputies(deputies: EmsFdDeputy[]): void;
-
-  allOfficers: (Officer | CombinedLeoUnit)[];
-  setAllOfficers(officers: (Officer | CombinedLeoUnit)[]): void;
-
-  allDeputies: EmsFdDeputy[];
-  setAllDeputies(deputies: EmsFdDeputy[]): void;
-
-  activeDispatchers: ActiveDispatchers[];
-  setActiveDispatchers(dispatchers: ActiveDispatchers[]): void;
+  activeDeputies: (EmsFdDeputy | CombinedEmsFdUnit)[];
+  setActiveDeputies(deputies: (EmsFdDeputy | CombinedEmsFdUnit)[]): void;
 
   activeIncidents: LeoIncident[];
   setActiveIncidents(incidents: LeoIncident[]): void;
@@ -48,15 +39,6 @@ export const useDispatchState = create<DispatchState>()((set) => ({
 
   activeDeputies: [],
   setActiveDeputies: (deputies) => set({ activeDeputies: deputies }),
-
-  allOfficers: [],
-  setAllOfficers: (officers) => set({ allOfficers: officers }),
-
-  allDeputies: [],
-  setAllDeputies: (deputies) => set({ allDeputies: deputies }),
-
-  activeDispatchers: [],
-  setActiveDispatchers: (dispatchers) => set({ activeDispatchers: dispatchers }),
 
   activeIncidents: [],
   setActiveIncidents: (incidents) => set({ activeIncidents: incidents }),

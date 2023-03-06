@@ -1,19 +1,21 @@
-import type { CourtDate, CourtEntry, Officer, SeizedItem, Violation } from "@prisma/client";
-import type { CREATE_TICKET_SCHEMA } from "@snailycad/schemas";
-import { cad, Feature, PaymentStatus, RecordType, WhitelistStatus } from "@snailycad/types";
+import { Feature, CourtDate, CourtEntry, Officer, SeizedItem, Violation } from "@prisma/client";
+import type { CREATE_TICKET_SCHEMA, CREATE_TICKET_SCHEMA_BUSINESS } from "@snailycad/schemas";
+import { PaymentStatus, RecordType, WhitelistStatus } from "@snailycad/types";
 import { NotFound } from "@tsed/exceptions";
 import { userProperties } from "lib/auth/getSessionUser";
 import { isFeatureEnabled } from "lib/cad";
 import { leoProperties } from "lib/leo/activeOfficer";
-import { prisma } from "lib/prisma";
-import { ExtendedNotFound } from "src/exceptions/ExtendedNotFound";
+import { prisma } from "lib/data/prisma";
+import { ExtendedBadRequest } from "src/exceptions/extended-bad-request";
+import { ExtendedNotFound } from "src/exceptions/extended-not-found";
 import type { z } from "zod";
-import { validateRecordData } from "./validateRecordData";
+import { validateRecordData } from "./validate-record-data";
+import { captureException } from "@sentry/node";
 
 interface UpsertRecordOptions {
-  data: z.infer<typeof CREATE_TICKET_SCHEMA>;
+  data: z.infer<typeof CREATE_TICKET_SCHEMA | typeof CREATE_TICKET_SCHEMA_BUSINESS>;
   recordId: string | null;
-  cad: cad;
+  cad: { features?: Record<Feature, boolean> };
   officer: Officer | null;
 }
 
@@ -31,12 +33,24 @@ export async function upsertRecord(options: UpsertRecordOptions) {
     await Promise.all([unlinkViolations(record.violations), unlinkSeizedItems(record.seizedItems)]);
   }
 
-  const citizen = await prisma.citizen.findUnique({
-    where: { id: options.data.citizenId },
-  });
+  let citizen;
+  let business;
+  if ("citizenId" in options.data && options.data.citizenId) {
+    citizen = await prisma.citizen.findUnique({
+      where: { id: options.data.citizenId },
+    });
 
-  if (!citizen) {
-    throw new ExtendedNotFound({ citizenId: "citizenNotFound" });
+    if (!citizen) {
+      throw new ExtendedNotFound({ citizenId: "citizenNotFound" });
+    }
+  } else if ("businessId" in options.data && options.data.businessId) {
+    business = await prisma.business.findUnique({
+      where: { id: options.data.businessId },
+    });
+
+    if (!business) {
+      throw new ExtendedNotFound({ businessId: "businessNotFound" });
+    }
   }
 
   if (options.data.vehicleId) {
@@ -47,6 +61,10 @@ export async function upsertRecord(options: UpsertRecordOptions) {
     if (!vehicle) {
       throw new ExtendedNotFound({ plateOrVin: "vehicleNotFound" });
     }
+  }
+
+  if (!business && !citizen) {
+    throw new ExtendedBadRequest({ citizenId: "citizenOrBusinessNotFound" });
   }
 
   const isApprovalEnabled = isFeatureEnabled({
@@ -60,7 +78,8 @@ export async function upsertRecord(options: UpsertRecordOptions) {
     where: { id: String(options.recordId) },
     create: {
       type: options.data.type as RecordType,
-      citizenId: citizen.id,
+      citizenId: citizen?.id,
+      businessId: business?.id,
       officerId: options.officer?.id ?? null,
       notes: options.data.notes,
       postal: String(options.data.postal),
@@ -71,6 +90,8 @@ export async function upsertRecord(options: UpsertRecordOptions) {
       vehicleColor: options.data.vehicleColor || null,
       vehicleModel: options.data.vehicleModel || null,
       vehiclePlate: options.data.plateOrVin || options.data.plateOrVinSearch,
+      call911Id: options.data.call911Id || null,
+      incidentId: options.data.incidentId || null,
     },
     update: {
       notes: options.data.notes,
@@ -81,6 +102,8 @@ export async function upsertRecord(options: UpsertRecordOptions) {
       vehicleColor: options.data.vehicleColor || null,
       vehicleModel: options.data.vehicleModel || null,
       vehiclePlate: options.data.plateOrVin || options.data.plateOrVinSearch,
+      call911Id: options.data.call911Id || null,
+      incidentId: options.data.incidentId || null,
     },
     include: {
       officer: { include: leoProperties },
@@ -114,21 +137,47 @@ export async function upsertRecord(options: UpsertRecordOptions) {
     courtEntry = { ...courtEntry, dates };
   }
 
-  if (ticket.type === "ARREST_REPORT" && !options.recordId) {
+  if (ticket.type === "ARREST_REPORT" && !options.recordId && citizen) {
     await prisma.citizen.update({
       where: { id: citizen.id },
       data: { arrested: true },
     });
   }
 
-  const validatedViolations = await Promise.all(
+  const validatedViolationsResults = await Promise.allSettled(
     options.data.violations.map((v) =>
       validateRecordData({ ...v, ticketId: ticket.id, cad: options.cad }),
     ),
   );
+  const fullFilledValidatedViolations = validatedViolationsResults
+    .filter((v) => v.status === "fulfilled")
+    // @ts-expect-error - we know it's fulfilled
+    .map((v) => v.value) as Awaited<ReturnType<typeof validateRecordData>>[];
+
+  const failedValidatedViolations = validatedViolationsResults
+    .filter((v) => v.status === "rejected")
+    // @ts-expect-error - we know it's rejected
+    .map((v) => v.reason);
+
+  if (failedValidatedViolations.length >= 1) {
+    captureException({
+      message: "Unable to validate violations",
+      violations: JSON.stringify(failedValidatedViolations),
+    });
+  }
+
+  const errors = fullFilledValidatedViolations.reduce(
+    (prev, current) => ({ ...prev, ...current.errors }),
+    {},
+  );
+
+  if (Object.keys(errors).length >= 1) {
+    await prisma.record.delete({ where: { id: ticket.id } });
+    throw new ExtendedBadRequest(errors);
+  }
 
   const violations = await prisma.$transaction(
-    validatedViolations.map((item) => {
+    fullFilledValidatedViolations.map((item) => {
       return prisma.violation.create({
         data: {
           counts: item.counts,
