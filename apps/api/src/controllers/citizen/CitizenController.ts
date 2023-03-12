@@ -2,33 +2,41 @@ import { UseBeforeEach, Context, MultipartFile, PlatformMulterFile } from "@tsed
 import { Controller } from "@tsed/di";
 import { ContentType, Delete, Description, Get, Post, Put } from "@tsed/schema";
 import { QueryParams, BodyParams, PathParams } from "@tsed/platform-params";
-import { prisma } from "lib/prisma";
-import { IsAuth } from "middlewares/IsAuth";
+import { prisma } from "lib/data/prisma";
+import { IsAuth } from "middlewares/is-auth";
 import { BadRequest, Forbidden, NotFound } from "@tsed/exceptions";
-import { CREATE_CITIZEN_SCHEMA } from "@snailycad/schemas";
+import { CREATE_CITIZEN_SCHEMA, CREATE_OFFICER_SCHEMA } from "@snailycad/schemas";
 import fs from "node:fs/promises";
 import { AllowedFileExtension, allowedFileExtensions } from "@snailycad/config";
 import { leoProperties } from "lib/leo/activeOfficer";
-import { generateString } from "utils/generateString";
-import { CadFeature, User, ValueType, Feature, cad, MiscCadSettings, Prisma } from "@prisma/client";
-import { ExtendedBadRequest } from "src/exceptions/ExtendedBadRequest";
+import { generateString } from "utils/generate-string";
+import { User, ValueType, Feature, cad, MiscCadSettings, Prisma } from "@prisma/client";
+import { ExtendedBadRequest } from "src/exceptions/extended-bad-request";
 import { canManageInvariant, userProperties } from "lib/auth/getSessionUser";
-import { validateSchema } from "lib/validateSchema";
+import { validateSchema } from "lib/data/validate-schema";
 import { updateCitizenLicenseCategories } from "lib/citizen/licenses";
 import { isFeatureEnabled } from "lib/cad";
 import { shouldCheckCitizenUserId } from "lib/citizen/hasCitizenAccess";
 import { citizenObjectFromData } from "lib/citizen";
 import type * as APITypes from "@snailycad/types/api";
-import { getImageWebPPath } from "utils/image";
+import { getImageWebPPath } from "lib/images/get-image-webp-path";
+import { validateSocialSecurityNumber } from "lib/citizen/validateSSN";
+import { setEndedSuspendedLicenses } from "lib/citizen/setEndedSuspendedLicenses";
+import { upsertOfficer } from "controllers/leo/my-officers/upsert-officer";
+import { createCitizenViolations } from "lib/records/create-citizen-violations";
+import generateBlurPlaceholder from "lib/images/generate-image-blur-data";
+import { z } from "zod";
 
 export const citizenInclude = {
   user: { select: userProperties },
   flags: true,
+  suspendedLicenses: true,
   vehicles: {
     orderBy: { createdAt: "desc" },
     include: {
+      trimLevels: true,
       flags: true,
-      model: { include: { value: true } },
+      model: { include: { trimLevels: true, value: true } },
       registrationStatus: true,
       insuranceStatus: true,
       TruckLog: true,
@@ -79,7 +87,7 @@ export class CitizenController {
   @Get("/")
   @Description("Get all the citizens of the authenticated user")
   async getCitizens(
-    @Context("cad") cad: { features?: CadFeature[] },
+    @Context("cad") cad: { features?: Record<Feature, boolean> },
     @Context("user") user: User,
     @QueryParams("query", String) query = "",
     @QueryParams("skip", Number) skip = 0,
@@ -108,7 +116,16 @@ export class CitizenController {
       prisma.citizen.findMany({
         where,
         orderBy: { updatedAt: "desc" },
-        include: { user: { select: userProperties } },
+        select: {
+          name: true,
+          surname: true,
+          imageId: true,
+          imageBlurData: true,
+          id: true,
+          userId: true,
+          socialSecurityNumber: true,
+          user: { select: userProperties },
+        },
         skip,
         take: 35,
       }),
@@ -119,7 +136,7 @@ export class CitizenController {
 
   @Get("/:id")
   async getCitizen(
-    @Context("cad") cad: { features?: CadFeature[]; miscCadSettings: MiscCadSettings },
+    @Context("cad") cad: { features?: Record<Feature, boolean>; miscCadSettings: MiscCadSettings },
     @Context("user") user: User,
     @PathParams("id") citizenId: string,
   ): Promise<APITypes.GetCitizenByIdData> {
@@ -137,13 +154,18 @@ export class CitizenController {
       throw new NotFound("notFound");
     }
 
-    return citizen;
+    const [_citizen] = await setEndedSuspendedLicenses([citizen]);
+    if (!_citizen) {
+      throw new NotFound("notFound");
+    }
+
+    return _citizen;
   }
 
   @Delete("/:id")
   async deleteCitizen(
     @Context("user") user: User,
-    @Context("cad") cad: cad & { features?: CadFeature[] },
+    @Context("cad") cad: cad & { features?: Record<Feature, boolean> },
     @PathParams("id") citizenId: string,
   ): Promise<APITypes.DeleteCitizenByIdData> {
     const checkCitizenUserId = shouldCheckCitizenUserId({ cad, user });
@@ -178,16 +200,59 @@ export class CitizenController {
     return true;
   }
 
+  @Post("/:id/deceased")
+  async markCitizenDeceased(
+    @Context("user") user: User,
+    @Context("cad") cad: cad & { features?: Record<Feature, boolean> },
+    @PathParams("id") citizenId: string,
+  ): Promise<APITypes.DeleteCitizenByIdData> {
+    const checkCitizenUserId = shouldCheckCitizenUserId({ cad, user });
+
+    const allowDeletion = isFeatureEnabled({
+      features: cad.features,
+      feature: Feature.ALLOW_CITIZEN_DELETION_BY_NON_ADMIN,
+      defaultReturn: true,
+    });
+
+    if (!allowDeletion) {
+      throw new Forbidden("onlyAdminsCanDeleteCitizens");
+    }
+
+    const citizen = await prisma.citizen.findFirst({
+      where: {
+        id: citizenId,
+        userId: checkCitizenUserId ? user.id : undefined,
+      },
+    });
+
+    if (!citizen) {
+      throw new NotFound("notFound");
+    }
+
+    await prisma.citizen.update({
+      where: { id: citizen.id },
+      data: { dead: true, dateOfDead: new Date() },
+    });
+
+    return true;
+  }
+
   @Post("/")
   async createCitizen(
-    @Context("cad") cad: cad & { features?: CadFeature[]; miscCadSettings: MiscCadSettings | null },
+    @Context("cad")
+    cad: cad & { features?: Record<Feature, boolean>; miscCadSettings: MiscCadSettings },
     @Context("user") user: User,
     @BodyParams() body: unknown,
   ): Promise<APITypes.PostCitizensData> {
-    const data = validateSchema(CREATE_CITIZEN_SCHEMA, body);
+    const data = validateSchema(
+      CREATE_CITIZEN_SCHEMA.extend({
+        department: z.string().nullish(),
+      }),
+      body,
+    );
 
     const miscSettings = cad.miscCadSettings;
-    if (miscSettings?.maxCitizensPerUser) {
+    if (miscSettings.maxCitizensPerUser) {
       const count = await prisma.citizen.count({
         where: {
           userId: user.id,
@@ -214,7 +279,7 @@ export class CitizenController {
       });
 
       if (existing) {
-        throw new ExtendedBadRequest({ name: "nameAlreadyTaken" });
+        throw new ExtendedBadRequest({ name: "nameAlreadyTaken" }, "nameAlreadyTaken");
       }
     }
 
@@ -222,7 +287,7 @@ export class CitizenController {
     const now = Date.now();
 
     if (date > now) {
-      throw new ExtendedBadRequest({ dateOfBirth: "dateLargerThanNow" });
+      throw new ExtendedBadRequest({ dateOfBirth: "dateLargerThanNow" }, "dateLargerThanNow");
     }
 
     const defaultLicenseValue = await prisma.value.findFirst({
@@ -230,14 +295,45 @@ export class CitizenController {
     });
     const defaultLicenseValueId = defaultLicenseValue?.id ?? null;
 
+    if (data.socialSecurityNumber) {
+      await validateSocialSecurityNumber({
+        socialSecurityNumber: data.socialSecurityNumber,
+      });
+    }
+
     const citizen = await prisma.citizen.create({
       data: {
         userId: user.id || undefined,
-        ...citizenObjectFromData(data, defaultLicenseValueId),
+        ...(await citizenObjectFromData({
+          data,
+          defaultLicenseValueId,
+          cad,
+        })),
       },
+      include: { suspendedLicenses: true },
     });
 
     await updateCitizenLicenseCategories(citizen, data);
+
+    if (data.records) {
+      await createCitizenViolations({
+        cad,
+        data: data.records,
+        citizenId: citizen.id,
+      });
+    }
+
+    if (data.department) {
+      await upsertOfficer({
+        body,
+        citizen,
+        cad,
+        user,
+        schema: CREATE_OFFICER_SCHEMA.omit({ citizenId: true, image: true }),
+        includeProperties: false,
+      });
+    }
+
     return citizen;
   }
 
@@ -245,10 +341,11 @@ export class CitizenController {
   async updateCitizen(
     @PathParams("id") citizenId: string,
     @Context("user") user: User,
-    @Context("cad") cad: { features?: CadFeature[]; miscCadSettings: MiscCadSettings },
+    @Context("cad")
+    cad: cad & { features?: Record<Feature, boolean>; miscCadSettings: MiscCadSettings | null },
     @BodyParams() body: unknown,
   ): Promise<APITypes.PutCitizenByIdData> {
-    const data = validateSchema(CREATE_CITIZEN_SCHEMA, body);
+    const data = validateSchema(CREATE_CITIZEN_SCHEMA.partial(), body);
     const checkCitizenUserId = shouldCheckCitizenUserId({ cad, user });
 
     const citizen = await prisma.citizen.findUnique({
@@ -263,11 +360,26 @@ export class CitizenController {
       throw new NotFound("citizenNotFound");
     }
 
-    const date = new Date(data.dateOfBirth).getTime();
-    const now = Date.now();
+    const date = data.dateOfBirth ? new Date(data.dateOfBirth).getTime() : undefined;
+    if (date) {
+      const now = Date.now();
 
-    if (date > now) {
-      throw new ExtendedBadRequest({ dateOfBirth: "dateLargerThanNow" });
+      if (date > now) {
+        throw new ExtendedBadRequest({ dateOfBirth: "dateLargerThanNow" });
+      }
+    }
+
+    const isEditableSSNEnabled = isFeatureEnabled({
+      features: cad.features,
+      feature: Feature.EDITABLE_SSN,
+      defaultReturn: true,
+    });
+
+    if (data.socialSecurityNumber && isEditableSSNEnabled) {
+      await validateSocialSecurityNumber({
+        socialSecurityNumber: data.socialSecurityNumber,
+        citizenId: citizen.id,
+      });
     }
 
     const updated = await prisma.citizen.update({
@@ -275,10 +387,16 @@ export class CitizenController {
         id: citizen.id,
       },
       data: {
-        ...citizenObjectFromData(data),
+        ...(await citizenObjectFromData({
+          data,
+          cad,
+        })),
         socialSecurityNumber:
-          data.socialSecurityNumber ??
-          (!citizen.socialSecurityNumber ? generateString(9, { numbersOnly: true }) : undefined),
+          data.socialSecurityNumber && isEditableSSNEnabled
+            ? data.socialSecurityNumber
+            : !citizen.socialSecurityNumber
+            ? generateString(9, { type: "numbers-only" })
+            : undefined,
       },
       include: { gender: true, ethnicity: true },
     });
@@ -289,52 +407,64 @@ export class CitizenController {
   @Post("/:id")
   async uploadImageToCitizen(
     @Context("user") user: User,
-    @Context("cad") cad: cad & { features?: CadFeature[] },
+    @Context("cad") cad: cad & { features?: Record<Feature, boolean> },
     @PathParams("id") citizenId: string,
     @MultipartFile("image") file?: PlatformMulterFile,
   ): Promise<APITypes.PostCitizenImageByIdData> {
-    const citizen = await prisma.citizen.findUnique({
-      where: {
-        id: citizenId,
-      },
-    });
+    try {
+      const citizen = await prisma.citizen.findUnique({
+        where: {
+          id: citizenId,
+        },
+      });
 
-    const isCreateCitizenEnabled = isFeatureEnabled({
-      defaultReturn: false,
-      feature: Feature.CREATE_USER_CITIZEN_LEO,
-      features: cad.features,
-    });
+      const isCreateCitizenEnabled = isFeatureEnabled({
+        defaultReturn: false,
+        feature: Feature.CREATE_USER_CITIZEN_LEO,
+        features: cad.features,
+      });
 
-    const checkCitizenUserId = shouldCheckCitizenUserId({ cad, user });
-    if (checkCitizenUserId && !isCreateCitizenEnabled) {
-      canManageInvariant(citizen?.userId, user, new NotFound("notFound"));
-    } else if (!citizen) {
-      throw new NotFound("citizenNotFound");
+      const checkCitizenUserId = shouldCheckCitizenUserId({ cad, user });
+      if (checkCitizenUserId && !isCreateCitizenEnabled) {
+        canManageInvariant(citizen?.userId, user, new NotFound("notFound"));
+      } else if (!citizen) {
+        throw new NotFound("citizenNotFound");
+      }
+
+      if (!file) {
+        throw new ExtendedBadRequest({ file: "No file provided." }, "invalidImageType");
+      }
+
+      if (!allowedFileExtensions.includes(file.mimetype as AllowedFileExtension)) {
+        throw new ExtendedBadRequest({ image: "invalidImageType" }, "invalidImageType");
+      }
+
+      const image = await getImageWebPPath({
+        buffer: file.buffer,
+        pathType: "citizens",
+        id: `${citizen.id}-${file.originalname.split(".")[0]}`,
+      });
+
+      const previousImage = citizen.imageId
+        ? `${process.cwd()}/public/citizens/${citizen.imageId}`
+        : undefined;
+
+      if (previousImage) {
+        await fs.rm(previousImage, { force: true });
+      }
+
+      const [data] = await Promise.all([
+        prisma.citizen.update({
+          where: { id: citizen.id },
+          data: { imageId: image.fileName, imageBlurData: await generateBlurPlaceholder(image) },
+          select: { imageId: true },
+        }),
+        fs.writeFile(image.path, image.buffer),
+      ]);
+
+      return data;
+    } catch {
+      throw new BadRequest("errorUploadingImage");
     }
-
-    if (!file) {
-      throw new ExtendedBadRequest({ file: "No file provided." });
-    }
-
-    if (!allowedFileExtensions.includes(file.mimetype as AllowedFileExtension)) {
-      throw new ExtendedBadRequest({ image: "invalidImageType" });
-    }
-
-    const image = await getImageWebPPath({
-      buffer: file.buffer,
-      pathType: "citizens",
-      id: citizen.id,
-    });
-
-    const [data] = await Promise.all([
-      prisma.citizen.update({
-        where: { id: citizen.id },
-        data: { imageId: image.fileName },
-        select: { imageId: true },
-      }),
-      fs.writeFile(image.path, image.buffer),
-    ]);
-
-    return data;
   }
 }

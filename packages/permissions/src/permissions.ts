@@ -11,17 +11,18 @@ export enum Permissions {
   ManageCallHistory = "ManageCallHistory",
   LiveMap = "LiveMap",
   ViewCitizenLogs = "ViewCitizenLogs",
-  ViewDLExams = "ViewDLExams",
-  ManageDLExams = "ManageDLExams",
-  ViewWeaponExams = "ViewWeaponExams",
-  ManageWeaponExams = "ManageWeaponExams",
+  ViewLicenseExams = "ViewLicenseExams",
+  ManageLicenseExams = "ManageLicenseExams",
+
   ViewCustomFields = "ViewCustomFields",
   ManageCustomFields = "ManageCustomFields",
   ManageDMV = "ManageDMV",
+  ManageBureauOfFirearms = "ManageBureauOfFirearms",
   DeleteCitizenRecords = "DeleteCitizenRecords",
   ManageCustomRoles = "ManageCustomRoles",
   ViewCustomRoles = "ViewCustomRoles",
   ManageWarrants = "ManageWarrants",
+  ManageAwardsAndQualifications = "ManageAwardsAndQualifications",
 
   Dispatch = "Dispatch",
   EmsFd = "EmsFd",
@@ -92,9 +93,20 @@ export enum Permissions {
   ManageValueCitizenFlag = "ManageValueCitizenFlag",
   ManageValueQualification = "ManageValueQualification",
   ManageValueCallType = "ManageValueCallType",
+  ManageValueAddress = "ManageValueAddress",
+  ManageValueEmergencyVehicle = "ManageValueEmergencyVehicle",
+  ManageValueAddressFlag = "ManageValueAddressFlag",
+  ManageValueVehicleTrimLevel = "ManageValueVehicleTrimLevel",
 
   // other
   UsePersonalApiToken = "UsePersonalApiToken",
+
+  // deprecated
+
+  ViewDLExams = "ViewDLExams",
+  ManageDLExams = "ManageDLExams",
+  ViewWeaponExams = "ViewWeaponExams",
+  ManageWeaponExams = "ManageWeaponExams",
 }
 
 export const allPermissions = Object.values(Permissions);

@@ -16,6 +16,9 @@ import {
   PenalCode,
   AnyValue,
   ValueWithValueObj,
+  AddressValue,
+  EmergencyVehicleValue,
+  CombinedEmsFdUnit,
 } from "@snailycad/types";
 
 export function isPenalCodeValue(value: AnyValue): value is PenalCode {
@@ -70,16 +73,32 @@ export function isCallTypeValue(value: AnyValue): value is CallTypeValue {
   return hasValueObj(value) && value.value.type === ValueType.CALL_TYPE;
 }
 
+export function isAddressValue(value: AnyValue): value is AddressValue {
+  return hasValueObj(value) && value.value.type === ValueType.ADDRESS;
+}
+
+export function isEmergencyVehicleValue(value: AnyValue): value is EmergencyVehicleValue {
+  return hasValueObj(value) && value.value.type === ValueType.EMERGENCY_VEHICLE;
+}
+
 export function isOfficerRankValue(value: AnyValue): value is Value & { type: "OFFICER_RANK" } {
   return isBaseValue(value) && value.type === ValueType.OFFICER_RANK;
 }
 
 export function isUnitCombined(
-  unit: Officer | CombinedLeoUnit | EmsFdDeputy,
+  unit: Officer | CombinedEmsFdUnit | CombinedLeoUnit | EmsFdDeputy,
 ): unit is CombinedLeoUnit {
-  return !("citizenId" in unit) || "officers" in unit;
+  return !("citizenId" in unit) && "officers" in unit;
 }
 
-export function isUnitOfficer(unit: Officer | CombinedLeoUnit | EmsFdDeputy): unit is Officer {
+export function isUnitCombinedEmsFd(
+  unit: Officer | CombinedEmsFdUnit | CombinedLeoUnit | EmsFdDeputy,
+): unit is CombinedEmsFdUnit {
+  return !("citizenId" in unit) && "deputies" in unit;
+}
+
+export function isUnitOfficer(
+  unit: Officer | CombinedEmsFdUnit | CombinedLeoUnit | EmsFdDeputy,
+): unit is Officer {
   return !isUnitCombined(unit) && "divisions" in unit && Array.isArray(unit.divisions);
 }

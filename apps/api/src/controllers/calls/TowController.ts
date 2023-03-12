@@ -8,28 +8,30 @@ import {
   UseBeforeEach,
 } from "@tsed/common";
 import { ContentType, Delete, Description, Get, Post, Put } from "@tsed/schema";
-import { prisma } from "lib/prisma";
+import { prisma } from "lib/data/prisma";
 import { TOW_SCHEMA, UPDATE_TOW_SCHEMA } from "@snailycad/schemas";
 import { NotFound } from "@tsed/exceptions";
-import { IsAuth } from "middlewares/IsAuth";
-import { Socket } from "services/SocketService";
-import { validateSchema } from "lib/validateSchema";
+import { IsAuth } from "middlewares/is-auth";
+import { Socket } from "services/socket-service";
+import { validateSchema } from "lib/data/validate-schema";
 import {
-  cad,
   Citizen,
   DiscordWebhookType,
+  Feature,
   RegisteredVehicle,
   User,
   Value,
   VehicleValue,
 } from "@prisma/client";
 import { canManageInvariant } from "lib/auth/getSessionUser";
-import { Permissions, UsePermissions } from "middlewares/UsePermissions";
+import { Permissions, UsePermissions } from "middlewares/use-permissions";
 import { callInclude } from "controllers/dispatch/911-calls/Calls911Controller";
 import { officerOrDeputyToUnit } from "lib/leo/officerOrDeputyToUnit";
-import { sendDiscordWebhook } from "lib/discord/webhooks";
+import { sendDiscordWebhook, sendRawWebhook } from "lib/discord/webhooks";
 import type * as APITypes from "@snailycad/types/api";
 import { shouldCheckCitizenUserId } from "lib/citizen/hasCitizenAccess";
+import { IsFeatureEnabled } from "middlewares/is-enabled";
+import { getTranslator } from "utils/get-translator";
 
 const CITIZEN_SELECTS = {
   name: true,
@@ -45,6 +47,7 @@ export const towIncludes = {
 @Controller("/tow")
 @UseBeforeEach(IsAuth)
 @ContentType("application/json")
+@IsFeatureEnabled({ feature: Feature.TAXI })
 export class TowController {
   private socket: Socket;
   constructor(socket: Socket) {
@@ -75,7 +78,7 @@ export class TowController {
   async createTowCall(
     @BodyParams() body: unknown,
     @Context("user") user: User,
-    @Context("cad") cad: cad,
+    @Context("cad") cad: { features?: Record<Feature, boolean> },
   ): Promise<APITypes.PostTowCallsData> {
     const data = validateSchema(TOW_SCHEMA, body);
 
@@ -136,8 +139,12 @@ export class TowController {
       });
 
       try {
-        const data = createWebhookData(impoundedVehicle);
-        await sendDiscordWebhook(DiscordWebhookType.VEHICLE_IMPOUNDED, data);
+        const data = await createVehicleImpoundedWebhookData(impoundedVehicle, user.locale);
+        await sendDiscordWebhook({ type: DiscordWebhookType.VEHICLE_IMPOUNDED, data });
+        await sendRawWebhook({
+          type: DiscordWebhookType.VEHICLE_IMPOUNDED,
+          data: impoundedVehicle,
+        });
       } catch (error) {
         console.error("Could not send Discord webhook.", error);
       }
@@ -168,12 +175,12 @@ export class TowController {
 
     const call = await prisma.towCall.create({
       data: {
-        creatorId: data.creatorId,
+        creatorId: data.creatorId || null,
         description: data.description,
-        descriptionData: data.descriptionData,
+        descriptionData: data.descriptionData || undefined,
         location: data.location,
         postal: data.postal,
-        deliveryAddressId: data.deliveryAddressId,
+        deliveryAddressId: data.deliveryAddressId || undefined,
         plate: vehicle?.plate.toUpperCase() ?? null,
         model: vehicle?.model.value.value ?? null,
         ended: data.callCountyService ?? false,
@@ -225,7 +232,7 @@ export class TowController {
       where: { id: callId },
       data: {
         description: data.description,
-        descriptionData: data.descriptionData,
+        descriptionData: data.descriptionData || undefined,
         location: data.location,
         postal: data.postal ? String(data.postal) : null,
         assignedUnit: assignedUnitId,
@@ -267,23 +274,29 @@ export class TowController {
   }
 }
 
-function createWebhookData(
+export async function createVehicleImpoundedWebhookData(
   vehicle: RegisteredVehicle & {
     model: VehicleValue & { value: Value };
     registrationStatus: Value;
-    citizen: Pick<Citizen, "name" | "surname">;
+    citizen?: Pick<Citizen, "name" | "surname"> | null;
   },
+  locale?: string | null,
 ) {
+  const t = await getTranslator({ type: "webhooks", locale, namespace: "Tow" });
+  const common = await getTranslator({ type: "common", locale, namespace: "Common" });
+
   return {
     embeds: [
       {
-        title: "Vehicle Impounded",
+        title: t("vehicleImpounded"),
         fields: [
-          { name: "Registration Status", value: vehicle.registrationStatus.value, inline: true },
-          { name: "Model", value: vehicle.model.value.value, inline: true },
+          { name: t("registrationStatus"), value: vehicle.registrationStatus.value, inline: true },
+          { name: t("model"), value: vehicle.model.value.value, inline: true },
           {
-            name: "Owner",
-            value: `${vehicle.citizen.name} ${vehicle.citizen.surname}`,
+            name: t("owner"),
+            value: vehicle.citizen
+              ? `${vehicle.citizen.name} ${vehicle.citizen.surname}`
+              : common("unknown"),
             inline: true,
           },
         ],

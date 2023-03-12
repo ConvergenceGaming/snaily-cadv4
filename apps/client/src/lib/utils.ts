@@ -6,8 +6,10 @@ import {
   type ValueLicenseType,
   WhitelistStatus,
   EmsFdDeputy,
+  CombinedEmsFdUnit,
+  Business,
 } from "@snailycad/types";
-import { isUnitCombined, isUnitOfficer } from "@snailycad/utils/typeguards";
+import { isUnitCombined, isUnitCombinedEmsFd, isUnitOfficer } from "@snailycad/utils/typeguards";
 import { handleRequest } from "./fetch";
 import type { IncomingMessage } from "connect";
 import type { NextApiRequestCookies } from "next/dist/server/api-utils";
@@ -37,9 +39,13 @@ export async function requestAll(
   );
 }
 
-export function makeUnitName(unit: Officer | EmsFdDeputy | CombinedLeoUnit | undefined) {
+export function makeUnitName(
+  unit: Officer | EmsFdDeputy | CombinedLeoUnit | CombinedEmsFdUnit | undefined,
+) {
   if (!unit) return "UNKNOWN";
-  if (isUnitCombined(unit)) return "";
+
+  const isCombined = isUnitCombined(unit) || isUnitCombinedEmsFd(unit);
+  if (isCombined) return "";
 
   return `${unit.citizen.name} ${unit.citizen.surname}`;
 }
@@ -49,15 +55,15 @@ export function yesOrNoText(t: boolean): "yes" | "no" {
 }
 
 export function formatUnitDivisions(unit: Officer | EmsFdDeputy) {
-  const division = isUnitOfficer(unit) ? null : unit.division.value.value;
+  const division = isUnitOfficer(unit) ? null : unit.division?.value.value;
   if (!("divisions" in unit)) return division as string;
   const divisions = unit.divisions.map((d) => d.value.value).join(", ");
 
   return division ?? divisions;
 }
 
-export function formatCitizenAddress(citizen: Pick<Citizen, "address" | "postal">) {
-  const { address, postal } = citizen;
+export function formatCitizenAddress(data: Pick<Citizen | Business, "address" | "postal">) {
+  const { address, postal } = data;
   return `${address}${postal ? ` (${postal})` : ""}`;
 }
 
@@ -68,10 +74,12 @@ export function formatDate(date: string | Date | number, options?: { onlyDate: b
 }
 
 export function filterLicenseTypes(licenses: Value[], type: ValueLicenseType) {
-  return licenses.filter((item) => {
-    if (item.licenseType === null) return true;
-    return item.licenseType === type;
-  });
+  return licenses.filter((item) => filterLicenseType(item, type));
+}
+
+export function filterLicenseType(value: Value, type: ValueLicenseType) {
+  if (value.licenseType === null) return true;
+  return value.licenseType === type;
 }
 
 export function getUnitDepartment(unit: Officer | EmsFdDeputy | null) {

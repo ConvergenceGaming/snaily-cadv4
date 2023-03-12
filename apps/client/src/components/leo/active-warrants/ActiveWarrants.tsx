@@ -1,11 +1,9 @@
-import * as React from "react";
 import type { AssignedWarrantOfficer, Warrant } from "@snailycad/types";
-import { Button } from "components/Button";
+import { Button } from "@snailycad/ui";
 import { Table, useTableState } from "components/shared/Table";
 import { useTranslations } from "next-intl";
 import { useModal } from "state/modalState";
 import { ModalIds } from "types/ModalIds";
-import { CreateWarrantModal } from "../modals/CreateWarrantModal";
 import { useTemporaryItem } from "hooks/shared/useTemporaryItem";
 import { useActiveWarrants } from "hooks/realtime/useActiveWarrants";
 import { makeUnitName } from "lib/utils";
@@ -13,6 +11,12 @@ import { useGenerateCallsign } from "hooks/useGenerateCallsign";
 import { isUnitCombined } from "@snailycad/utils";
 import { CallDescription } from "components/dispatch/active-calls/CallDescription";
 import { Permissions, usePermission } from "hooks/usePermission";
+import dynamic from "next/dynamic";
+
+const CreateWarrantModal = dynamic(
+  async () => (await import("../modals/CreateWarrantModal")).CreateWarrantModal,
+  { ssr: false },
+);
 
 export function ActiveWarrants() {
   const { hasPermissions } = usePermission();
@@ -26,6 +30,7 @@ export function ActiveWarrants() {
   const [tempWarrant, warrantState] = useTemporaryItem(activeWarrants);
   const t = useTranslations("Leo");
   const tableState = useTableState({
+    tableId: "active-warrants",
     pagination: { pageSize: 12, totalDataCount: activeWarrants.length },
   });
 
@@ -55,7 +60,7 @@ export function ActiveWarrants() {
             <Button
               variant={null}
               className="dark:border dark:border-quinary dark:bg-tertiary dark:hover:brightness-125 bg-gray-500 hover:bg-gray-600 text-white"
-              onClick={() => openModal(ModalIds.CreateWarrant, { isActive: true })}
+              onPress={() => openModal(ModalIds.CreateWarrant, { isActive: true })}
             >
               {t("createWarrant")}
             </Button>
@@ -69,7 +74,7 @@ export function ActiveWarrants() {
         ) : (
           <Table
             tableState={tableState}
-            features={{ isWithinCard: true }}
+            features={{ isWithinCardOrModal: true }}
             data={activeWarrants.filter(isActiveWarrant).map((warrant) => ({
               id: warrant.id,
               citizen: `${warrant.citizen.name} ${warrant.citizen.surname}`,
@@ -79,7 +84,7 @@ export function ActiveWarrants() {
                   ? common("none")
                   : assignedOfficers(warrant.assignedOfficers),
               actions: hasManageWarrantsPermissions ? (
-                <Button variant="success" onClick={() => handleEditClick(warrant)} size="xs">
+                <Button variant="success" onPress={() => handleEditClick(warrant)} size="xs">
                   {common("edit")}
                 </Button>
               ) : null,

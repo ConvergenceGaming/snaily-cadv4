@@ -3,14 +3,15 @@ import { Unauthorized } from "@tsed/exceptions";
 import { parse } from "cookie";
 import { Cookie, USER_API_TOKEN_HEADER } from "@snailycad/config";
 import { signJWT, verifyJWT } from "utils/jwt";
-import { prisma } from "lib/prisma";
+import { prisma } from "lib/data/prisma";
 import { Feature, type User } from "@snailycad/types";
 import { isFeatureEnabled } from "lib/cad";
 import type { GetUserData } from "@snailycad/types/api";
-import { setCookie } from "utils/setCookie";
+import { setCookie } from "utils/set-cookie";
 import { ACCESS_TOKEN_EXPIRES_MS, ACCESS_TOKEN_EXPIRES_S } from "./setUserTokenCookies";
 import { getUserFromUserAPIToken } from "./getUserFromUserAPIToken";
 import { validateUserData } from "./validateUser";
+import { createFeaturesObject } from "middlewares/is-enabled";
 
 export enum GetSessionUserErrors {
   InvalidAPIToken = "invalid user API token",
@@ -52,6 +53,7 @@ export const userProperties = {
   locale: true,
   createdAt: true,
   updatedAt: true,
+  lastSeen: true,
 };
 
 interface GetSessionUserOptions<ReturnNullOnError extends boolean> {
@@ -69,11 +71,13 @@ export async function getSessionUser(
 ): Promise<GetUserData | null> {
   const accessToken: string | undefined =
     options.req.cookies[Cookie.AccessToken] ||
-    parse(String(options.req.headers.session))[Cookie.AccessToken];
+    parse(String(options.req.headers.session))[Cookie.AccessToken] ||
+    parse(String(options.req.headers.cookie))[Cookie.AccessToken];
 
   const refreshToken: string | undefined =
     options.req.cookies[Cookie.RefreshToken] ||
-    parse(String(options.req.headers.session))[Cookie.RefreshToken];
+    parse(String(options.req.headers.session))[Cookie.RefreshToken] ||
+    parse(String(options.req.headers.cookie))[Cookie.RefreshToken];
 
   const userApiTokenHeader = options.req.headers[USER_API_TOKEN_HEADER]
     ? String(options.req.headers[USER_API_TOKEN_HEADER])
@@ -82,7 +86,7 @@ export async function getSessionUser(
   const cad = await prisma.cad.findFirst({ select: { features: true } });
   const isUserAPITokensEnabled = isFeatureEnabled({
     feature: Feature.USER_API_TOKENS,
-    features: cad?.features,
+    features: createFeaturesObject(cad?.features),
     defaultReturn: false,
   });
 
@@ -98,7 +102,7 @@ export async function getSessionUser(
    */
   if (userApiTokenHeader && isUserAPITokensEnabled) {
     const { apiToken, user } = await getUserFromUserAPIToken(userApiTokenHeader);
-    validateUserData(user);
+    validateUserData(user, options.req, options.returnNullOnError as false | undefined);
 
     await prisma.apiToken.update({
       where: { id: apiToken.id },
@@ -127,7 +131,7 @@ export async function getSessionUser(
       select: userProperties,
     });
 
-    validateUserData(user);
+    validateUserData(user, options.req, options.returnNullOnError as false | undefined);
 
     return createUserData(user);
   }
@@ -152,7 +156,11 @@ export async function getSessionUser(
       },
     });
 
-    validateUserData(user);
+    if (options.returnNullOnError && !user) {
+      return null;
+    }
+
+    validateUserData(user, options.req, options.returnNullOnError as false | undefined);
 
     const newAccessToken = signJWT({ userId: user.id }, ACCESS_TOKEN_EXPIRES_S);
 
@@ -173,6 +181,9 @@ export async function getSessionUser(
 }
 
 function createUserData(user: User) {
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+  if (!user) return user as GetUserData;
+
   const { tempPassword, ...rest } = user;
   return { ...rest, tempPassword: null, hasTempPassword: !!tempPassword } as GetUserData;
 }

@@ -12,19 +12,22 @@ import {
   PlatformMulterFile,
   MultipartFile,
 } from "@tsed/common";
-import { NotFound } from "@tsed/exceptions";
+import { BadRequest, NotFound } from "@tsed/exceptions";
 import { ContentType, Delete, Description, Put } from "@tsed/schema";
-import { prisma } from "lib/prisma";
-import { IsAuth } from "middlewares/IsAuth";
-import { validateSchema } from "lib/validateSchema";
-import { ExtendedBadRequest } from "src/exceptions/ExtendedBadRequest";
+import { prisma } from "lib/data/prisma";
+import { IsAuth } from "middlewares/is-auth";
+import { validateSchema } from "lib/data/validate-schema";
+import { ExtendedBadRequest } from "src/exceptions/extended-bad-request";
 import type { User } from "@prisma/client";
 import type * as APITypes from "@snailycad/types/api";
-import { getImageWebPPath } from "utils/image";
+import { getImageWebPPath } from "lib/images/get-image-webp-path";
+import { Feature, IsFeatureEnabled } from "middlewares/is-enabled";
+import generateBlurPlaceholder from "lib/images/generate-image-blur-data";
 
 @UseBeforeEach(IsAuth)
 @Controller("/bleeter")
 @ContentType("application/json")
+@IsFeatureEnabled({ feature: Feature.BLEETER })
 export class BleeterController {
   @Get("/")
   @Description("Get **all** bleeter posts, ordered by `createdAt`")
@@ -71,6 +74,7 @@ export class BleeterController {
         bodyData: data.bodyData,
         userId: user.id,
       },
+      include: { user: { select: { username: true } } },
     });
 
     return post;
@@ -104,6 +108,7 @@ export class BleeterController {
         body: data.body,
         bodyData: data.bodyData,
       },
+      include: { user: { select: { username: true } } },
     });
 
     return updated;
@@ -116,36 +121,44 @@ export class BleeterController {
     @PathParams("id") postId: string,
     @MultipartFile("image") file?: PlatformMulterFile,
   ): Promise<APITypes.PostBleeterByIdImageData> {
-    const post = await prisma.bleeterPost.findUnique({
-      where: {
-        id: postId,
-      },
-    });
+    try {
+      const post = await prisma.bleeterPost.findUnique({
+        where: {
+          id: postId,
+        },
+      });
 
-    if (!file) {
-      throw new ExtendedBadRequest({ file: "No file provided." });
+      if (!file) {
+        throw new ExtendedBadRequest({ file: "No file provided." });
+      }
+
+      if (!post || post.userId !== user.id) {
+        throw new NotFound("notFound");
+      }
+
+      if (!allowedFileExtensions.includes(file.mimetype as AllowedFileExtension)) {
+        throw new ExtendedBadRequest({ image: "invalidImageType" });
+      }
+
+      const image = await getImageWebPPath({
+        buffer: file.buffer,
+        pathType: "bleeter",
+        id: `${post.id}-${file.originalname.split(".")[0]}`,
+      });
+
+      const [data] = await Promise.all([
+        prisma.bleeterPost.update({
+          where: { id: post.id },
+          data: { imageId: image.fileName, imageBlurData: await generateBlurPlaceholder(image) },
+          select: { imageId: true },
+        }),
+        fs.writeFile(image.path, image.buffer),
+      ]);
+
+      return data;
+    } catch {
+      throw new BadRequest("errorUploadingImage");
     }
-
-    if (!post || post.userId !== user.id) {
-      throw new NotFound("notFound");
-    }
-
-    if (!allowedFileExtensions.includes(file.mimetype as AllowedFileExtension)) {
-      throw new ExtendedBadRequest({ image: "invalidImageType" });
-    }
-
-    const image = await getImageWebPPath({ buffer: file.buffer, pathType: "bleeter", id: post.id });
-
-    const [data] = await Promise.all([
-      prisma.bleeterPost.update({
-        where: { id: post.id },
-        data: { imageId: image.fileName },
-        select: { imageId: true },
-      }),
-      fs.writeFile(image.path, image.buffer),
-    ]);
-
-    return data;
   }
 
   @Delete("/:id")

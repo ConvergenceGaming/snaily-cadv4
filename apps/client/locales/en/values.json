@@ -10,8 +10,6 @@
     "file": "file",
     "importValues": "Import via file",
     "exportValues": "Export Values",
-    "addPenalCodeGroup": "Add Group",
-    "deleteGroup": "Delete Group",
     "ungrouped": "Ungrouped",
     "licenseType": "License Type",
     "whitelisted": "Whitelisted",
@@ -25,9 +23,21 @@
     "isConfidential": "Is Confidential",
     "priority": "Priority",
     "isDisabled": "Disabled",
-    "alert_deletePenalCodeGroup": "Are you sure you want to delete <span>{group}</span>? This action cannot be undone.",
+    "county": "County",
+    "deletedSelectedValues": "Deleted {deleted} items. Failed to delete {failed} items.",
+    "failedDeleteValue": "Failed to delete <span>{value}</span>.",
+    "cacheTip": " Values are cached for 24 hours. This means that updated, added or deleted values may not immediately change. It could take up to 24 hours for the changes to take effect.",
     "alert_deleteValue": "Are you sure you want to delete <span>{value}</span>? This action cannot be undone!",
     "alert_deleteSelectedValues": "Are you sure you want to delete {length} items? This action cannot be undone"
+  },
+  "PENAL_CODE_GROUP": {
+    "MANAGE": "Manage Penal Code Groups",
+    "ADD": "Add Penal Code Group",
+    "DELETE": "Delete Penal Code Group",
+    "EDIT": "Edit Penal Code Group",
+    "ungrouped": "Ungrouped",
+    "alert_deletePenalCodeGroup": "Are you sure you want to delete <span>{group}</span>? This action cannot be undone.",
+    "deleteGroup": "Delete Group"
   },
   "GENDER": {
     "MANAGE": "Manage Genders",
@@ -102,7 +112,7 @@
     "EDIT": "Edit Division"
   },
   "DRIVERSLICENSE_CATEGORY": {
-    "MANAGE": "Manage DL Categories",
+    "MANAGE": "Manage License Categories",
     "ADD": "Add Category",
     "DELETE": "Delete Category",
     "EDIT": "Edit Category"
@@ -136,5 +146,29 @@
     "ADD": "Add Call Type",
     "DELETE": "Delete Call Type",
     "EDIT": "Edit Call Type"
+  },
+  "ADDRESS": {
+    "MANAGE": "Manage Addresses",
+    "ADD": "Add Address",
+    "DELETE": "Delete Address",
+    "EDIT": "Edit Address"
+  },
+  "EMERGENCY_VEHICLE": {
+    "MANAGE": "Manage Emergency Vehicles",
+    "ADD": "Add Emergency Vehicle",
+    "DELETE": "Delete Emergency Vehicle",
+    "EDIT": "Edit Emergency Vehicle"
+  },
+  "ADDRESS_FLAG": {
+    "MANAGE": "Manage Address flags",
+    "ADD": "Add address flag",
+    "DELETE": "Delete address flag",
+    "EDIT": "Edit address flag"
+  },
+  "VEHICLE_TRIM_LEVEL": {
+    "MANAGE": "Manage vehicle trim levels",
+    "ADD": "Add trim level",
+    "DELETE": "Delete trim level",
+    "EDIT": "Edit trim level"
   }
 }

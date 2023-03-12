@@ -1,7 +1,7 @@
 import { hasPermission, Permissions } from "@snailycad/permissions";
 import type { EmsFdDeputy, Feature, User } from "@snailycad/types";
 import { isUnitOfficer } from "@snailycad/utils";
-import type { ActiveOfficer } from "state/leoState";
+import type { ActiveOfficer } from "state/leo-state";
 import { ModalIds } from "types/ModalIds";
 
 export type Args<T> = Record<Feature | "hasActiveDispatchers" | "isDispatch", boolean> & {
@@ -17,15 +17,20 @@ export interface ModalButton<T = unknown> {
   };
 }
 
-export const switchDivision: ModalButton = ({ unit }) => {
+export const switchDivision: ModalButton = ({ DIVISIONS, unit }) => {
   const isEnabled = unit ? isUnitOfficer(unit) && (unit.callsigns?.length ?? 0) >= 1 : false;
 
   return {
     modalId: ModalIds.SwitchDivisionCallsign,
     nameKey: ["Leo", "switchDivisionCallsign"],
-    isEnabled,
+    isEnabled: DIVISIONS && isEnabled,
   };
 };
+
+export const selectDepartmentBtn: ModalButton = () => ({
+  modalId: ModalIds.SelectDepartment,
+  nameKey: ["Leo", "selectDepartment"],
+});
 
 export const nameSearchBtn: ModalButton = () => ({
   modalId: ModalIds.NameSearch,
@@ -35,6 +40,12 @@ export const nameSearchBtn: ModalButton = () => ({
 export const plateSearchBtn: ModalButton = () => ({
   modalId: ModalIds.VehicleSearch,
   nameKey: ["Leo", "plateSearch"],
+});
+
+export const businessSearchBtn: ModalButton = ({ BUSINESS }) => ({
+  modalId: ModalIds.BusinessSearch,
+  nameKey: ["Leo", "businessSearch"],
+  isEnabled: BUSINESS,
 });
 
 export const weaponSearchBtn: ModalButton = ({ WEAPON_REGISTRATION }) => ({

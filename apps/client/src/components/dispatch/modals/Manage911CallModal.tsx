@@ -4,43 +4,55 @@ import { Modal } from "components/modal/Modal";
 import { useModal } from "state/modalState";
 import { ModalIds } from "types/ModalIds";
 import useFetch from "lib/useFetch";
-import type { Full911Call } from "state/dispatch/dispatchState";
+import type { Full911Call } from "state/dispatch/dispatch-state";
 import { useRouter } from "next/router";
 import { AlertModal } from "components/modal/AlertModal";
 import { CallEventsArea } from "../events/EventsArea";
 
 import { usePermission } from "hooks/usePermission";
 import { defaultPermissions } from "@snailycad/permissions";
-import { useLeoState } from "state/leoState";
-import { useEmsFdState } from "state/emsFdState";
+import { useLeoState } from "state/leo-state";
+import { useEmsFdState } from "state/ems-fd-state";
 import type { Delete911CallByIdData } from "@snailycad/types/api";
-import { useCall911State } from "state/dispatch/call911State";
+import { useCall911State } from "state/dispatch/call-911-state";
 import { Manage911CallForm } from "./Manage911Call/Manage911CallForm";
 import { Infofield } from "components/shared/Infofield";
 import { FullDate } from "components/shared/FullDate";
 import { makeUnitName } from "lib/utils";
 import { useGenerateCallsign } from "hooks/useGenerateCallsign";
+import { shallow } from "zustand/shallow";
+import { isUnitCombined } from "@snailycad/utils";
+import { useActiveDispatchers } from "hooks/realtime/use-active-dispatchers";
 
 interface Props {
   call: Full911Call | null;
   forceOpen?: boolean;
+  forceDisabled?: boolean;
   setCall?(call: Full911Call | null): void;
   onClose?(): void;
 }
 
-export function Manage911CallModal({ setCall, forceOpen, call, onClose }: Props) {
+export function Manage911CallModal({ setCall, forceDisabled, forceOpen, call, onClose }: Props) {
   const [showAlert, setShowAlert] = React.useState(false);
 
   const { isOpen, closeModal } = useModal();
   const t = useTranslations("Calls");
   const { state, execute } = useFetch();
-  const { setCalls, calls } = useCall911State();
+  const { setCalls, calls } = useCall911State(
+    (state) => ({
+      setCalls: state.setCalls,
+      calls: state.calls,
+    }),
+    shallow,
+  );
+
   const router = useRouter();
   const { hasPermissions } = usePermission();
   const { generateCallsign } = useGenerateCallsign();
 
-  const { activeOfficer } = useLeoState();
-  const { activeDeputy } = useEmsFdState();
+  const activeOfficer = useLeoState((state) => state.activeOfficer);
+  const activeDeputy = useEmsFdState((state) => state.activeDeputy);
+  const { hasActiveDispatchers } = useActiveDispatchers();
 
   const hasDispatchPermissions = hasPermissions(
     defaultPermissions.defaultDispatchPermissions,
@@ -49,10 +61,13 @@ export function Manage911CallModal({ setCall, forceOpen, call, onClose }: Props)
 
   const activeUnit = router.pathname.includes("/officer") ? activeOfficer : activeDeputy;
   const isDispatch = router.pathname.includes("/dispatch") && hasDispatchPermissions;
-  const isDisabled = isDispatch
+
+  const isDisabled = forceDisabled
+    ? true
+    : isDispatch
     ? false
     : call
-    ? !call?.assignedUnits.some((u) => u.unit?.id === activeUnit?.id)
+    ? !call?.assignedUnits.some((u) => u.unit?.id === activeUnit?.id) && hasActiveDispatchers
     : false;
 
   const handleCallStateUpdate = React.useCallback(
@@ -88,8 +103,9 @@ export function Manage911CallModal({ setCall, forceOpen, call, onClose }: Props)
   const primaryUnit = React.useMemo(() => {
     const unit = call?.assignedUnits.find((v) => v.isPrimary);
     if (!unit?.unit) return null;
+    const template = isUnitCombined(unit as any) ? "pairedUnitTemplate" : "callsignTemplate";
 
-    return `${generateCallsign(unit.unit)} - ${makeUnitName(unit.unit)}`;
+    return `${generateCallsign(unit.unit, template)} ${makeUnitName(unit.unit)}`;
   }, [call, generateCallsign]);
 
   return (

@@ -1,4 +1,5 @@
 import type * as Prisma from "@prisma/client";
+import type { WhitelistStatus } from "./index.js";
 import type * as Types from "./index.js";
 
 export * from "./api/admin.js";
@@ -27,13 +28,13 @@ export type GetBleeterByIdData = GetBleeterData[number];
  * @method Post
  * @route /bleeter/:id
  */
-export type PostBleeterByIdData = Prisma.BleeterPost;
+export type PostBleeterByIdData = GetBleeterByIdData;
 
 /**
  * @method Put
  * @route /bleeter/:id
  */
-export type PutBleeterByIdData = Prisma.BleeterPost;
+export type PutBleeterByIdData = GetBleeterByIdData;
 
 /**
  * @method Post
@@ -112,7 +113,10 @@ export interface PostLoginUserData {
  * @method Post
  * @route /auth/register
  */
-export type PostRegisterUserData = PostLoginUserData & { isOwner: boolean };
+export type PostRegisterUserData = PostLoginUserData & {
+  isOwner: boolean;
+  whitelistStatus?: WhitelistStatus;
+};
 
 /**
  * @method Post
@@ -183,7 +187,7 @@ export interface GetTruckLogsData {
     citizen: Prisma.Citizen | null;
     vehicle: Omit<Types.RegisteredVehicle, "citizen"> | null;
   })[];
-  registeredVehicles: Omit<Types.RegisteredVehicle, "citizen">[];
+  totalCount: number;
 }
 
 /**
@@ -209,7 +213,10 @@ export type DeleteTruckLogsData = boolean;
  * @method GET
  * @route /bolos
  */
-export type GetBolosData = Types.Bolo[];
+export interface GetBolosData {
+  bolos: Types.Bolo[];
+  totalCount: number;
+}
 
 /**
  * @method POST
@@ -233,15 +240,24 @@ export type DeleteBolosData = boolean;
  * @method POST
  * @route /bolos/mark-stolen/:id
  */
-export type PostMarkStolenData = Prisma.Bolo;
+export type PostMarkStolenData = Prisma.Bolo | true;
 
 /** citizens */
+type CitizenProperties =
+  | "id"
+  | "name"
+  | "surname"
+  | "userId"
+  | "socialSecurityNumber"
+  | "imageId"
+  | "imageBlurData";
+
 /**
  * @method GET
  * @route /citizen
  */
 export interface GetCitizensData {
-  citizens: (Prisma.Citizen & { user: Types.User | null })[];
+  citizens: (Pick<Prisma.Citizen, CitizenProperties> & { user: Types.User | null })[];
   totalCount: number;
 }
 
@@ -267,7 +283,10 @@ export type PostCitizensData = Prisma.Citizen;
  * @method PUT
  * @route /citizen/:id
  */
-export type PutCitizenByIdData = Prisma.Citizen & { ethnicity: Prisma.Value; gender: Prisma.Value };
+export type PutCitizenByIdData = Prisma.Citizen & {
+  ethnicity?: Prisma.Value | null;
+  gender?: Prisma.Value | null;
+};
 
 /**
  * @method POST
@@ -321,7 +340,8 @@ export interface GetCitizenVehiclesData {
 export type PostCitizenVehicleData = Prisma.RegisteredVehicle & {
   model: Types.VehicleValue;
   registrationStatus: Prisma.Value;
-  citizen: Prisma.Citizen;
+  citizen?: Prisma.Citizen | null;
+  trimLevels?: Prisma.Value[];
 };
 
 /**
@@ -331,6 +351,7 @@ export type PostCitizenVehicleData = Prisma.RegisteredVehicle & {
 export type PutCitizenVehicleData = Prisma.RegisteredVehicle & {
   model: Types.VehicleValue;
   registrationStatus: Prisma.Value;
+  trimLevels?: Prisma.Value[];
 };
 
 /**
@@ -392,7 +413,17 @@ export type GetBusinessByIdData = Prisma.Business & {
   employees: Omit<GetBusinessesData["businesses"][number], "business">[];
   citizen: Pick<Prisma.Citizen, "name" | "surname" | "id">;
   employee: Types.Employee | null;
+  roles: (Prisma.EmployeeValue & { value: Prisma.Value })[];
 };
+
+/**
+ * @method GET
+ * @route /businesses/:id/roles
+ */
+export interface GetBusinessRolesByBusinessIdData {
+  roles: (Prisma.EmployeeValue & { value: Prisma.Value })[];
+  totalCount: number;
+}
 
 /**
  * @method PUT
@@ -464,6 +495,7 @@ export type DeleteBusinessPostsData = boolean;
  * @route /incidents
  */
 export interface GetIncidentsData {
+  totalCount: number;
   incidents: Types.LeoIncident[];
 }
 

@@ -1,26 +1,20 @@
 import fs from "node:fs/promises";
 import { Controller, UseBeforeEach, PlatformMulterFile, MultipartFile } from "@tsed/common";
-import { ContentType, Delete, Get, Post, Put } from "@tsed/schema";
-import { CREATE_OFFICER_SCHEMA } from "@snailycad/schemas";
+import { ContentType, Delete, Description, Get, Post, Put } from "@tsed/schema";
 import { QueryParams, BodyParams, Context, PathParams } from "@tsed/platform-params";
 import { BadRequest, NotFound } from "@tsed/exceptions";
-import { prisma } from "lib/prisma";
-import { IsAuth } from "middlewares/IsAuth";
-import { getImageWebPPath, validateImgurURL } from "utils/image";
-import { User, MiscCadSettings, Feature, CadFeature } from "@prisma/client";
-import { validateSchema } from "lib/validateSchema";
-import { handleWhitelistStatus } from "lib/leo/handleWhitelistStatus";
-import { getLastOfArray, manyToManyHelper } from "utils/manyToMany";
-import { Permissions, UsePermissions } from "middlewares/UsePermissions";
-import { updateOfficerDivisionsCallsigns, validateMaxDepartmentsEachPerUser } from "lib/leo/utils";
-import { isFeatureEnabled } from "lib/cad";
-import { validateDuplicateCallsigns } from "lib/leo/validateDuplicateCallsigns";
-import { findNextAvailableIncremental } from "lib/leo/findNextAvailableIncremental";
-import { shouldCheckCitizenUserId } from "lib/citizen/hasCitizenAccess";
+import { prisma } from "lib/data/prisma";
+import { IsAuth } from "middlewares/is-auth";
+import { Feature, cad, User, MiscCadSettings, Rank } from "@prisma/client";
+import { Permissions, UsePermissions } from "middlewares/use-permissions";
 import { leoProperties } from "lib/leo/activeOfficer";
 import { AllowedFileExtension, allowedFileExtensions } from "@snailycad/config";
-import { ExtendedBadRequest } from "src/exceptions/ExtendedBadRequest";
+import { ExtendedBadRequest } from "src/exceptions/extended-bad-request";
 import type * as APITypes from "@snailycad/types/api";
+import { upsertOfficer } from "./upsert-officer";
+import generateBlurPlaceholder from "lib/images/generate-image-blur-data";
+import { hasPermission } from "@snailycad/permissions";
+import { getImageWebPPath } from "lib/images/get-image-webp-path";
 
 @Controller("/leo")
 @UseBeforeEach(IsAuth)
@@ -31,16 +25,20 @@ export class MyOfficersController {
     fallback: (u) => u.isLeo,
     permissions: [Permissions.Leo],
   })
+  @Description("Get all the current user's officers.")
   async getUserOfficers(@Context("user") user: User): Promise<APITypes.GetMyOfficersData> {
-    const officers = await prisma.officer.findMany({
-      where: { userId: user.id },
-      include: {
-        ...leoProperties,
-        qualifications: { include: { qualification: { include: { value: true } } } },
-      },
-    });
+    const [totalCount, officers] = await prisma.$transaction([
+      prisma.officer.count({ where: { userId: user.id } }),
+      prisma.officer.findMany({
+        where: { userId: user.id },
+        include: {
+          ...leoProperties,
+          qualifications: { include: { qualification: { include: { value: true } } } },
+        },
+      }),
+    ]);
 
-    return { officers };
+    return { officers, totalCount };
   }
 
   @Post("/")
@@ -51,105 +49,10 @@ export class MyOfficersController {
   async createOfficer(
     @BodyParams() body: unknown,
     @Context("user") user: User,
-    @Context("cad") cad: { features: CadFeature[]; miscCadSettings: MiscCadSettings },
+    @Context("cad")
+    cad: cad & { features?: Record<Feature, boolean>; miscCadSettings: MiscCadSettings },
   ): Promise<APITypes.PostMyOfficersData> {
-    const data = validateSchema(CREATE_OFFICER_SCHEMA, body);
-
-    const checkCitizenUserId = shouldCheckCitizenUserId({ cad, user });
-    const citizen = await prisma.citizen.findFirst({
-      where: {
-        id: data.citizenId,
-        userId: checkCitizenUserId ? user.id : undefined,
-      },
-    });
-
-    if (!citizen) {
-      throw new NotFound("citizenNotFound");
-    }
-
-    await validateMaxDivisionsPerUnit(data.divisions, cad);
-    await validateMaxDepartmentsEachPerUser({
-      departmentId: data.department,
-      userId: user.id,
-      cad,
-      type: "officer",
-    });
-
-    const officerCount = await prisma.officer.count({
-      where: { userId: user.id },
-    });
-
-    if (
-      cad.miscCadSettings.maxOfficersPerUser &&
-      officerCount >= cad.miscCadSettings.maxOfficersPerUser
-    ) {
-      throw new BadRequest("maxLimitOfficersPerUserReached");
-    }
-
-    const isBadgeNumbersEnabled = isFeatureEnabled({
-      feature: Feature.BADGE_NUMBERS,
-      defaultReturn: true,
-      features: cad.features,
-    });
-
-    const { defaultDepartment, department, whitelistStatusId } = await handleWhitelistStatus(
-      data.department,
-      null,
-    );
-
-    await validateDuplicateCallsigns({
-      callsign1: data.callsign,
-      callsign2: data.callsign2,
-      type: "leo",
-    });
-
-    const incremental = await findNextAvailableIncremental({ type: "leo" });
-    const officer = await prisma.officer.create({
-      data: {
-        callsign: data.callsign,
-        callsign2: data.callsign2,
-        userId: user.id,
-        departmentId: defaultDepartment ? defaultDepartment.id : data.department,
-        rankId:
-          (defaultDepartment
-            ? defaultDepartment.defaultOfficerRankId
-            : department.defaultOfficerRankId) || undefined,
-        badgeNumber: isBadgeNumbersEnabled ? data.badgeNumber : undefined,
-        citizenId: citizen.id,
-        imageId: validateImgurURL(data.image),
-        whitelistStatusId,
-        incremental,
-      },
-      include: leoProperties,
-    });
-
-    const disconnectConnectArr = manyToManyHelper([], data.divisions as string[]);
-
-    await updateOfficerDivisionsCallsigns({
-      officerId: officer.id,
-      disconnectConnectArr,
-      callsigns: data.callsigns,
-    });
-
-    const updated = getLastOfArray(
-      await prisma.$transaction(
-        disconnectConnectArr.map((v, idx) =>
-          prisma.officer.update({
-            where: { id: officer.id },
-            data: { divisions: v },
-            include:
-              idx + 1 === disconnectConnectArr.length
-                ? {
-                    ...leoProperties,
-                    qualifications: { include: { qualification: { include: { value: true } } } },
-                  }
-                : undefined,
-          }),
-        ),
-      ),
-    );
-
-    return updated as APITypes.PostMyOfficersData;
+    return upsertOfficer({ body, user, cad });
   }
 
   @Put("/:id")
@@ -161,11 +64,10 @@ export class MyOfficersController {
     @PathParams("id") officerId: string,
     @BodyParams() body: unknown,
     @Context("user") user: User,
-    @Context("cad") cad: { features: CadFeature[]; miscCadSettings: MiscCadSettings },
+    @Context("cad")
+    cad: cad & { features?: Record<Feature, boolean>; miscCadSettings: MiscCadSettings },
   ): Promise<APITypes.PutMyOfficerByIdData> {
-    const data = validateSchema(CREATE_OFFICER_SCHEMA, body);
-
-    const officer = await prisma.officer.findFirst({
+    const existingOfficer = await prisma.officer.findFirst({
       where: {
         id: officerId,
         userId: user.id,
@@ -173,95 +75,7 @@ export class MyOfficersController {
       include: leoProperties,
     });
 
-    if (!officer) {
-      throw new NotFound("officerNotFound");
-    }
-
-    await validateMaxDivisionsPerUnit(data.divisions as string[], cad);
-    await validateDuplicateCallsigns({
-      callsign1: data.callsign,
-      callsign2: data.callsign2,
-      type: "leo",
-      unitId: officer.id,
-    });
-    await validateMaxDepartmentsEachPerUser({
-      departmentId: data.department,
-      userId: user.id,
-      cad,
-      type: "officer",
-      unitId: officer.id,
-    });
-
-    const checkCitizenUserId = shouldCheckCitizenUserId({ cad, user });
-    const citizen = await prisma.citizen.findFirst({
-      where: {
-        id: data.citizenId,
-        userId: checkCitizenUserId ? user.id : undefined,
-      },
-    });
-
-    if (!citizen) {
-      throw new NotFound("citizenNotFound");
-    }
-
-    const { defaultDepartment, department, whitelistStatusId } = await handleWhitelistStatus(
-      data.department,
-      officer,
-    );
-
-    const disconnectConnectArr = manyToManyHelper(
-      officer.divisions.map((v) => v.id),
-      data.divisions as string[],
-    );
-
-    await prisma.$transaction(
-      disconnectConnectArr.map((v) =>
-        prisma.officer.update({ where: { id: officer.id }, data: { divisions: v } }),
-      ),
-    );
-
-    const isBadgeNumbersEnabled = isFeatureEnabled({
-      feature: Feature.BADGE_NUMBERS,
-      defaultReturn: true,
-      features: cad.features,
-    });
-
-    const rank = officer.rankId
-      ? undefined
-      : (defaultDepartment
-          ? defaultDepartment.defaultOfficerRankId
-          : department.defaultOfficerRankId) || undefined;
-
-    const incremental = officer.incremental
-      ? undefined
-      : await findNextAvailableIncremental({ type: "leo" });
-
-    await updateOfficerDivisionsCallsigns({
-      officerId: officer.id,
-      disconnectConnectArr,
-      callsigns: data.callsigns,
-    });
-
-    const updatedOfficer = await prisma.officer.update({
-      where: {
-        id: officer.id,
-      },
-      data: {
-        callsign: data.callsign,
-        callsign2: data.callsign2,
-        badgeNumber: isBadgeNumbersEnabled ? data.badgeNumber : undefined,
-        citizenId: citizen.id,
-        imageId: validateImgurURL(data.image),
-        departmentId: defaultDepartment ? defaultDepartment.id : data.department,
-        rankId: rank,
-        whitelistStatusId,
-        incremental,
-      },
-      include: {
-        ...leoProperties,
-        qualifications: { include: { qualification: { include: { value: true } } } },
-      },
-    });
+    const updatedOfficer = await upsertOfficer({ body, user, cad, existingOfficer });
 
     return updatedOfficer;
   }
@@ -298,15 +112,28 @@ export class MyOfficersController {
   @Get("/logs")
   @UsePermissions({
     fallback: (u) => u.isLeo,
-    permissions: [Permissions.Leo],
+    permissions: [
+      Permissions.Leo,
+      Permissions.ManageUnits,
+      Permissions.ViewUnits,
+      Permissions.DeleteUnits,
+    ],
   })
   async getOfficerLogs(
     @Context("user") user: User,
     @QueryParams("skip", Number) skip = 0,
     @QueryParams("includeAll", Boolean) includeAll = false,
     @QueryParams("officerId", String) officerId?: string,
+    @QueryParams("isAdmin", Boolean) isAdmin = false,
   ): Promise<APITypes.GetMyOfficersLogsData> {
-    const where = { userId: user.id, emsFdDeputyId: null, officerId: officerId || undefined };
+    const hasManageUnitsPermissions = hasPermission({
+      permissionsToCheck: [Permissions.ManageUnits, Permissions.ViewUnits, Permissions.DeleteUnits],
+      userToCheck: user,
+      fallback: (u) => u.rank !== Rank.USER,
+    });
+    const userIdObj = hasManageUnitsPermissions && isAdmin ? {} : { userId: user.id };
+
+    const where = { ...userIdObj, emsFdDeputyId: null, officerId: officerId || undefined };
 
     const [totalCount, logs] = await prisma.$transaction([
       prisma.officerLog.count({ where }),
@@ -332,47 +159,62 @@ export class MyOfficersController {
     @PathParams("id") officerId: string,
     @MultipartFile("image") file?: PlatformMulterFile,
   ): Promise<APITypes.PostMyOfficerByIdData> {
-    const officer = await prisma.officer.findFirst({
-      where: {
-        userId: user.id,
-        id: officerId,
-      },
-    });
+    try {
+      const officer = await prisma.officer.findFirst({
+        where: {
+          userId: user.id,
+          id: officerId,
+        },
+      });
 
-    if (!officer) {
-      throw new NotFound("Not Found");
+      if (!officer) {
+        throw new NotFound("Not Found");
+      }
+
+      if (!file) {
+        throw new ExtendedBadRequest({ file: "No file provided." });
+      }
+
+      if (!allowedFileExtensions.includes(file.mimetype as AllowedFileExtension)) {
+        throw new ExtendedBadRequest({ image: "invalidImageType" });
+      }
+
+      const image = await getImageWebPPath({
+        buffer: file.buffer,
+        pathType: "units",
+        id: `${officer.id}-${file.originalname.split(".")[0]}`,
+      });
+
+      const previousImage = officer.imageId
+        ? `${process.cwd()}/public/units/${officer.imageId}`
+        : undefined;
+
+      if (previousImage) {
+        await fs.rm(previousImage, { force: true });
+      }
+
+      const [data] = await Promise.all([
+        prisma.officer.update({
+          where: { id: officer.id },
+          data: {
+            imageId: image.fileName,
+            imageBlurData: await generateBlurPlaceholder(image),
+          },
+          select: { imageId: true },
+        }),
+        fs.writeFile(image.path, image.buffer),
+      ]);
+
+      return data;
+    } catch {
+      throw new BadRequest("errorUploadingImage");
     }
-
-    if (!file) {
-      throw new ExtendedBadRequest({ file: "No file provided." });
-    }
-
-    if (!allowedFileExtensions.includes(file.mimetype as AllowedFileExtension)) {
-      throw new ExtendedBadRequest({ image: "invalidImageType" });
-    }
-
-    const image = await getImageWebPPath({
-      buffer: file.buffer,
-      pathType: "units",
-      id: officer.id,
-    });
-
-    const [data] = await Promise.all([
-      prisma.officer.update({
-        where: { id: officer.id },
-        data: { imageId: image.fileName },
-        select: { imageId: true },
-      }),
-      fs.writeFile(image.path, image.buffer),
-    ]);
-
-    return data;
   }
 }
 
 export async function validateMaxDivisionsPerUnit(
   arr: unknown[],
-  cad: { miscCadSettings: MiscCadSettings } | null,
+  cad: (cad & { miscCadSettings: MiscCadSettings }) | null,
 ) {
   const { maxDivisionsPerOfficer } = cad?.miscCadSettings ?? {};
 

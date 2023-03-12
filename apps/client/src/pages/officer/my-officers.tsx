@@ -1,14 +1,14 @@
 import * as React from "react";
 import { useTranslations } from "use-intl";
 import dynamic from "next/dynamic";
-import { Button } from "components/Button";
+import { Button } from "@snailycad/ui";
 import { Layout } from "components/Layout";
 import { useModal } from "state/modalState";
 import { getSessionUser } from "lib/auth";
 import { getTranslations } from "lib/getTranslation";
 import type { GetServerSideProps } from "next";
 import { ModalIds } from "types/ModalIds";
-import type { Officer } from "@snailycad/types";
+import { Officer, ValueType } from "@snailycad/types";
 import useFetch from "lib/useFetch";
 import { formatOfficerDepartment, formatUnitDivisions, makeUnitName, requestAll } from "lib/utils";
 import { useGenerateCallsign } from "hooks/useGenerateCallsign";
@@ -21,7 +21,8 @@ import { OfficerRank } from "components/leo/OfficerRank";
 import { UnitDepartmentStatus } from "components/leo/UnitDepartmentStatus";
 import type { DeleteMyOfficerByIdData, GetMyOfficersData } from "@snailycad/types/api";
 import { useTemporaryItem } from "hooks/shared/useTemporaryItem";
-import Image from "next/future/image";
+import { useLoadValuesClientSide } from "hooks/useLoadValuesClientSide";
+import { ImageWrapper } from "components/shared/image-wrapper";
 
 const AlertModal = dynamic(async () => (await import("components/modal/AlertModal")).AlertModal);
 const ManageOfficerModal = dynamic(
@@ -33,13 +34,17 @@ interface Props {
 }
 
 export default function MyOfficers({ officers: data }: Props) {
+  useLoadValuesClientSide({
+    valueTypes: [ValueType.DEPARTMENT, ValueType.DIVISION],
+  });
+
   const common = useTranslations("Common");
   const t = useTranslations("Leo");
   const { openModal, closeModal } = useModal();
   const { state, execute } = useFetch();
   const { generateCallsign } = useGenerateCallsign();
   const { makeImageUrl } = useImageUrl();
-  const { BADGE_NUMBERS } = useFeatureEnabled();
+  const { DIVISIONS, BADGE_NUMBERS } = useFeatureEnabled();
   const tableState = useTableState();
 
   const [officers, setOfficers] = React.useState<Officer[]>(data);
@@ -78,7 +83,7 @@ export default function MyOfficers({ officers: data }: Props) {
       <header className="flex items-center justify-between">
         <Title className="!mb-0">{t("myOfficers")}</Title>
 
-        <Button onClick={() => openModal(ModalIds.ManageOfficer)}>{t("createOfficer")}</Button>
+        <Button onPress={() => openModal(ModalIds.ManageOfficer)}>{t("createOfficer")}</Button>
       </header>
 
       {officers.length <= 0 ? (
@@ -92,7 +97,7 @@ export default function MyOfficers({ officers: data }: Props) {
               officer: (
                 <span className="flex items-center">
                   {officer.imageId ? (
-                    <Image
+                    <ImageWrapper
                       className="rounded-md w-[30px] h-[30px] object-cover mr-2"
                       draggable={false}
                       src={makeImageUrl("units", officer.imageId)!}
@@ -114,11 +119,11 @@ export default function MyOfficers({ officers: data }: Props) {
               position: officer.position ?? common("none"),
               actions: (
                 <>
-                  <Button size="xs" onClick={() => handleEditClick(officer)} variant="success">
+                  <Button size="xs" onPress={() => handleEditClick(officer)} variant="success">
                     {common("edit")}
                   </Button>
                   <Button
-                    onClick={() => handleDeleteClick(officer)}
+                    onPress={() => handleDeleteClick(officer)}
                     className="ml-2"
                     variant="danger"
                     size="xs"
@@ -134,7 +139,7 @@ export default function MyOfficers({ officers: data }: Props) {
             { header: t("callsign"), accessorKey: "callsign" },
             BADGE_NUMBERS ? { header: t("badgeNumber"), accessorKey: "badgeNumber" } : null,
             { header: t("department"), accessorKey: "department" },
-            { header: t("division"), accessorKey: "division" },
+            DIVISIONS ? { header: t("division"), accessorKey: "division" } : null,
             { header: t("rank"), accessorKey: "rank" },
             { header: t("position"), accessorKey: "position" },
             { header: t("status"), accessorKey: "departmentStatus" },
@@ -160,7 +165,6 @@ export default function MyOfficers({ officers: data }: Props) {
       <AlertModal
         title={t("deleteOfficer")}
         description={t.rich("alert_deleteOfficer", {
-          span: (children) => <span className="font-semibold">{children}</span>,
           officer: tempOfficer && makeUnitName(tempOfficer),
         })}
         id={ModalIds.AlertDeleteOfficer}
@@ -174,16 +178,12 @@ export default function MyOfficers({ officers: data }: Props) {
 
 export const getServerSideProps: GetServerSideProps = async ({ req, locale }) => {
   const user = await getSessionUser(req);
-  const [{ officers }, values] = await requestAll(req, [
-    ["/leo", { officers: [] }],
-    ["/admin/values/department?paths=division", []],
-  ]);
+  const [{ officers }] = await requestAll(req, [["/leo", { officers: [] }]]);
 
   return {
     props: {
       session: user,
       officers,
-      values,
       messages: {
         ...(await getTranslations(["leo", "common"], user?.locale ?? locale)),
       },

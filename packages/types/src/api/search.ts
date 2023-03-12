@@ -12,7 +12,10 @@ export type PostEmsFdMedicalRecordsSearchData =
       medicalRecords: Types.MedicalRecord[];
       isConfidential: false;
     })
-  | (Pick<Prisma.Citizen, "id" | "name" | "surname" | "imageId" | "socialSecurityNumber"> & {
+  | (Pick<
+      Prisma.Citizen,
+      "id" | "name" | "surname" | "imageId" | "imageBlurData" | "socialSecurityNumber"
+    > & {
       isConfidential: true;
     });
 
@@ -41,8 +44,12 @@ export type PostLeoSearchCitizenData = (
       weapons: Types.Weapon[];
       notes: Types.Note[];
       Record: Types.Record[];
+      addressFlags: Types.Value[];
     })
-  | (Pick<Types.Citizen, "id" | "name" | "surname" | "imageId" | "socialSecurityNumber"> & {
+  | (Pick<
+      Types.Citizen,
+      "id" | "name" | "surname" | "imageId" | "imageBlurData" | "socialSecurityNumber"
+    > & {
       isConfidential: true;
     })
 )[];
@@ -72,6 +79,13 @@ export type PostLeoSearchVehicleData =
       TruckLog: Prisma.TruckLog[];
     })
   | null;
+
+export type PostLeoSearchBusinessData = (Types.Business & {
+  citizen: Types.BaseCitizen;
+  vehicles: Types.RegisteredVehicle[];
+  employees: Types.Employee[];
+  Record: Types.Record[];
+})[];
 
 /**
  * @method POST
@@ -113,6 +127,14 @@ export type PutSearchActionsCitizenFlagsData = Pick<Types.Citizen, "id" | "flags
 
 /**
  * @method PUT
+ * @route /search/actions/citizen-flags/:citizenId
+ */
+export type PutSearchActionsCitizenAddressFlagsData = Pick<Types.Citizen, "id"> & {
+  addressFlags: Types.Value[];
+};
+
+/**
+ * @method PUT
  * @route /search/actions/custom-fields/citizen/:citizenId
  */
 export interface PutSearchActionsUpdateCitizenCustomFields {
@@ -149,3 +171,9 @@ export type PostSearchActionsCreateCitizen = PostLeoSearchCitizenData[number];
  * @route /search/actions/vehicle
  */
 export type PostSearchActionsCreateVehicle = PostLeoSearchVehicleData;
+
+/**
+ * @method POST
+ * @route /search/actions/vehicle
+ */
+export type PostLEODeclareCitizenMissing = Prisma.Citizen;

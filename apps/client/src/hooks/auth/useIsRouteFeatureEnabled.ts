@@ -8,8 +8,7 @@ const featuresRoute: Partial<Record<Feature, string>> = {
   TAXI: "/taxi",
   TRUCK_LOGS: "/truck-logs",
   BUSINESS: "/business",
-  DL_EXAMS: "/officer/supervisor/dl-exams",
-  WEAPON_EXAMS: "/officer/supervisor/weapon-exams",
+  LICENSE_EXAMS: "/officer/supervisor/exams",
   DMV: "/officer/dmv",
 };
 
@@ -18,15 +17,15 @@ export function useIsRouteFeatureEnabled(cad: Partial<Pick<CAD, "features">>) {
   const router = useRouter();
 
   const checkEnabled = React.useCallback(() => {
-    const features = cad.features ?? [];
+    const features = cad.features;
     let isEnabled = true;
 
-    for (const feature of features) {
-      const route =
-        feature.feature in featuresRoute &&
-        featuresRoute[feature.feature as keyof typeof featuresRoute];
+    for (const key in features) {
+      const feature = features[key as keyof typeof features];
 
-      if (route && !feature.isEnabled && router.pathname.includes(route)) {
+      const route = key in featuresRoute && featuresRoute[key as keyof typeof featuresRoute];
+
+      if (route && feature === false && router.pathname.includes(route)) {
         isEnabled = false;
         break;
       } else {

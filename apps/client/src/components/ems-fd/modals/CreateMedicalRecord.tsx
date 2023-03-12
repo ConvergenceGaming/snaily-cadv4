@@ -1,25 +1,18 @@
 import { useTranslations } from "use-intl";
 import { Form, Formik } from "formik";
 import { MEDICAL_RECORD_SCHEMA } from "@snailycad/schemas";
-import { Button } from "components/Button";
+import { Loader, Button, TextField } from "@snailycad/ui";
 import { FormField } from "components/form/FormField";
-import { Loader } from "components/Loader";
 import { Modal } from "components/modal/Modal";
 import useFetch from "lib/useFetch";
 import { useModal } from "state/modalState";
 import { ModalIds } from "types/ModalIds";
 import type { MedicalRecord } from "@snailycad/types";
 import { handleValidate } from "lib/handleValidate";
-import { Input } from "components/form/inputs/Input";
-import { Textarea } from "components/form/Textarea";
 import { Select } from "components/form/Select";
 import { useValues } from "context/ValuesContext";
-import { InputSuggestions } from "components/form/inputs/InputSuggestions";
-import { useImageUrl } from "hooks/useImageUrl";
-import { useFeatureEnabled } from "hooks/useFeatureEnabled";
-import type { NameSearchResult } from "state/search/nameSearchState";
 import type { PostEmsFdMedicalRecord } from "@snailycad/types/api";
-import Image from "next/future/image";
+import { CitizenSuggestionsField } from "components/shared/CitizenSuggestionsField";
 
 interface Props {
   onCreate?(newV: MedicalRecord): void;
@@ -32,8 +25,6 @@ export function CreateMedicalRecordModal({ onClose, onCreate }: Props) {
   const common = useTranslations("Common");
   const t = useTranslations("MedicalRecords");
   const { bloodGroup } = useValues();
-  const { makeImageUrl } = useImageUrl();
-  const { SOCIAL_SECURITY_NUMBERS } = useFeatureEnabled();
 
   const validate = handleValidate(MEDICAL_RECORD_SCHEMA);
 
@@ -71,52 +62,15 @@ export function CreateMedicalRecordModal({ onClose, onCreate }: Props) {
       className="w-[600px]"
     >
       <Formik validate={validate} onSubmit={onSubmit} initialValues={INITIAL_VALUES}>
-        {({ handleChange, setValues, errors, values, isValid }) => (
+        {({ handleChange, setFieldValue, errors, values, isValid }) => (
           <Form>
-            <FormField errorMessage={errors.citizenId} label={t("citizen")}>
-              <InputSuggestions<NameSearchResult>
-                onSuggestionClick={(suggestion) => {
-                  const newValues = {
-                    ...values,
-                    citizenId: suggestion.id,
-                    citizenName: `${suggestion.name} ${suggestion.surname}`,
-                  };
-
-                  setValues(newValues, true);
-                }}
-                Component={({ suggestion }) => (
-                  <div className="flex items-center">
-                    {suggestion.imageId ? (
-                      <Image
-                        className="rounded-md w-[35px] h-[35px] object-cover"
-                        draggable={false}
-                        src={makeImageUrl("citizens", suggestion.imageId)!}
-                        loading="lazy"
-                        width={35}
-                        height={35}
-                        alt={`${suggestion.name} ${suggestion.surname}`}
-                      />
-                    ) : null}
-                    <p>
-                      {suggestion.name} {suggestion.surname}{" "}
-                      {SOCIAL_SECURITY_NUMBERS && suggestion.socialSecurityNumber ? (
-                        <>(SSN: {suggestion.socialSecurityNumber})</>
-                      ) : null}
-                    </p>
-                  </div>
-                )}
-                options={{
-                  apiPath: "/search/name",
-                  method: "POST",
-                  dataKey: "name",
-                }}
-                inputProps={{
-                  value: values.citizenName,
-                  name: "citizenName",
-                  onChange: handleChange,
-                }}
-              />
-            </FormField>
+            <CitizenSuggestionsField
+              autoFocus
+              fromAuthUserOnly={false}
+              label={common("citizen")}
+              labelFieldName="citizenName"
+              valueFieldName="citizenId"
+            />
 
             <FormField errorMessage={errors.bloodGroup} label={t("bloodGroup")}>
               <Select
@@ -130,18 +84,27 @@ export function CreateMedicalRecordModal({ onClose, onCreate }: Props) {
               />
             </FormField>
 
-            <FormField errorMessage={errors.type} label={common("type")}>
-              <Input onChange={handleChange} name="type" value={values.type} />
-            </FormField>
+            <TextField
+              onChange={(value) => setFieldValue("type", value)}
+              name="type"
+              value={values.type}
+              errorMessage={errors.type}
+              label={common("type")}
+            />
 
-            <FormField errorMessage={errors.description} label={common("description")}>
-              <Textarea value={values.description} name="description" onChange={handleChange} />
-            </FormField>
+            <TextField
+              isTextarea
+              errorMessage={errors.description}
+              label={common("description")}
+              value={values.description}
+              name="description"
+              onChange={(value) => setFieldValue("description", value)}
+            />
 
             <footer className="flex justify-end mt-5">
               <Button
                 type="reset"
-                onClick={() => closeModal(ModalIds.CreateMedicalRecord)}
+                onPress={() => closeModal(ModalIds.CreateMedicalRecord)}
                 variant="cancel"
               >
                 {common("cancel")}

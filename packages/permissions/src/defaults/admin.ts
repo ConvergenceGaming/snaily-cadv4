@@ -12,6 +12,7 @@ export const defaultManagementPermissions = [
   Permissions.ManageUnits,
   Permissions.DeleteUnits,
   Permissions.ManageUnitCallsigns,
+  Permissions.ManageAwardsAndQualifications,
   Permissions.ViewBusinesses,
   Permissions.ManageBusinesses,
   Permissions.DeleteBusinesses,
@@ -50,6 +51,10 @@ export const defaultValuePermissions = [
   Permissions.ManageValueCitizenFlag,
   Permissions.ManageValueQualification,
   Permissions.ManageValueCallType,
+  Permissions.ManageValueAddress,
+  Permissions.ManageValueEmergencyVehicle,
+  Permissions.ManageValueAddressFlag,
+  Permissions.ManageValueVehicleTrimLevel,
 ];
 
 export const defaultCourthousePermissions = [
@@ -57,6 +62,8 @@ export const defaultCourthousePermissions = [
   Permissions.ManageExpungementRequests,
   Permissions.ViewNameChangeRequests,
   Permissions.ManageNameChangeRequests,
+  Permissions.ManagePendingWarrants,
+  Permissions.ManageCourthousePosts,
 ];
 
 export const defaultOwnerPermissions = [Permissions.ManageCADSettings];

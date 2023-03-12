@@ -14,10 +14,14 @@ export const defaultLeoPermissions = [
   Permissions.ManageDLExams,
   Permissions.ViewWeaponExams,
   Permissions.ManageWeaponExams,
+  Permissions.ViewLicenseExams,
+  Permissions.ManageLicenseExams,
   Permissions.ManageDMV,
+  Permissions.ManageBureauOfFirearms,
   Permissions.DeleteCitizenRecords,
   Permissions.ViewCitizenLogs,
   Permissions.ManageWarrants,
+  Permissions.ManageAwardsAndQualifications,
 ];
 
 export const defaultDispatchPermissions = [Permissions.Dispatch, Permissions.LiveMap];

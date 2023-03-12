@@ -4,7 +4,7 @@ import { useFeatureEnabled } from "hooks/useFeatureEnabled";
 import type { Feature, User } from "@snailycad/types";
 import { useTranslations } from "next-intl";
 import { Dropdown } from "components/Dropdown";
-import { Button } from "components/Button";
+import { Button } from "@snailycad/ui";
 import { classNames } from "lib/classNames";
 import { useAuth } from "context/AuthContext";
 import { usePermission, Permissions } from "hooks/usePermission";
@@ -52,7 +52,7 @@ export function CitizenDropdown() {
       <Dropdown.LinkItem href="/citizen">{t("citizens")}</Dropdown.LinkItem>
 
       {items.map((item) => {
-        const upperCase = item.href.replace("-", "_").replace("/", "").toUpperCase() as Feature;
+        const upperCase = item.href.replace(/-/g, "_").replace("/", "").toUpperCase() as Feature;
         const show = "show" in item ? item.show?.(user) : true;
 
         if (!enabled[upperCase] || !show) {

@@ -1,10 +1,12 @@
-import type { CombinedLeoUnit, EmsFdDeputy, Officer } from "@snailycad/types";
+import type { CombinedEmsFdUnit, CombinedLeoUnit, EmsFdDeputy, Officer } from "@snailycad/types";
+import { replaceTemplateVariables } from "./utils/replace-template-variables";
 
 type P = "callsign" | "callsign2" | "department" | "citizenId" | "incremental";
 type Unit =
   | Pick<Officer, P | "divisions" | "callsigns">
   | Pick<EmsFdDeputy, P | "division">
-  | CombinedLeoUnit;
+  | CombinedLeoUnit
+  | CombinedEmsFdUnit;
 
 /**
  * given a unit and a template, generate a callsign for the unit
@@ -13,7 +15,7 @@ type Unit =
  * @returns the generated callsign
  */
 export function generateCallsign(unit: Unit, template: string | null) {
-  const isCombined = !("citizenId" in unit) || "officers" in unit;
+  const isCombined = !("citizenId" in unit) || "officers" in unit || "deputies" in unit;
   const _template = isCombined && unit.pairedUnitTemplate ? unit.pairedUnitTemplate : template;
 
   const unitDivision =
@@ -33,23 +35,4 @@ export function generateCallsign(unit: Unit, template: string | null) {
   };
 
   return replaceTemplateVariables(_template, replacers);
-}
-
-function replaceTemplateVariables(
-  template: string,
-  replacers: Record<string, string | number | null | undefined>,
-) {
-  const templateArr: (string | null)[] = template.split(/[{}]/);
-
-  Object.entries(replacers).forEach(([replacer, value]) => {
-    const idx = templateArr.indexOf(replacer);
-
-    if (value) {
-      templateArr[idx] = value.toString();
-    } else {
-      templateArr[idx] = null;
-    }
-  });
-
-  return templateArr.filter((v) => v !== null).join("");
 }

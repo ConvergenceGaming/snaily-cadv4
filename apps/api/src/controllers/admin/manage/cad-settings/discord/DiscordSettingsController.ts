@@ -2,17 +2,19 @@ import process from "node:process";
 import { BodyParams, Context, Controller, UseBeforeEach } from "@tsed/common";
 import { ContentType, Get, Post } from "@tsed/schema";
 import { RESTGetAPIGuildRolesResult, Routes } from "discord-api-types/v10";
-import { IsAuth } from "middlewares/IsAuth";
-import { prisma } from "lib/prisma";
+import { IsAuth } from "middlewares/is-auth";
+import { prisma } from "lib/data/prisma";
 import { Rank, cad, DiscordRole } from "@prisma/client";
 import { BadRequest } from "@tsed/exceptions";
 import { DISCORD_SETTINGS_SCHEMA } from "@snailycad/schemas";
-import { validateSchema } from "lib/validateSchema";
-import { manyToManyHelper } from "utils/manyToMany";
+import { validateSchema } from "lib/data/validate-schema";
+import { manyToManyHelper } from "lib/data/many-to-many";
 import type * as APITypes from "@snailycad/types/api";
 import { Permissions } from "@snailycad/permissions";
-import { UsePermissions } from "middlewares/UsePermissions";
+import { UsePermissions } from "middlewares/use-permissions";
 import { performDiscordRequest } from "lib/discord/performDiscordRequest";
+import { AuditLogActionType, createAuditLogEntry } from "@snailycad/audit-logger/server";
+import { parseDiscordGuildIds } from "lib/discord/utils";
 
 const guildId = process.env.DISCORD_SERVER_ID;
 
@@ -20,25 +22,43 @@ const guildId = process.env.DISCORD_SERVER_ID;
 @Controller("/admin/manage/cad-settings/discord/roles")
 @ContentType("application/json")
 export class DiscordSettingsController {
+  private async getDiscordRoles(guildIds: string[]) {
+    const _roles: (RESTGetAPIGuildRolesResult[number] & { guildId: string })[] = [];
+
+    for (const guildId of guildIds) {
+      try {
+        const roles = await performDiscordRequest<RESTGetAPIGuildRolesResult>({
+          handler(rest) {
+            return rest.get(Routes.guildRoles(guildId));
+          },
+        });
+
+        const rolesWithGuildId = roles?.map((role) => ({ ...role, guildId })) ?? [];
+
+        _roles.push(...rolesWithGuildId);
+      } catch {
+        continue;
+      }
+    }
+
+    return _roles;
+  }
+
   @Get("/")
   async getGuildRoles(@Context("cad") cad: cad): Promise<APITypes.GetCADDiscordRolesData> {
+    console.log({ guildId });
+
     if (!guildId) {
       throw new BadRequest("mustSetBotTokenGuildId");
     }
 
-    const roles = await performDiscordRequest({
-      async handler(rest) {
-        const roles = await rest.get(Routes.guildRoles(guildId));
-        return roles as RESTGetAPIGuildRolesResult | null;
-      },
-    });
+    const guildIds = parseDiscordGuildIds(guildId);
+    const roles = await this.getDiscordRoles(guildIds);
 
     const discordRoles = await prisma.discordRoles.upsert({
       where: { id: String(cad.discordRolesId) },
       update: { guildId },
-      create: {
-        guildId,
-      },
+      create: { guildId },
     });
 
     await prisma.cad.update({
@@ -58,10 +78,12 @@ export class DiscordSettingsController {
           name: role.name,
           id: role.id,
           discordRolesId: discordRoles.id,
+          guildId: role.guildId,
         },
         update: {
           name: role.name,
           discordRolesId: discordRoles.id,
+          guildId: role.guildId,
         },
       });
 
@@ -79,20 +101,14 @@ export class DiscordSettingsController {
   async setRoleTypes(
     @Context("cad") cad: cad,
     @BodyParams() body: unknown,
+    @Context("sessionUserId") sessionUserId: string,
   ): Promise<APITypes.PostCADDiscordRolesData> {
     if (!guildId) {
       throw new BadRequest("mustSetBotTokenGuildId");
     }
 
     const data = validateSchema(DISCORD_SETTINGS_SCHEMA, body);
-    const roles = await performDiscordRequest({
-      async handler(rest) {
-        const roles = await rest.get(Routes.guildRoles(guildId));
-        return roles as RESTGetAPIGuildRolesResult | null;
-      },
-    });
-
-    const rolesBody = Array.isArray(roles) ? roles : [];
+    const roles = await this.getDiscordRoles(parseDiscordGuildIds(guildId));
 
     const rolesToCheck = {
       leoRoles: data.leoRoles,
@@ -109,7 +125,7 @@ export class DiscordSettingsController {
     Object.values(rolesToCheck).map((roleId) => {
       if (Array.isArray(roleId) && roleId.length <= 0) return;
 
-      if (roleId && !this.doesRoleExist(rolesBody, roleId)) {
+      if (roleId && !this.doesRoleExist(roles, roleId)) {
         throw new BadRequest("invalidRoleId");
       }
     });
@@ -133,6 +149,7 @@ export class DiscordSettingsController {
       update: createUpdateData,
       create: createUpdateData,
       include: {
+        adminRoles: true,
         leoRoles: true,
         emsFdRoles: true,
         leoSupervisorRoles: true,
@@ -144,6 +161,12 @@ export class DiscordSettingsController {
     });
 
     await Promise.all([
+      this.updateRoles({
+        discordRoleId: discordRoles.id,
+        discordRoles: discordRoles.adminRoles,
+        newRoles: (data.adminRoles as string[] | null) ?? [],
+        type: "adminRoles",
+      }),
       this.updateRoles({
         discordRoleId: discordRoles.id,
         discordRoles: discordRoles.leoRoles,
@@ -195,6 +218,7 @@ export class DiscordSettingsController {
         discordRoles: {
           include: {
             roles: true,
+            adminRoles: true,
             leoRoles: true,
             emsFdRoles: true,
             leoSupervisorRoles: true,
@@ -205,6 +229,16 @@ export class DiscordSettingsController {
           },
         },
       },
+    });
+
+    await createAuditLogEntry({
+      action: {
+        type: AuditLogActionType.UpdateDiscordRoles,
+        previous: discordRoles,
+        new: updated.discordRoles!,
+      },
+      prisma,
+      executorId: sessionUserId,
     });
 
     return updated.discordRoles!;
@@ -244,5 +278,6 @@ interface UpdateRolesOptions {
     | "dispatchRoles"
     | "towRoles"
     | "taxiRoles"
-    | "courthouseRoles";
+    | "courthouseRoles"
+    | "adminRoles";
 }

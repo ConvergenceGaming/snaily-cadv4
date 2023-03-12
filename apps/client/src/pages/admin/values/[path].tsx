@@ -1,7 +1,7 @@
 import { useTranslations } from "use-intl";
 import * as React from "react";
 import { useRouter } from "next/router";
-import { Button } from "components/Button";
+import { Button } from "@snailycad/ui";
 import { Layout } from "components/Layout";
 import { getSessionUser } from "lib/auth";
 import { getTranslations } from "lib/getTranslation";
@@ -11,20 +11,16 @@ import { type AnyValue, ValueType, Rank } from "@snailycad/types";
 import useFetch from "lib/useFetch";
 import { AdminLayout } from "components/admin/AdminLayout";
 import { getObjLength, isEmpty, requestAll, yesOrNoText } from "lib/utils";
-import { Input } from "components/form/inputs/Input";
-import { FormField } from "components/form/FormField";
 import dynamic from "next/dynamic";
-import { Table, useTableState } from "components/shared/Table";
+import { Table, useAsyncTable, useTableState } from "components/shared/Table";
 import { useTableDataOfType, useTableHeadersOfType } from "lib/admin/values/values";
-import { OptionsDropdown } from "components/admin/values/import/OptionsDropdown";
+import { OptionsDropdown } from "components/admin/values/import/options-dropdown";
 import { Title } from "components/shared/Title";
 import { AlertModal } from "components/modal/AlertModal";
 import { ModalIds } from "types/ModalIds";
 import { FullDate } from "components/shared/FullDate";
-import { hasValueObj, isBaseValue } from "@snailycad/utils/typeguards";
 import { valueRoutes } from "components/admin/Sidebar/routes";
 import type {
-  DeleteValueByIdData,
   DeleteValuesBulkData,
   GetValuesData,
   PutValuePositionsData,
@@ -39,28 +35,71 @@ import {
   hasTableDataChanged,
 } from "lib/admin/values/utils";
 import type { AccessorKeyColumnDef } from "@tanstack/react-table";
-import { getSelectedTableRows } from "hooks/shared/table/useTableState";
+import { getSelectedTableRows } from "hooks/shared/table/use-table-state";
+import { SearchArea } from "components/shared/search/search-area";
+import { useLoadValuesClientSide } from "hooks/useLoadValuesClientSide";
+import { toastMessage } from "lib/toastMessage";
+import Link from "next/link";
+import { BoxArrowUpRight, InfoCircle } from "react-bootstrap-icons";
 
-const ManageValueModal = dynamic(async () => {
-  return (await import("components/admin/values/ManageValueModal")).ManageValueModal;
-});
+const ManageValueModal = dynamic(
+  async () => (await import("components/admin/values/ManageValueModal")).ManageValueModal,
+  { ssr: false },
+);
 
-const ImportValuesModal = dynamic(async () => {
-  return (await import("components/admin/values/import/ImportValuesModal")).ImportValuesModal;
-});
+const AlertDeleteValueModal = dynamic(
+  async () =>
+    (await import("components/admin/values/alert-delete-value-modal")).AlertDeleteValueModal,
+  { ssr: false },
+);
+
+const ImportValuesModal = dynamic(
+  async () =>
+    (await import("components/admin/values/import/import-values-modal")).ImportValuesModal,
+  { ssr: false },
+);
 
 interface Props {
   pathValues: GetValuesData[number];
 }
 
-export default function ValuePath({ pathValues: { type, values: data } }: Props) {
-  const [values, setValues] = React.useState<AnyValue[]>(data);
+const pathsRecord: Partial<Record<ValueType, ValueType[]>> = {
+  [ValueType.DEPARTMENT]: [ValueType.OFFICER_RANK],
+  [ValueType.DIVISION]: [ValueType.DEPARTMENT],
+  [ValueType.QUALIFICATION]: [ValueType.DEPARTMENT],
+  [ValueType.CODES_10]: [ValueType.DEPARTMENT],
+  [ValueType.OFFICER_RANK]: [ValueType.DEPARTMENT],
+  [ValueType.EMERGENCY_VEHICLE]: [ValueType.DEPARTMENT, ValueType.DIVISION],
+  [ValueType.VEHICLE]: [ValueType.VEHICLE_TRIM_LEVEL],
+};
+
+export default function ValuePath({ pathValues: { totalCount, type, values: data } }: Props) {
   const router = useRouter();
-  const path = (router.query.path as string).toUpperCase().replace("-", "_");
+  const path = (router.query.path as string).toUpperCase().replace(/-/g, "_");
   const routeData = valueRoutes.find((v) => v.type === type);
 
+  useLoadValuesClientSide({
+    // @ts-expect-error - this is fine
+    valueTypes: pathsRecord[type] ? pathsRecord[type] : [],
+  });
+
   const [search, setSearch] = React.useState("");
-  const [tempValue, valueState] = useTemporaryItem(values);
+  const asyncTable = useAsyncTable({
+    search,
+    fetchOptions: {
+      onResponse(json: GetValuesData) {
+        const [forType] = json;
+        if (!forType) return { data, totalCount };
+        return { data: forType.values, totalCount: forType.totalCount };
+      },
+      path: `/admin/values/${type.toLowerCase()}?includeAll=false&cache=false`,
+    },
+    initialData: data,
+    totalCount,
+  });
+
+  const [allSelected, setAllSelected] = React.useState(false);
+  const [tempValue, valueState] = useTemporaryItem(asyncTable.items);
   const { state, execute } = useFetch();
 
   const { isOpen, openModal, closeModal } = useModal();
@@ -71,38 +110,34 @@ export default function ValuePath({ pathValues: { type, values: data } }: Props)
   const extraTableHeaders = useTableHeadersOfType(type);
   const extraTableData = useTableDataOfType(type);
   const tableState = useTableState({
+    pagination: asyncTable.pagination,
     dragDrop: { onListChange: setList },
-    search: { value: search, setValue: setSearch },
   });
 
   const tableHeaders = React.useMemo(() => {
     return [
+      { header: "ID", accessorKey: "id" },
       { header: "Value", accessorKey: "value" },
       ...extraTableHeaders,
       { header: t("isDisabled"), accessorKey: "isDisabled" },
       { header: common("createdAt"), accessorKey: "createdAt" },
       { header: common("actions"), accessorKey: "actions" },
-    ] as AccessorKeyColumnDef<{ id: string }>[];
+    ] as AccessorKeyColumnDef<{ id: string }, "id">[];
   }, [extraTableHeaders, t, common]);
 
   async function setList(list: AnyValue[]) {
-    if (!hasTableDataChanged(values, list)) return;
+    if (!hasTableDataChanged(asyncTable.items, list)) return;
 
-    setValues((p) =>
-      list.map((v, idx) => {
-        const prev = p.find((a) => a.id === v.id);
+    for (const [index, value] of list.entries()) {
+      if ("position" in value) {
+        value.position = index;
+      } else {
+        value.value.position = index;
+      }
 
-        if (prev) {
-          if ("position" in prev) {
-            prev.position = idx;
-          } else {
-            prev.value.position = idx;
-          }
-        }
-
-        return v;
-      }),
-    );
+      asyncTable.move(value.id, index);
+      asyncTable.update(value.id, value);
+    }
 
     await execute<PutValuePositionsData>({
       path: `/admin/values/${type.toLowerCase()}/positions`,
@@ -125,23 +160,10 @@ export default function ValuePath({ pathValues: { type, values: data } }: Props)
     openModal(ModalIds.ManageValue);
   }
 
-  async function handleDelete() {
-    if (!tempValue) return;
-
-    const { json } = await execute<DeleteValueByIdData>({
-      path: `/admin/values/${type.toLowerCase()}/${tempValue.id}`,
-      method: "DELETE",
-    });
-
-    if (json) {
-      setValues((p) => p.filter((v) => v.id !== tempValue.id));
-      valueState.setTempId(null);
-      closeModal(ModalIds.AlertDeleteValue);
-    }
-  }
-
   async function handleDeleteSelected() {
-    const selectedRows = getSelectedTableRows(data, tableState.rowSelection);
+    const selectedRows = allSelected
+      ? { all: true }
+      : getSelectedTableRows(data, tableState.rowSelection);
 
     const { json } = await execute<DeleteValuesBulkData>({
       path: `/admin/values/${type.toLowerCase()}/bulk-delete`,
@@ -149,16 +171,27 @@ export default function ValuePath({ pathValues: { type, values: data } }: Props)
       data: selectedRows,
     });
 
-    if (json && typeof json === "boolean") {
-      setValues((p) => p.filter((v) => !selectedRows.includes(v.id)));
+    if (json) {
+      if (Array.isArray(selectedRows)) {
+        asyncTable.remove(...selectedRows);
+      } else {
+        asyncTable.setItems([]);
+      }
+
+      setAllSelected(false);
       tableState.setRowSelection({});
       closeModal(ModalIds.AlertDeleteSelectedValues);
+
+      toastMessage({
+        title: "Delete Values",
+        icon: "info",
+        message: t("deletedSelectedValues", {
+          failed: json.failed,
+          deleted: json.success,
+        }),
+      });
     }
   }
-
-  React.useEffect(() => {
-    setValues(data);
-  }, [data]);
 
   React.useEffect(() => {
     // reset form values
@@ -177,6 +210,8 @@ export default function ValuePath({ pathValues: { type, values: data } }: Props)
     );
   }
 
+  const documentationUrl = createValueDocumentationURL(type);
+
   return (
     <AdminLayout
       permissions={{
@@ -188,26 +223,59 @@ export default function ValuePath({ pathValues: { type, values: data } }: Props)
         <div>
           <Title className="!mb-0">{typeT("MANAGE")}</Title>
           <h2 className="text-lg font-semibold">
-            {t("totalItems")}: <span className="font-normal">{values.length}</span>
+            {t("totalItems")}:{" "}
+            <span className="font-normal">{asyncTable.pagination.totalDataCount}</span>
           </h2>
+          <Link
+            className="mt-1 underline flex items-center gap-1 text-blue-500"
+            target="_blank"
+            href={documentationUrl}
+          >
+            {common("learnMore")}
+            <BoxArrowUpRight className="inline-block" />
+          </Link>
         </div>
 
         <div className="flex gap-2">
           {isEmpty(tableState.rowSelection) ? null : (
-            <Button onClick={() => openModal(ModalIds.AlertDeleteSelectedValues)} variant="danger">
+            <Button onPress={() => openModal(ModalIds.AlertDeleteSelectedValues)} variant="danger">
               {t("deleteSelectedValues")}
             </Button>
           )}
-          <Button onClick={() => openModal(ModalIds.ManageValue)}>{typeT("ADD")}</Button>
-          <OptionsDropdown type={type} values={values} />
+          <Button onPress={() => openModal(ModalIds.ManageValue)}>{typeT("ADD")}</Button>
+          <OptionsDropdown type={type} valueLength={asyncTable.items.length} />
         </div>
       </header>
 
-      <FormField label={common("search")} className="my-2">
-        <Input onChange={(e) => setSearch(e.target.value)} value={search} />
-      </FormField>
+      <SearchArea search={{ search, setSearch }} asyncTable={asyncTable} totalCount={totalCount} />
 
-      {values.length <= 0 ? (
+      {!allSelected &&
+      getObjLength(tableState.rowSelection) === tableState.pagination.pageSize &&
+      totalCount > tableState.pagination.pageSize ? (
+        <div className="flex items-center gap-2 px-4 py-2 card my-3 !bg-slate-900 !border-slate-500 border-2">
+          <InfoCircle />
+          <span>
+            {getObjLength(tableState.rowSelection)} items selected.{" "}
+            <Button
+              onClick={() => setAllSelected(true)}
+              variant="transparent"
+              className="underline"
+              size="xs"
+            >
+              Select all {totalCount}?
+            </Button>
+          </span>
+        </div>
+      ) : null}
+
+      {allSelected ? (
+        <div className="flex items-center gap-2 px-4 py-2 card my-3 !bg-slate-900 !border-slate-500 border-2">
+          <InfoCircle />
+          <span>{totalCount} items selected. </span>
+        </div>
+      ) : null}
+
+      {asyncTable.items.length <= 0 ? (
         <p className="mt-5">There are no values yet for this type.</p>
       ) : (
         <Table
@@ -216,7 +284,7 @@ export default function ValuePath({ pathValues: { type, values: data } }: Props)
           containerProps={{
             style: { overflowY: "auto", maxHeight: "75vh" },
           }}
-          data={values.map((value) => ({
+          data={asyncTable.items.map((value) => ({
             id: value.id,
             rowProps: { value },
             value: getValueStrFromValue(value),
@@ -225,7 +293,7 @@ export default function ValuePath({ pathValues: { type, values: data } }: Props)
             createdAt: <FullDate>{getCreatedAtFromValue(value)}</FullDate>,
             actions: (
               <>
-                <Button size="xs" onClick={() => handleEditClick(value)} variant="success">
+                <Button size="xs" onPress={() => handleEditClick(value)} variant="success">
                   {common("edit")}
                 </Button>
 
@@ -234,7 +302,7 @@ export default function ValuePath({ pathValues: { type, values: data } }: Props)
                     <Tooltip.Trigger asChild>
                       <Button
                         size="xs"
-                        onClick={() => handleDeleteClick(value)}
+                        onPress={() => handleDeleteClick(value)}
                         variant="danger"
                         className="ml-2"
                         disabled={isValueInUse(value)}
@@ -265,33 +333,16 @@ export default function ValuePath({ pathValues: { type, values: data } }: Props)
         />
       )}
 
-      <AlertModal
-        id={ModalIds.AlertDeleteValue}
-        description={t.rich("alert_deleteValue", {
-          value:
-            tempValue &&
-            (isBaseValue(tempValue)
-              ? tempValue.value
-              : hasValueObj(tempValue)
-              ? tempValue.value.value
-              : tempValue.title),
-          span: (children) => {
-            return <span className="font-semibold">{children}</span>;
-          },
-        })}
-        onDeleteClick={handleDelete}
-        title={typeT("DELETE")}
-        state={state}
-        onClose={() => {
-          // wait for animation to play out
-          setTimeout(() => valueState.setTempId(null), 100);
-        }}
+      <AlertDeleteValueModal
+        type={type}
+        valueState={[tempValue, valueState]}
+        asyncTable={asyncTable}
       />
 
       <AlertModal
         id={ModalIds.AlertDeleteSelectedValues}
-        description={t.rich("alert_deleteSelectedValues", {
-          length: getObjLength(tableState.rowSelection),
+        description={t("alert_deleteSelectedValues", {
+          length: allSelected ? totalCount : getObjLength(tableState.rowSelection),
         })}
         onDeleteClick={handleDeleteSelected}
         title={typeT("DELETE")}
@@ -300,45 +351,37 @@ export default function ValuePath({ pathValues: { type, values: data } }: Props)
 
       <ManageValueModal
         onCreate={(value) => {
-          setValues((p) => [value, ...p]);
+          asyncTable.append(value);
         }}
-        onUpdate={(old, newV) => {
-          setValues((p) => {
-            const idx = p.indexOf(old);
-            p[idx] = newV;
-
-            return p;
-          });
+        onUpdate={(previousValue, newValue) => {
+          asyncTable.update(previousValue.id, newValue);
         }}
         value={tempValue}
         type={type}
       />
-      <ImportValuesModal onImport={(data) => setValues((p) => [...data, ...p])} type={type} />
+      <ImportValuesModal onImport={(data) => asyncTable.append(...data)} type={type} />
     </AdminLayout>
   );
 }
 
 export const getServerSideProps: GetServerSideProps = async ({ locale, req, query }) => {
-  const path = (query.path as string).replace("-", "_") as Lowercase<ValueType>;
-
-  const pathsRecord: Partial<Record<Lowercase<ValueType>, string>> = {
-    department: "officer_rank",
-    division: "department",
-    qualification: "department",
-    codes_10: "department",
-    officer_rank: "department",
-  };
-
-  const paths = pathsRecord[path];
-  const pathsStr = paths ? `?paths=${paths}` : "";
+  const path = (query.path as string).replace(/-/g, "_") as Lowercase<ValueType>;
 
   const user = await getSessionUser(req);
-  const [values] = await requestAll(req, [[`/admin/values/${path}${pathsStr}`, []]]);
+  const [pathValues] = await requestAll(req, [
+    [
+      `/admin/values/${path}?includeAll=false&cache=false`,
+      {
+        totalCount: 0,
+        values: [],
+        type: path.toUpperCase(),
+      },
+    ],
+  ]);
 
   return {
     props: {
-      values,
-      pathValues: values?.[0] ?? { type: path, values: [] },
+      pathValues: pathValues?.[0] ?? { type: path, values: [] },
       session: user,
       messages: {
         ...(await getTranslations(["admin", "values", "common"], user?.locale ?? locale)),
@@ -346,3 +389,13 @@ export const getServerSideProps: GetServerSideProps = async ({ locale, req, quer
     },
   };
 };
+
+export function createValueDocumentationURL(type: ValueType) {
+  const transformedPaths: Partial<Record<ValueType, string>> = {
+    [ValueType.DRIVERSLICENSE_CATEGORY]: "license-category",
+    [ValueType.BLOOD_GROUP]: "bloodgroup",
+  };
+
+  const path = transformedPaths[type] ?? type.replace(/_/g, "-").toLowerCase();
+  return `https://docs.snailycad.org/docs/features/general/values/${path}`;
+}

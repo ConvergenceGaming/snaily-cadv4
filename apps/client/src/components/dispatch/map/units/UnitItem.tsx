@@ -1,10 +1,10 @@
-import * as React from "react";
+import type * as React from "react";
 import * as Accordion from "@radix-ui/react-accordion";
 import { makeUnitName } from "lib/utils";
 import { useGenerateCallsign } from "hooks/useGenerateCallsign";
 import { CaretDownFill } from "react-bootstrap-icons";
 import type { MapPlayer } from "types/Map";
-import { Button } from "components/Button";
+import { Button } from "@snailycad/ui";
 import { useTranslations } from "next-intl";
 import { useModal } from "state/modalState";
 import { ModalIds } from "types/ModalIds";
@@ -59,17 +59,17 @@ export function UnitItem({ setTempUnit, player }: CallItemProps) {
         </Accordion.Trigger>
         <Accordion.Content className="pt-2 text-base text-neutral-800 dark:text-white">
           <div className="map-column">
-            <Infofield label={t("status")}>{player.unit?.status?.value.value}</Infofield>
+            <Infofield label={t("status")}>{unit.status?.value?.value}</Infofield>
             <Infofield label={common("user")}>{player.username}</Infofield>
             {RADIO_CHANNEL_MANAGEMENT ? (
               <Infofield className="flex !flex-row gap-2 mt-1" label={t("radioChannel")}>
-                <UnitRadioChannelModal unit={player.unit!} />
+                <UnitRadioChannelModal unit={unit} />
               </Infofield>
             ) : null}
 
             <div className="flex flex-row gap-2 mt-5">
-              <Button onClick={() => handleStatusClick()}>{common("manage")}</Button>
-              <Button onClick={() => handleShowOnMap()}>Toggle unit on map</Button>
+              <Button onPress={() => handleStatusClick()}>{common("manage")}</Button>
+              <Button onPress={() => handleShowOnMap()}>Toggle unit on map</Button>
             </div>
           </div>
         </Accordion.Content>

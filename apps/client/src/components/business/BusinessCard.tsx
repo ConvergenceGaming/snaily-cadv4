@@ -1,4 +1,4 @@
-import { Button } from "components/Button";
+import { Button } from "@snailycad/ui";
 import { useAuth } from "context/AuthContext";
 import Link from "next/link";
 import { WhitelistStatus } from "@snailycad/types";
@@ -29,7 +29,7 @@ export function BusinessCard({ employee }: Props) {
     : t("businessWhitelistedCAD");
 
   return (
-    <li className="flex items-baseline justify-between p-4 rounded-md card shadow-sm">
+    <li className="flex items-baseline justify-between p-4 rounded-md card shadow-sm dark:shadow-md border border-gray-400 dark:border-quinary dark:bg-tertiary">
       <div>
         <p>
           <span className="font-semibold">{t("business")}: </span> {employee.business.name}
@@ -46,11 +46,9 @@ export function BusinessCard({ employee }: Props) {
       </div>
 
       <Link href={isDisabled ? "#" : `/business/${employee.businessId}/${employee.id}`}>
-        <a href={isDisabled ? "#" : `/business/${employee.businessId}/${employee.id}`}>
-          <Button title={disabledMessage} disabled={isDisabled}>
-            {common("view")}
-          </Button>
-        </a>
+        <Button title={disabledMessage} disabled={isDisabled}>
+          {common("view")}
+        </Button>
       </Link>
     </li>
   );

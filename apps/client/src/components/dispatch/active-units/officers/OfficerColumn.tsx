@@ -7,7 +7,7 @@ import useFetch from "lib/useFetch";
 import { useUnitStatusChange } from "hooks/shared/useUnitsStatusChange";
 import { isUnitCombined, isUnitOfficer } from "@snailycad/utils";
 import { useActiveOfficers } from "hooks/realtime/useActiveOfficers";
-import { ActiveOfficer, useLeoState } from "state/leoState";
+import { ActiveOfficer, useLeoState } from "state/leo-state";
 import { ArrowRight } from "react-bootstrap-icons";
 import { useModal } from "state/modalState";
 import { ModalIds } from "types/ModalIds";
@@ -15,13 +15,15 @@ import { useRouter } from "next/router";
 import { useTranslations } from "next-intl";
 import { useGenerateCallsign } from "hooks/useGenerateCallsign";
 import { makeUnitName } from "lib/utils";
-import { Draggable } from "components/shared/dnd/Draggable";
+import { Draggable } from "@snailycad/ui";
 import { DndActions } from "types/DndActions";
-import { useActiveDispatchers } from "hooks/realtime/useActiveDispatchers";
+import { useActiveDispatchers } from "hooks/realtime/use-active-dispatchers";
 import { classNames } from "lib/classNames";
 import { ActiveUnitsQualificationsCard } from "components/leo/qualifications/ActiveUnitsQualificationsCard";
 import type { PostDispatchStatusUnmergeUnitById } from "@snailycad/types/api";
-import Image from "next/future/image";
+import { useDispatchState } from "state/dispatch/dispatch-state";
+import { generateContrastColor } from "lib/table/get-contrasting-text-color";
+import { ImageWrapper } from "components/shared/image-wrapper";
 
 interface Props {
   officer: Officer | CombinedLeoUnit;
@@ -34,12 +36,13 @@ export function OfficerColumn({ officer, nameAndCallsign, setTempUnit }: Props) 
 
   const { openModal } = useModal();
   const { setStatus } = useUnitStatusChange({ units: activeOfficers, setUnits: setActiveOfficers });
-  const { activeOfficer } = useLeoState();
+  const activeOfficer = useLeoState((state) => state.activeOfficer);
   const { makeImageUrl } = useImageUrl();
   const { codes10 } = useValues();
   const { execute } = useFetch();
   const { generateCallsign } = useGenerateCallsign();
   const { hasActiveDispatchers } = useActiveDispatchers();
+  const setDraggingUnit = useDispatchState((state) => state.setDraggingUnit);
 
   const t = useTranslations("Leo");
 
@@ -92,6 +95,9 @@ export function OfficerColumn({ officer, nameAndCallsign, setTempUnit }: Props) 
     }
   }
 
+  const unitStatusColor = officer.status?.color ?? undefined;
+  const textColor = unitStatusColor && generateContrastColor(unitStatusColor);
+
   return (
     <ContextMenu
       canBeOpened={isEligiblePage ? canBeOpened ?? false : false}
@@ -107,7 +113,12 @@ export function OfficerColumn({ officer, nameAndCallsign, setTempUnit }: Props) 
       ]}
     >
       <span>
-        <Draggable canDrag={canDrag} type={DndActions.MoveUnitTo911CallOrIncident} item={officer}>
+        <Draggable
+          onDrag={(isDragging) => setDraggingUnit(isDragging ? "move" : null)}
+          canDrag={canDrag}
+          type={DndActions.MoveUnitTo911CallOrIncident}
+          item={officer}
+        >
           {({ isDragging }) => (
             <ActiveUnitsQualificationsCard canBeOpened={!isDragging} unit={officer}>
               <span
@@ -116,7 +127,7 @@ export function OfficerColumn({ officer, nameAndCallsign, setTempUnit }: Props) 
                 style={{ minWidth: nameAndCallsign.length * 9 }} // todo: still necessary?
               >
                 {isUnitOfficer(officer) && officer.imageId ? (
-                  <Image
+                  <ImageWrapper
                     className="rounded-md w-[30px] h-[30px] object-cover mr-2 inline-block"
                     draggable={false}
                     src={makeImageUrl("units", officer.imageId)!}
@@ -128,7 +139,16 @@ export function OfficerColumn({ officer, nameAndCallsign, setTempUnit }: Props) 
                 ) : null}
                 {isUnitCombined(officer) ? (
                   <div className="flex items-center">
-                    {generateCallsign(officer, "pairedUnitTemplate")}
+                    <span
+                      style={{
+                        backgroundColor: unitStatusColor,
+                        color: textColor,
+                      }}
+                      className="px-1.5 py-0.5 rounded-md dark:bg-secondary"
+                    >
+                      {generateCallsign(officer, "pairedUnitTemplate")}
+                    </span>
+
                     <span className="mx-4">
                       <ArrowRight />
                     </span>
@@ -139,7 +159,15 @@ export function OfficerColumn({ officer, nameAndCallsign, setTempUnit }: Props) 
                     ))}
                   </div>
                 ) : (
-                  nameAndCallsign
+                  <span
+                    style={{
+                      backgroundColor: unitStatusColor,
+                      color: textColor,
+                    }}
+                    className="px-1.5 py-0.5 rounded-md dark:bg-secondary"
+                  >
+                    {nameAndCallsign}
+                  </span>
                 )}
               </span>
             </ActiveUnitsQualificationsCard>

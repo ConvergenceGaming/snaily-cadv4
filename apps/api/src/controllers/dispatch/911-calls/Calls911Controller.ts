@@ -8,12 +8,12 @@ import {
 } from "@snailycad/schemas";
 import { HeaderParams, BodyParams, Context, PathParams, QueryParams } from "@tsed/platform-params";
 import { BadRequest, NotFound } from "@tsed/exceptions";
-import { prisma } from "lib/prisma";
-import { Socket } from "services/SocketService";
-import { UseBeforeEach } from "@tsed/platform-middlewares";
-import { IsAuth } from "middlewares/IsAuth";
+import { prisma } from "lib/data/prisma";
+import { Socket } from "services/socket-service";
+import { UseAfter, UseBeforeEach } from "@tsed/platform-middlewares";
+import { IsAuth } from "middlewares/is-auth";
 import { _leoProperties } from "lib/leo/activeOfficer";
-import { validateSchema } from "lib/validateSchema";
+import { validateSchema } from "lib/data/validate-schema";
 import {
   type cad,
   User,
@@ -22,14 +22,15 @@ import {
   DiscordWebhookType,
   ShouldDoType,
   Prisma,
+  WhitelistStatus,
 } from "@prisma/client";
-import { sendDiscordWebhook } from "lib/discord/webhooks";
+import { sendDiscordWebhook, sendRawWebhook } from "lib/discord/webhooks";
 import type { APIEmbed } from "discord-api-types/v10";
-import { manyToManyHelper } from "utils/manyToMany";
-import { Permissions, UsePermissions } from "middlewares/UsePermissions";
+import { manyToManyHelper } from "lib/data/many-to-many";
+import { Permissions, UsePermissions } from "middlewares/use-permissions";
 import { officerOrDeputyToUnit } from "lib/leo/officerOrDeputyToUnit";
 import { findUnit } from "lib/leo/findUnit";
-import { getInactivityFilter, getPrismaNameActiveCallIncident } from "lib/leo/utils";
+import { getInactivityFilter } from "lib/leo/utils";
 import { assignUnitsToCall } from "lib/calls/assignUnitsToCall";
 import { linkOrUnlinkCallDepartmentsAndDivisions } from "lib/calls/linkOrUnlinkCallDepartmentsAndDivisions";
 import { hasPermission } from "@snailycad/permissions";
@@ -39,6 +40,13 @@ import {
   incidentInclude,
 } from "controllers/leo/incidents/IncidentController";
 import type { z } from "zod";
+import { getNextActiveCallId } from "lib/calls/getNextActiveCall";
+import { Feature, IsFeatureEnabled } from "middlewares/is-enabled";
+import { getTranslator } from "utils/get-translator";
+import { HandleInactivity } from "middlewares/handle-inactivity";
+import { handleEndCall } from "lib/calls/handle-end-call";
+import { AuditLogActionType, createAuditLogEntry } from "@snailycad/audit-logger/server";
+import { isFeatureEnabled } from "lib/cad";
 
 export const callInclude = {
   position: true,
@@ -55,6 +63,7 @@ export const callInclude = {
 @Controller("/911-calls")
 @UseBeforeEach(IsAuth)
 @ContentType("application/json")
+@IsFeatureEnabled({ feature: Feature.CALLS_911 })
 export class Calls911Controller {
   private socket: Socket;
   constructor(socket: Socket) {
@@ -63,9 +72,10 @@ export class Calls911Controller {
 
   @Get("/")
   @Description("Get all 911 calls")
+  @UseAfter(HandleInactivity)
   async get911Calls(
     @Context("cad") cad: { miscCadSettings: MiscCadSettings | null },
-    @QueryParams("includeEnded", Boolean) includeEnded: boolean,
+    @QueryParams("includeEnded", Boolean) includeEnded?: boolean,
     @QueryParams("skip", Number) skip = 0,
     @QueryParams("query", String) query = "",
     @QueryParams("includeAll", Boolean) includeAll = false,
@@ -75,12 +85,11 @@ export class Calls911Controller {
     @QueryParams("assignedUnit", String) assignedUnit?: string,
   ): Promise<APITypes.Get911CallsData> {
     const inactivityFilter = getInactivityFilter(cad, "call911InactivityTimeout");
-    if (inactivityFilter) {
-      this.endInactiveCalls(inactivityFilter.updatedAt);
-    }
+    const inactivityFilterWhere = includeEnded ? {} : inactivityFilter?.filter;
+
     const where: Prisma.Call911WhereInput = {
+      ...(inactivityFilterWhere ?? {}),
       ended: includeEnded ? undefined : false,
-      ...(inactivityFilter?.filter ?? {}),
       OR: query
         ? [
             { descriptionData: { array_contains: query } },
@@ -112,9 +121,19 @@ export class Calls911Controller {
       where.OR = [...Array.from(where.OR), { divisions: { some: { id: division } } }];
     }
     if (assignedUnit && where.OR) {
-      // @ts-expect-error this can be ignored.
-      where.OR = [...Array.from(where.OR), { assignedUnits: { some: { id: assignedUnit } } }];
+      where.OR = [
+        ...Array.from(where.OR as any[]),
+        { assignedUnits: { some: { id: assignedUnit } } },
+        { assignedUnits: { some: { officerId: assignedUnit } } },
+        { assignedUnits: { some: { emsFdDeputyId: assignedUnit } } },
+        { assignedUnits: { some: { combinedLeoId: assignedUnit } } },
+      ];
     }
+
+    // todo
+    // isFromServer
+    // if the request is from the server, we want to only return information that is required to render the UI.
+    // once the UI is rendered, we can then fetch the rest of the data.
 
     const [totalCount, calls] = await Promise.all([
       prisma.call911.count({ where }),
@@ -131,16 +150,20 @@ export class Calls911Controller {
   }
 
   @Get("/:id")
-  @Description("Get an incident by its id")
+  @Description("Get a call by its id")
   @UsePermissions({
-    permissions: [Permissions.ViewIncidents, Permissions.ManageIncidents],
+    permissions: [Permissions.Dispatch],
     fallback: (u) => u.isDispatch || u.isLeo,
   })
-  async getIncidentById(@PathParams("id") id: string): Promise<APITypes.Get911CallByIdData> {
+  async getCallById(@PathParams("id") id: string): Promise<APITypes.Get911CallByIdData> {
     const call = await prisma.call911.findUnique({
       where: { id },
       include: callInclude,
     });
+
+    if (!call) {
+      throw new NotFound("callNotFound");
+    }
 
     return officerOrDeputyToUnit(call);
   }
@@ -149,8 +172,9 @@ export class Calls911Controller {
   async create911Call(
     @BodyParams() body: unknown,
     @Context("user") user: User,
-    @Context("cad") cad: cad & { miscCadSettings: MiscCadSettings },
-    @HeaderParams("is-from-dispatch") isFromDispatchHeader: string | undefined,
+    @Context("cad")
+    cad: cad & { features?: Record<Feature, boolean>; miscCadSettings: MiscCadSettings },
+    @HeaderParams("is-from-dispatch") isFromDispatchHeader?: string | undefined,
   ): Promise<APITypes.Post911CallsData> {
     const data = validateSchema(CALL_911_SCHEMA, body);
     const hasDispatchPermissions = hasPermission({
@@ -162,17 +186,30 @@ export class Calls911Controller {
     const isFromDispatch = isFromDispatchHeader === "true" && hasDispatchPermissions;
     const maxAssignmentsToCalls = cad.miscCadSettings.maxAssignmentsToCalls ?? Infinity;
 
+    const isCallApprovalEnabled = isFeatureEnabled({
+      defaultReturn: false,
+      feature: Feature.CALL_911_APPROVAL,
+      features: cad.features,
+    });
+    const activeDispatchers = await prisma.activeDispatchers.count();
+    const hasActiveDispatchers = activeDispatchers > 0;
+    const shouldCallBePending = isCallApprovalEnabled && hasActiveDispatchers && !isFromDispatch;
+
+    const callStatus = shouldCallBePending ? WhitelistStatus.PENDING : WhitelistStatus.ACCEPTED;
+
     const call = await prisma.call911.create({
       data: {
-        location: data.location,
-        postal: data.postal,
-        description: data.description,
+        location: data.location ?? undefined,
+        postal: data.postal ?? undefined,
+        description: data.description ?? undefined,
         descriptionData: data.descriptionData ?? undefined,
-        name: data.name,
+        name: data.name ?? undefined,
         userId: user.id || undefined,
         situationCodeId: data.situationCode ?? null,
         viaDispatch: isFromDispatch,
         typeId: data.type,
+        extraFields: data.extraFields || undefined,
+        status: callStatus,
       },
       include: callInclude,
     });
@@ -211,8 +248,9 @@ export class Calls911Controller {
     const normalizedCall = officerOrDeputyToUnit(updated);
 
     try {
-      const data = this.createWebhookData(normalizedCall);
-      await sendDiscordWebhook(DiscordWebhookType.CALL_911, data);
+      const data = await this.createWebhookData(normalizedCall, user.locale);
+      await sendDiscordWebhook({ type: DiscordWebhookType.CALL_911, data });
+      await sendRawWebhook({ type: DiscordWebhookType.CALL_911, data: normalizedCall });
     } catch (error) {
       console.error("Could not send Discord webhook.", error);
     }
@@ -232,7 +270,7 @@ export class Calls911Controller {
     @Context("user") user: User,
     @Context("cad") cad: cad & { miscCadSettings: MiscCadSettings },
   ): Promise<APITypes.Put911CallByIdData> {
-    const data = validateSchema(CALL_911_SCHEMA, body);
+    const data = validateSchema(CALL_911_SCHEMA.partial(), body);
     const maxAssignmentsToCalls = cad.miscCadSettings.maxAssignmentsToCalls ?? Infinity;
 
     const call = await prisma.call911.findUnique({
@@ -275,7 +313,7 @@ export class Calls911Controller {
       },
       data: {
         location: data.location,
-        postal: String(data.postal),
+        postal: data.postal,
         description: data.description,
         name: data.name,
         userId: user.id,
@@ -283,6 +321,8 @@ export class Calls911Controller {
         descriptionData: data.descriptionData ?? undefined,
         situationCodeId: data.situationCode === null ? null : data.situationCode,
         typeId: data.type,
+        extraFields: data.extraFields || undefined,
+        status: (data.status as WhitelistStatus | null) || undefined,
       },
     });
 
@@ -332,7 +372,10 @@ export class Calls911Controller {
     });
 
     const normalizedCall = officerOrDeputyToUnit(updated);
-    this.socket.emitUpdate911Call(normalizedCall);
+    this.socket.emitUpdate911Call({
+      ...normalizedCall,
+      notifyAssignedUnits: data.notifyAssignedUnits,
+    });
 
     return normalizedCall;
   }
@@ -342,7 +385,10 @@ export class Calls911Controller {
     fallback: (u) => u.isLeo,
     permissions: [Permissions.ManageCallHistory],
   })
-  async purgeCalls(@BodyParams("ids") ids: string[]): Promise<APITypes.DeletePurge911CallsData> {
+  async purgeCalls(
+    @BodyParams("ids") ids: string[],
+    @Context("sessionUserId") sessionUserId: string,
+  ): Promise<APITypes.DeletePurge911CallsData> {
     if (!Array.isArray(ids)) return false;
 
     await Promise.all(
@@ -354,6 +400,13 @@ export class Calls911Controller {
         this.socket.emit911CallDelete(call);
       }),
     );
+
+    await createAuditLogEntry({
+      translationKey: "calls911Purged",
+      action: { type: AuditLogActionType.Calls911Purge, new: ids },
+      executorId: sessionUserId,
+      prisma,
+    });
 
     return true;
   }
@@ -373,28 +426,7 @@ export class Calls911Controller {
       throw new NotFound("callNotFound");
     }
 
-    const unitPromises = call.assignedUnits.map(async (unit) => {
-      const { prismaName, unitId } = getPrismaNameActiveCallIncident({ unit });
-      if (!prismaName) return;
-
-      // @ts-expect-error method has the same properties
-      return prisma[prismaName].update({
-        where: { id: unitId },
-        data: { activeCallId: null },
-      });
-    });
-
-    await Promise.all([
-      ...unitPromises,
-      prisma.assignedUnit.deleteMany({
-        where: { call911Id: call.id },
-      }),
-      prisma.call911.update({
-        where: { id: call.id },
-        data: { ended: true },
-      }),
-    ]);
-
+    await handleEndCall({ call, socket: this.socket });
     await Promise.all([
       this.socket.emit911CallDelete(call),
       this.socket.emitUpdateOfficerStatus(),
@@ -454,6 +486,7 @@ export class Calls911Controller {
     @PathParams("type") callType: "assign" | "unassign",
     @PathParams("callId") callId: string,
     @BodyParams("unit") rawUnitId: string | null,
+    @QueryParams("force", Boolean) force = false,
   ): Promise<APITypes.Post911CallAssignUnAssign> {
     if (!rawUnitId) {
       throw new BadRequest("unitIsRequired");
@@ -473,7 +506,8 @@ export class Calls911Controller {
     }
 
     const types = {
-      combined: "combinedLeoId",
+      "combined-leo": "combinedLeoId",
+      "combined-ems-fd": "combinedEmsFdId",
       leo: "officerId",
       "ems-fd": "emsFdDeputyId",
     };
@@ -509,7 +543,8 @@ export class Calls911Controller {
     const prismaNames = {
       leo: "officer",
       "ems-fd": "emsFdDeputy",
-      combined: "combinedLeoUnit",
+      "combined-leo": "combinedLeoUnit",
+      "combined-ems-fd": "combinedEmsFdUnit",
     };
 
     const assignedToStatus = await prisma.statusValue.findFirst({
@@ -521,7 +556,15 @@ export class Calls911Controller {
     // @ts-expect-error they have the same properties for updating
     await prisma[prismaNames[type]].update({
       where: { id: unit.id },
-      data: { activeCallId: callType === "assign" ? callId : null, statusId: assignedToStatus?.id },
+      data: {
+        activeCallId: await getNextActiveCallId({
+          callId: call.id,
+          type: callType,
+          unit,
+          force,
+        }),
+        statusId: assignedToStatus?.id,
+      },
     });
 
     await Promise.all([
@@ -595,38 +638,26 @@ export class Calls911Controller {
     return normalizedCall;
   }
 
-  private async endInactiveCalls(updatedAt: Date) {
-    await prisma.call911.updateMany({
-      where: { updatedAt: { not: { gte: updatedAt } } },
-      data: {
-        ended: true,
-      },
-    });
-  }
-
   // creates the webhook structure that will get sent to Discord.
-  private createWebhookData(call: Call911): { embeds: APIEmbed[] } {
-    const caller = call.name;
+  private async createWebhookData(
+    call: Call911,
+    locale?: string | null,
+  ): Promise<{ embeds: APIEmbed[] }> {
+    const t = await getTranslator({ type: "webhooks", locale, namespace: "Calls" });
+
+    const caller = call.name || t("unknown");
     const location = `${call.location} ${call.postal ? call.postal : ""}`;
-    const description = call.description || "Could not render description via Discord";
+    const description = call.description || t("couldNotRenderDescription");
 
     return {
       embeds: [
         {
-          title: "911 Call Created",
+          title: t("callCreated"),
           description,
-          footer: { text: "View more information on the CAD" },
+          footer: { text: t("viewMoreInfo") },
           fields: [
-            {
-              name: "Location",
-              value: location,
-              inline: true,
-            },
-            {
-              name: "Caller",
-              value: caller,
-              inline: true,
-            },
+            { name: t("location"), value: location, inline: true },
+            { name: t("caller"), value: caller, inline: true },
           ],
         },
       ],

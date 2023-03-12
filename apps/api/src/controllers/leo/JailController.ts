@@ -2,14 +2,14 @@ import { Context, Controller, UseBeforeEach } from "@tsed/common";
 import { ContentType, Delete, Description, Get } from "@tsed/schema";
 import { QueryParams, BodyParams, PathParams } from "@tsed/platform-params";
 import { NotFound } from "@tsed/exceptions";
-import { prisma } from "lib/prisma";
-import { IsAuth } from "middlewares/IsAuth";
+import { prisma } from "lib/data/prisma";
+import { IsAuth } from "middlewares/is-auth";
 import { leoProperties } from "lib/leo/activeOfficer";
 import { MiscCadSettings, ReleaseType } from "@prisma/client";
-import { validateSchema } from "lib/validateSchema";
+import { validateSchema } from "lib/data/validate-schema";
 import { RELEASE_CITIZEN_SCHEMA } from "@snailycad/schemas";
-import { ExtendedBadRequest } from "src/exceptions/ExtendedBadRequest";
-import { Permissions, UsePermissions } from "middlewares/UsePermissions";
+import { ExtendedBadRequest } from "src/exceptions/extended-bad-request";
+import { Permissions, UsePermissions } from "middlewares/use-permissions";
 import { convertToJailTimeScale } from "lib/leo/utils";
 import type * as APITypes from "@snailycad/types/api";
 
@@ -36,7 +36,7 @@ const citizenInclude = {
 @Controller("/leo/jail")
 @UseBeforeEach(IsAuth)
 @ContentType("application/json")
-export class LeoController {
+export class JailController {
   @Get("/")
   @Description("Get all the citizens who are jailed")
   @UsePermissions({
@@ -47,9 +47,12 @@ export class LeoController {
     @Context("cad") cad: { miscCadSettings: MiscCadSettings },
     @QueryParams("skip", Number) skip = 0,
     @QueryParams("includeAll", Boolean) includeAll = false,
+    @QueryParams("activeOnly", Boolean) activeOnly = false,
   ): Promise<APITypes.GetJailedCitizensData> {
+    const name = activeOnly ? "AND" : "OR";
+
     const where = {
-      OR: [{ arrested: true }, { Record: { some: { release: { isNot: null } } } }],
+      [name]: [{ arrested: true }, { Record: { some: { release: { is: null } } } }],
     };
 
     const [totalCount, citizens] = await prisma.$transaction([
@@ -85,7 +88,7 @@ export class LeoController {
         });
       });
 
-      Promise.all(
+      await Promise.all(
         Object.entries(citizenIdsToUpdate).map(async ([citizenId, recordIds]) => {
           await Promise.all(
             recordIds.map(async (recordId) => {
@@ -93,6 +96,7 @@ export class LeoController {
                 recordId,
                 releasedById: "",
                 type: ReleaseType.TIME_OUT,
+                force: true,
               });
             }),
           );
@@ -100,7 +104,7 @@ export class LeoController {
       ).catch(console.error);
     }
 
-    return { totalCount, jailedCitizens: citizens };
+    return { totalCount, jailedCitizens: citizens as any };
   }
 
   @Delete("/:id")
@@ -115,12 +119,12 @@ export class LeoController {
   ): Promise<APITypes.DeleteReleaseJailedCitizenData> {
     const data = validateSchema(RELEASE_CITIZEN_SCHEMA, body);
 
-    return this.handleReleaseCitizen(id, data);
+    return this.handleReleaseCitizen(id, data) as any;
   }
 
   private async handleReleaseCitizen(
     citizenId: string,
-    data: Zod.infer<typeof RELEASE_CITIZEN_SCHEMA>,
+    data: Zod.infer<typeof RELEASE_CITIZEN_SCHEMA> & { force?: true },
   ) {
     const citizen = await prisma.citizen.findUnique({
       where: { id: citizenId },
@@ -130,7 +134,7 @@ export class LeoController {
       throw new NotFound("citizenNotFound");
     }
 
-    if (!citizen.arrested) {
+    if (!data.force && !citizen.arrested) {
       throw new ExtendedBadRequest({ releasedById: "citizenNotArrested" });
     }
 
@@ -159,7 +163,7 @@ export class LeoController {
     const updatedCitizen = await prisma.citizen.update({
       where: { id: citizen.id },
       data: {
-        arrested: true,
+        arrested: false,
         Record: {
           update: {
             where: { id: record.id },

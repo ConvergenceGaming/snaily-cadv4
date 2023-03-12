@@ -1,4 +1,4 @@
-import { DEFAULT_EDITOR_DATA } from "components/editor/Editor";
+import { DEFAULT_EDITOR_DATA } from "components/editor/editor";
 import { HoverCard } from "components/shared/HoverCard";
 import { classNames } from "lib/classNames";
 import { dataToString } from "lib/editor/dataToString";
@@ -6,7 +6,7 @@ import { useTranslations } from "next-intl";
 import type { Descendant } from "slate";
 import dynamic from "next/dynamic";
 
-const Editor = dynamic(async () => (await import("components/editor/Editor")).Editor, {
+const Editor = dynamic(async () => (await import("components/editor/editor")).Editor, {
   ssr: false,
 });
 
@@ -52,7 +52,7 @@ export function CallDescription({ data, nonCard }: Props) {
       {data.description ? (
         <p className="w-full whitespace-pre-wrap">{data.description}</p>
       ) : (
-        <Editor value={data.descriptionData ?? DEFAULT_EDITOR_DATA} isReadonly />
+        <Editor hideBorder value={data.descriptionData ?? DEFAULT_EDITOR_DATA} isReadonly />
       )}
     </HoverCard>
   );

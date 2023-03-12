@@ -1,13 +1,20 @@
-import type { SlateEditor } from "components/editor/Editor";
+import type { SlateEditor } from "components/editor/editor";
 import type { Text } from "components/editor/types";
 import { Editor, Transforms, Element as SlateElement } from "slate";
 
 const LIST_TYPES = ["numbered-list", "bulleted-list"];
 
-export function isMarkActive(editor: SlateEditor, format: keyof Omit<Text, "text">) {
-  const marks = Editor.marks(editor);
-
-  return marks ? marks[format] === true : false;
+export function isMarkActive(
+  editor: SlateEditor,
+  format: keyof Omit<Text, "text">,
+  value: unknown = true,
+) {
+  try {
+    const marks = Editor.marks(editor);
+    return marks ? marks[format] === value : false;
+  } catch {
+    return false;
+  }
 }
 
 export function toggleBlock(editor: SlateEditor, format: SlateElement["type"]) {
@@ -30,26 +37,30 @@ export function toggleBlock(editor: SlateEditor, format: SlateElement["type"]) {
   }
 }
 
-export function toggleMark(editor: SlateEditor, format: keyof Omit<Text, "text">) {
+export function toggleMark(editor: SlateEditor, format: keyof Omit<Text, "text">, value: unknown) {
   const isActive = isMarkActive(editor, format);
 
   if (isActive) {
     Editor.removeMark(editor, format);
   } else {
-    Editor.addMark(editor, format, true);
+    Editor.addMark(editor, format, value);
   }
 }
 
 export function isBlockActive(editor: SlateEditor, format: SlateElement["type"]) {
-  const { selection } = editor;
-  if (!selection) return false;
+  try {
+    const { selection } = editor;
+    if (!selection) return false;
 
-  const [match] = Array.from(
-    Editor.nodes(editor, {
-      at: Editor.unhangRange(editor, selection),
-      match: (n) => !Editor.isEditor(n) && SlateElement.isElement(n) && n.type === format,
-    }),
-  );
+    const [match] = Array.from(
+      Editor.nodes(editor, {
+        at: Editor.unhangRange(editor, selection),
+        match: (n) => !Editor.isEditor(n) && SlateElement.isElement(n) && n.type === format,
+      }),
+    );
 
-  return !!match;
+    return !!match;
+  } catch (error) {
+    return false;
+  }
 }

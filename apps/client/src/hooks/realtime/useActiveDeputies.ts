@@ -3,24 +3,33 @@ import { useListener } from "@casper124578/use-socket.io";
 import { SocketEvents } from "@snailycad/config";
 import { useAuth } from "context/AuthContext";
 import useFetch from "lib/useFetch";
-import { useDispatchState } from "state/dispatch/dispatchState";
-import { useEmsFdState } from "state/emsFdState";
-import type { EmsFdDeputy } from "@snailycad/types";
+import { useDispatchState } from "state/dispatch/dispatch-state";
+import { useEmsFdState } from "state/ems-fd-state";
+import type { CombinedEmsFdUnit, EmsFdDeputy } from "@snailycad/types";
 import type { GetEmsFdActiveDeputies } from "@snailycad/types/api";
-import { useCall911State } from "state/dispatch/call911State";
+import { useCall911State } from "state/dispatch/call-911-state";
+import { shallow } from "zustand/shallow";
+import { isUnitCombinedEmsFd } from "@snailycad/utils";
 
 export function useActiveDeputies() {
   const { user } = useAuth();
   const { activeDeputies, setActiveDeputies } = useDispatchState();
   const { state, execute } = useFetch();
-  const { setActiveDeputy } = useEmsFdState();
-  const call911State = useCall911State();
+  const setActiveDeputy = useEmsFdState((state) => state.setActiveDeputy);
+  const call911State = useCall911State(
+    (state) => ({
+      calls: state.calls,
+      setCalls: state.setCalls,
+    }),
+    shallow,
+  );
 
   const handleCallsState = React.useCallback(
     (data: EmsFdDeputy[]) => {
       const updatedCalls = [...call911State.calls].map((call) => {
         const newAssignedUnits = [...call.assignedUnits].map((assignedUnit) => {
-          const deputy = data.find((v) => v.id === assignedUnit.emsFdDeputyId);
+          const unitIds = [assignedUnit.emsFdDeputyId, assignedUnit.combinedEmsFdId];
+          const deputy = data.find((v) => unitIds.includes(v.id));
 
           if (deputy) {
             return { ...assignedUnit, unit: deputy };
@@ -40,10 +49,17 @@ export function useActiveDeputies() {
   );
 
   const handleState = React.useCallback(
-    (data: EmsFdDeputy[]) => {
+    (data: (EmsFdDeputy | CombinedEmsFdUnit)[]) => {
       setActiveDeputies(data);
 
-      const activeDeputy = data.find((v) => v.userId === user?.id);
+      const activeDeputy = data.find((v) => {
+        if (isUnitCombinedEmsFd(v)) {
+          return v.deputies.some((v) => v.userId === user?.id);
+        }
+
+        return v.userId === user?.id;
+      });
+
       if (activeDeputy) {
         setActiveDeputy(activeDeputy);
       }

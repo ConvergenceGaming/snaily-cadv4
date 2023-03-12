@@ -7,10 +7,10 @@ import {
   Context,
 } from "@tsed/common";
 import { ContentType, Post } from "@tsed/schema";
-import { prisma } from "lib/prisma";
-import { IsValidPath } from "middlewares/ValidPath";
+import { prisma } from "lib/data/prisma";
+import { IsValidPath } from "middlewares/valid-path";
 import { BadRequest } from "@tsed/exceptions";
-import { IsAuth } from "middlewares/IsAuth";
+import { IsAuth } from "middlewares/is-auth";
 
 import {
   HASH_SCHEMA_ARR,
@@ -23,6 +23,8 @@ import {
   PENAL_CODE_ARR,
   QUALIFICATION_ARR,
   CALL_TYPE_ARR,
+  ADDRESS_SCHEMA_ARR,
+  EMERGENCY_VEHICLE_ARR,
 } from "@snailycad/schemas";
 import {
   type DepartmentType,
@@ -35,17 +37,19 @@ import {
   WhatPages,
   ValueType,
   Value,
-  CadFeature,
   cad,
+  PenalCodeType,
+  Feature,
 } from "@prisma/client";
-import { validateSchema } from "lib/validateSchema";
+import { validateSchema } from "lib/data/validate-schema";
 import { upsertWarningApplicable } from "lib/records/penal-code";
-import { getLastOfArray, manyToManyHelper } from "utils/manyToMany";
+import { getLastOfArray, manyToManyHelper } from "lib/data/many-to-many";
 import { getPermissionsForValuesRequest } from "lib/values/utils";
-import { UsePermissions } from "middlewares/UsePermissions";
-import { validateImgurURL } from "utils/image";
+import { UsePermissions } from "middlewares/use-permissions";
+import { validateImageURL } from "lib/images/validate-image-url";
 import type * as APITypes from "@snailycad/types/api";
-import { ExtendedBadRequest } from "src/exceptions/ExtendedBadRequest";
+import { ExtendedBadRequest } from "src/exceptions/extended-bad-request";
+import generateBlurPlaceholder from "lib/images/generate-image-blur-data";
 
 @Controller("/admin/values/import/:path")
 @UseBeforeEach(IsAuth, IsValidPath)
@@ -91,7 +95,7 @@ export class ImportValuesViaFileController {
   }
 
   private getTypeFromPath(path: string): ValueType {
-    return path.replace("-", "_").toUpperCase() as ValueType;
+    return path.replace(/-/g, "_").toUpperCase() as ValueType;
   }
 }
 
@@ -102,15 +106,16 @@ interface HandlerOptions {
 }
 
 export const typeHandlers = {
-  VEHICLE: async ({ body, id }: HandlerOptions) => {
-    const data = validateSchema(HASH_SCHEMA_ARR, body);
+  ADDRESS: async ({ body, id }: HandlerOptions) => {
+    const data = validateSchema(ADDRESS_SCHEMA_ARR, body);
 
     return prisma.$transaction(
       data.map((item) => {
-        return prisma.vehicleValue.upsert({
+        return prisma.addressValue.upsert({
           where: { id: String(id) },
-          ...makePrismaData(ValueType.VEHICLE, {
-            hash: item.hash,
+          ...makePrismaData(ValueType.ADDRESS, {
+            postal: item.postal,
+            county: item.county,
             value: item.value,
             isDisabled: item.isDisabled,
           }),
@@ -118,6 +123,43 @@ export const typeHandlers = {
         });
       }),
     );
+  },
+  VEHICLE: async ({ body, id }: HandlerOptions) => {
+    const data = validateSchema(HASH_SCHEMA_ARR, body);
+
+    return handlePromiseAll(data, async (item) => {
+      const updatedValue = await prisma.vehicleValue.upsert({
+        where: { id: String(id) },
+        ...makePrismaData(ValueType.VEHICLE, {
+          hash: item.hash,
+          value: item.value,
+          isDisabled: item.isDisabled,
+        }),
+        include: { value: true, trimLevels: true },
+      });
+
+      const disconnectConnectArr = manyToManyHelper(
+        updatedValue.trimLevels.map((v) => v.id),
+        item.trimLevels ?? [],
+      );
+
+      const updated = getLastOfArray(
+        await prisma.$transaction(
+          disconnectConnectArr.map((v, idx) =>
+            prisma.vehicleValue.update({
+              where: { id: updatedValue.id },
+              data: { trimLevels: v },
+              include:
+                idx + 1 === disconnectConnectArr.length
+                  ? { value: true, trimLevels: true }
+                  : undefined,
+            }),
+          ),
+        ),
+      );
+
+      return updated || updatedValue;
+    });
   },
   WEAPON: async ({ body, id }: HandlerOptions) => {
     const data = validateSchema(HASH_SCHEMA_ARR, body);
@@ -186,6 +228,7 @@ export const typeHandlers = {
             isDefaultDepartment: item.isDefaultDepartment ?? false,
             isConfidential: item.isConfidential ?? false,
             whitelisted: item.whitelisted ?? false,
+            extraFields: item.extraFields || undefined,
             defaultOfficerRank: item.defaultOfficerRankId
               ? { connect: { id: item.defaultOfficerRankId } }
               : undefined,
@@ -208,6 +251,7 @@ export const typeHandlers = {
             value: item.value,
             isDisabled: item.isDisabled,
             pairedUnitTemplate: item.pairedUnitTemplate || null,
+            extraFields: item.extraFields || undefined,
           }),
           include: { value: true, department: { include: { value: true } } },
         });
@@ -260,15 +304,36 @@ export const typeHandlers = {
   PENAL_CODE: async ({ body, id, context }: HandlerOptions) => {
     const data = validateSchema(PENAL_CODE_ARR, body);
     const penalCode = id && (await prisma.penalCode.findUnique({ where: { id: String(id) } }));
-    const cad = context.get("cad") as cad & { features?: CadFeature[] };
+    const cad = context.get("cad") as cad & { features?: Record<Feature, boolean> };
+
+    const groups = new Map<string, { name: string; id: string; position: number | null }>();
+
+    for (const item of data) {
+      if (!item.group) continue;
+      groups.set(item.group.id, item.group);
+    }
+
+    await Promise.all(
+      Array.from(groups.values()).map(async (group) => {
+        await prisma.penalCodeGroup.upsert({
+          where: { id: group.id },
+          update: { id: group.id, name: group.name, position: group.position },
+          create: { id: group.id, name: group.name, position: group.position },
+        });
+      }),
+    );
 
     return handlePromiseAll(data, async (item) => {
+      const groupId = item.group?.id ?? item.groupId;
+
       const data = {
         update: {
           title: item.title,
           description: item.description,
           descriptionData: item.descriptionData ?? [],
-          groupId: item.groupId,
+          type: (item.type ?? null) as PenalCodeType | null,
+          groupId,
+          isPrimary: item.isPrimary ?? true,
           ...(await upsertWarningApplicable({
             body: item,
             cad,
@@ -279,7 +344,9 @@ export const typeHandlers = {
           title: item.title,
           description: item.description,
           descriptionData: item.descriptionData ?? [],
-          groupId: item.groupId,
+          groupId,
+          isPrimary: item.isPrimary ?? true,
+          type: (item.type ?? null) as PenalCodeType | null,
           ...(await upsertWarningApplicable({
             body: item,
             cad,
@@ -298,11 +365,13 @@ export const typeHandlers = {
     const data = validateSchema(QUALIFICATION_ARR, body);
 
     return handlePromiseAll(data, async (item) => {
+      const validatedImageURL = validateImageURL(item.image);
       const updatedValue = await prisma.qualificationValue.upsert({
         where: { id: String(id) },
         ...makePrismaData(ValueType.QUALIFICATION, {
           description: item.description,
-          imageId: validateImgurURL(item.image),
+          imageId: validatedImageURL,
+          imageBlurData: await generateBlurPlaceholder(validatedImageURL),
           value: item.value,
           isDisabled: item.isDisabled,
           qualificationType: item.qualificationType as QualificationValueType,
@@ -338,8 +407,10 @@ export const typeHandlers = {
     const data = validateSchema(BASE_ARR, body);
 
     return handlePromiseAll(data, async (item) => {
+      const validatedImageURL = validateImageURL(item.officerRankImageId);
       const createUpdateData = {
-        officerRankImageId: validateImgurURL(item.officerRankImageId),
+        officerRankImageId: validatedImageURL,
+        officerRankImageBlurData: await generateBlurPlaceholder(validatedImageURL),
         value: item.value,
         isDisabled: item.isDisabled ?? false,
         isDefault: false,
@@ -393,6 +464,62 @@ export const typeHandlers = {
       }),
     );
   },
+  EMERGENCY_VEHICLE: async ({ body, id }: HandlerOptions) => {
+    const data = validateSchema(EMERGENCY_VEHICLE_ARR, body);
+
+    const valueInclude = {
+      value: true,
+      divisions: { include: { value: true } },
+      departments: { include: { value: true } },
+    };
+
+    return handlePromiseAll(data, async (item) => {
+      const updatedValue = await prisma.emergencyVehicleValue.upsert({
+        where: { id: String(id) },
+        ...makePrismaData(ValueType.EMERGENCY_VEHICLE, {
+          value: item.value,
+          isDisabled: item.isDisabled,
+        }),
+        include: valueInclude,
+      });
+
+      const departmentDcArr = manyToManyHelper(
+        updatedValue.departments.map((v) => v.id),
+        item.departments ?? [],
+      );
+
+      const divisionsDcArr = manyToManyHelper(
+        updatedValue.divisions.map((v) => v.id),
+        item.divisions ?? [],
+      );
+
+      const updatedWithDepartment = getLastOfArray(
+        await prisma.$transaction(
+          departmentDcArr.map((v, idx) =>
+            prisma.emergencyVehicleValue.update({
+              where: { id: updatedValue.id },
+              data: { departments: v },
+              include: idx + 1 === departmentDcArr.length ? valueInclude : undefined,
+            }),
+          ),
+        ),
+      );
+
+      const updatedWithDivision = getLastOfArray(
+        await prisma.$transaction(
+          divisionsDcArr.map((v, idx) =>
+            prisma.emergencyVehicleValue.update({
+              where: { id: updatedValue.id },
+              data: { divisions: v },
+              include: idx + 1 === divisionsDcArr.length ? valueInclude : undefined,
+            }),
+          ),
+        ),
+      );
+
+      return updatedWithDivision || updatedWithDepartment || updatedValue;
+    });
+  },
   GENDER: async (options: HandlerOptions) => typeHandlers.GENERIC({ ...options, type: "GENDER" }),
   ETHNICITY: async (options: HandlerOptions) =>
     typeHandlers.GENERIC({ ...options, type: "ETHNICITY" }),
@@ -403,8 +530,12 @@ export const typeHandlers = {
   LICENSE: async (options: HandlerOptions) => typeHandlers.GENERIC({ ...options, type: "LICENSE" }),
   VEHICLE_FLAG: async (options: HandlerOptions) =>
     typeHandlers.GENERIC({ ...options, type: "VEHICLE_FLAG" }),
+  ADDRESS_FLAG: async (options: HandlerOptions) =>
+    typeHandlers.GENERIC({ ...options, type: "ADDRESS_FLAG" }),
   CITIZEN_FLAG: async (options: HandlerOptions) =>
     typeHandlers.GENERIC({ ...options, type: "CITIZEN_FLAG" }),
+  VEHICLE_TRIM_LEVEL: async (options: HandlerOptions) =>
+    typeHandlers.GENERIC({ ...options, type: "VEHICLE_TRIM_LEVEL" }),
 
   GENERIC: async ({ body, type, id }: HandlerOptions & { type: ValueType }): Promise<Value[]> => {
     const data = validateSchema(BASE_ARR, body);

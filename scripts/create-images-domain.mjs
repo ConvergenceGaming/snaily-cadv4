@@ -17,14 +17,14 @@ function getNextConfigPath() {
     dir = process.cwd();
   }
 
-  const configFilePath = join(dir, "next.config.js");
+  const configFilePath = join(dir, "next.config.mjs");
   return pathToFileURL(configFilePath);
 }
 
 async function loadNextConfig() {
   const configFilePath = getNextConfigPath();
 
-  const data = (await import(configFilePath)).default;
+  const data = await import(configFilePath);
   const text = await readFile(configFilePath, "utf8");
 
   return { data, text };
@@ -71,7 +71,7 @@ const imagesIndex = stringArray.findIndex((line) => line.includes("images: { // 
 const imagesEndIndex = stringArray.findIndex((line) => line.includes("}, // end images"));
 
 let imagesData = stringArray.slice(imagesIndex, imagesEndIndex).join("\n");
-imagesData = imagesData.replace(/localhost"\]/, `localhost", "${domain}"]`);
+imagesData = imagesData.replace(/, "localhost"/, `, "localhost", "${domain}"`);
 
 stringArray.splice(imagesIndex, imagesEndIndex - imagesIndex, imagesData);
 
@@ -79,4 +79,4 @@ const config = stringArray.join("\n");
 
 writeNextConfig(config);
 
-console.log("Image domain added to next.config.js");
+console.log("Image domain added to next.config.mjs");

@@ -1,16 +1,14 @@
 import { Form, Formik, FormikHelpers } from "formik";
 import { useTranslations } from "use-intl";
 
-import { Button } from "components/Button";
 import { FormField } from "components/form/FormField";
-import { Loader } from "components/Loader";
+import { Button, Loader, TabsContent } from "@snailycad/ui";
 import { useAuth } from "context/AuthContext";
 import useFetch from "lib/useFetch";
 import { FormRow } from "components/form/FormRow";
 import type { AutoSetUserProperties } from "@snailycad/types";
 import { Toggle } from "components/form/Toggle";
 import { SettingsTabs } from "src/pages/admin/manage/cad-settings";
-import { TabsContent } from "components/shared/TabList";
 import { toastMessage } from "lib/toastMessage";
 import type { PutCADAutoSetPropertiesData } from "@snailycad/types/api";
 
@@ -60,7 +58,6 @@ export function AutoSetUserPropertiesTab() {
       <p className="my-3 text-neutral-700 dark:text-gray-200">
         This will automatically set these properties to what value is set below when a user creates
         an account.
-        <br />
       </p>
 
       <p className="text-neutral-700 dark:text-gray-200">

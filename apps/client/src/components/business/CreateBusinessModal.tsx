@@ -1,7 +1,5 @@
-import { Button } from "components/Button";
+import { Loader, Button, TextField } from "@snailycad/ui";
 import { FormField } from "components/form/FormField";
-import { Input } from "components/form/inputs/Input";
-import { Loader } from "components/Loader";
 import { Modal } from "components/modal/Modal";
 import { useModal } from "state/modalState";
 import { Form, Formik } from "formik";
@@ -12,11 +10,11 @@ import { CREATE_COMPANY_SCHEMA } from "@snailycad/schemas";
 import { handleValidate } from "lib/handleValidate";
 import { Toggle } from "components/form/Toggle";
 import { useRouter } from "next/router";
-import { FormRow } from "components/form/FormRow";
 import { toastMessage } from "lib/toastMessage";
 import { WhitelistStatus } from "@snailycad/types";
 import { CitizenSuggestionsField } from "components/shared/CitizenSuggestionsField";
 import type { GetBusinessesData, PostCreateBusinessData } from "@snailycad/types/api";
+import { AddressPostalSelect } from "components/form/select/PostalSelect";
 
 interface Props {
   onCreate?(employee: GetBusinessesData["businesses"][number]): void;
@@ -43,7 +41,7 @@ export function CreateBusinessModal({ onCreate }: Props) {
 
     if (json.id) {
       if (json.business.status === WhitelistStatus.PENDING) {
-        toastMessage({ icon: null, message: error("businessCreatedButPending") });
+        toastMessage({ icon: "info", message: error("businessCreatedButPending") });
       } else {
         router.push(`/business/${json.id}/${json.employee?.id}`);
       }
@@ -71,39 +69,26 @@ export function CreateBusinessModal({ onCreate }: Props) {
       onClose={handleClose}
     >
       <Formik validate={validate} onSubmit={onSubmit} initialValues={INITIAL_VALUES}>
-        {({ handleChange, errors, values, isValid }) => (
+        {({ handleChange, setFieldValue, errors, values, isValid }) => (
           <Form>
-            <FormField errorMessage={errors.ownerId} label={t("citizen")}>
-              <CitizenSuggestionsField
-                fromAuthUserOnly
-                labelFieldName="ownerName"
-                valueFieldName="ownerId"
-              />
-            </FormField>
+            <CitizenSuggestionsField
+              autoFocus
+              allowsCustomValue
+              label={t("citizen")}
+              fromAuthUserOnly
+              labelFieldName="citizenName"
+              valueFieldName="ownerId"
+            />
 
-            <FormField errorMessage={errors.name} label={t("name")}>
-              <Input name="name" onChange={handleChange} value={values.name} />
-            </FormField>
+            <TextField
+              errorMessage={errors.name}
+              label={t("name")}
+              name="name"
+              onChange={(value) => setFieldValue("name", value)}
+              value={values.name}
+            />
 
-            <FormRow flexLike>
-              <FormField className="w-full" errorMessage={errors.address} label={t("address")}>
-                <Input
-                  className="w-full"
-                  name="address"
-                  onChange={handleChange}
-                  value={values.address}
-                />
-              </FormField>
-
-              <FormField optional errorMessage={errors.postal} label={common("postal")}>
-                <Input
-                  className="min-w-[200px]"
-                  name="postal"
-                  onChange={handleChange}
-                  value={values.postal}
-                />
-              </FormField>
-            </FormRow>
+            <AddressPostalSelect />
 
             <FormField errorMessage={errors.whitelisted} label={t("whitelisted")}>
               <Toggle
@@ -114,7 +99,7 @@ export function CreateBusinessModal({ onCreate }: Props) {
             </FormField>
 
             <footer className="flex justify-end mt-5">
-              <Button type="reset" onClick={handleClose} variant="cancel">
+              <Button type="reset" onPress={handleClose} variant="cancel">
                 {common("cancel")}
               </Button>
               <Button

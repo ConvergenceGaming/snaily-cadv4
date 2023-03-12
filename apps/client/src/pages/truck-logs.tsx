@@ -1,6 +1,5 @@
-import * as React from "react";
 import dynamic from "next/dynamic";
-import { Button } from "components/Button";
+import { Button } from "@snailycad/ui";
 import { Layout } from "components/Layout";
 import { useModal } from "state/modalState";
 import { getSessionUser } from "lib/auth";
@@ -10,21 +9,33 @@ import type { GetServerSideProps } from "next";
 import { ModalIds } from "types/ModalIds";
 import { useTranslations } from "use-intl";
 import useFetch from "lib/useFetch";
-import { Table, useTableState } from "components/shared/Table";
+import { Table, useAsyncTable, useTableState } from "components/shared/Table";
 import { Title } from "components/shared/Title";
 import type { DeleteTruckLogsData, GetTruckLogsData } from "@snailycad/types/api";
 import { useTemporaryItem } from "hooks/shared/useTemporaryItem";
 
-const AlertModal = dynamic(async () => (await import("components/modal/AlertModal")).AlertModal);
+const AlertModal = dynamic(async () => (await import("components/modal/AlertModal")).AlertModal, {
+  ssr: false,
+});
 const ManageTruckLogModal = dynamic(
-  async () => (await import("components/truck-logs/ManageTruckLog")).ManageTruckLogModal,
+  async () => (await import("components/truck-logs/manage-truck-log-modal")).ManageTruckLogModal,
+  { ssr: false },
 );
 
-export default function TruckLogs({ registeredVehicles, logs: data }: GetTruckLogsData) {
+export default function TruckLogs({ logs: initialLogs, totalCount }: GetTruckLogsData) {
   const { openModal, closeModal } = useModal();
-  const [logs, setLogs] = React.useState(data);
-  const [tempLog, logState] = useTemporaryItem(logs);
-  const tableState = useTableState();
+
+  const asyncTable = useAsyncTable({
+    fetchOptions: {
+      onResponse: (json: GetTruckLogsData) => ({ data: json.logs, totalCount: json.totalCount }),
+      path: "/truck-logs",
+    },
+    totalCount,
+    initialData: initialLogs,
+  });
+
+  const [tempLog, logState] = useTemporaryItem(asyncTable.items);
+  const tableState = useTableState({ pagination: asyncTable.pagination });
 
   const t = useTranslations("TruckLogs");
   const common = useTranslations("Common");
@@ -39,7 +50,7 @@ export default function TruckLogs({ registeredVehicles, logs: data }: GetTruckLo
     });
 
     if (json) {
-      setLogs((p) => p.filter((v) => v.id !== tempLog.id));
+      asyncTable.remove(tempLog.id);
       logState.setTempId(null);
       closeModal(ModalIds.AlertDeleteTruckLog);
     }
@@ -60,15 +71,15 @@ export default function TruckLogs({ registeredVehicles, logs: data }: GetTruckLo
       <header className="flex items-center justify-between">
         <Title>{t("truckLogs")}</Title>
 
-        <Button onClick={() => openModal(ModalIds.ManageTruckLog)}>{t("createTruckLog")}</Button>
+        <Button onPress={() => openModal(ModalIds.ManageTruckLog)}>{t("createTruckLog")}</Button>
       </header>
 
-      {logs.length <= 0 ? (
+      {asyncTable.items.length <= 0 ? (
         <p className="mt-3">{t("noTruckLogs")}</p>
       ) : (
         <Table
           tableState={tableState}
-          data={logs.map((log) => ({
+          data={asyncTable.items.map((log) => ({
             id: log.id,
             driver: log.citizen ? `${log.citizen.name} ${log.citizen.surname}` : "—",
             vehicle: log.vehicle?.model.value.value,
@@ -77,11 +88,11 @@ export default function TruckLogs({ registeredVehicles, logs: data }: GetTruckLo
             notes: log.notes ?? common("none"),
             actions: (
               <>
-                <Button onClick={() => handleEditClick(log)} size="xs" variant="success">
+                <Button onPress={() => handleEditClick(log)} size="xs" variant="success">
                   {common("edit")}
                 </Button>
                 <Button
-                  onClick={() => handleDeleteClick(log)}
+                  onPress={() => handleDeleteClick(log)}
                   className="ml-2"
                   size="xs"
                   variant="danger"
@@ -103,19 +114,10 @@ export default function TruckLogs({ registeredVehicles, logs: data }: GetTruckLo
       )}
 
       <ManageTruckLogModal
-        onCreate={(log) => {
-          setLogs((p) => [log, ...p]);
-        }}
-        onUpdate={(old, log) => {
-          setLogs((p) => {
-            const idx = p.indexOf(old);
-            p[idx] = log;
-            return p;
-          });
-        }}
-        log={tempLog}
-        registeredVehicles={registeredVehicles}
+        onCreate={(log) => asyncTable.append(log)}
+        onUpdate={(previousLog, newLog) => asyncTable.update(previousLog.id, newLog)}
         onClose={() => logState.setTempId(null)}
+        log={tempLog}
       />
 
       <AlertModal
@@ -123,8 +125,8 @@ export default function TruckLogs({ registeredVehicles, logs: data }: GetTruckLo
         description={t("alert_deleteTruckLog")}
         onDeleteClick={handleDelete}
         id={ModalIds.AlertDeleteTruckLog}
-        state={state}
         onClose={() => logState.setTempId(null)}
+        state={state}
       />
     </Layout>
   );
@@ -132,14 +134,11 @@ export default function TruckLogs({ registeredVehicles, logs: data }: GetTruckLo
 
 export const getServerSideProps: GetServerSideProps<GetTruckLogsData> = async ({ locale, req }) => {
   const user = await getSessionUser(req);
-  const [{ logs, registeredVehicles }] = await requestAll(req, [
-    ["/truck-logs", { logs: [], registeredVehicles: [] }],
-  ]);
+  const [logsData] = await requestAll(req, [["/truck-logs", { logs: [], totalCount: 0 }]]);
 
   return {
     props: {
-      logs,
-      registeredVehicles,
+      ...logsData,
       session: user,
       messages: {
         ...(await getTranslations(["truck-logs", "common"], user?.locale ?? locale)),

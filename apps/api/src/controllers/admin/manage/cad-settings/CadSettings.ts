@@ -6,24 +6,31 @@ import {
   API_TOKEN_SCHEMA,
 } from "@snailycad/schemas";
 import { Controller } from "@tsed/di";
-import { BodyParams, Context } from "@tsed/platform-params";
+import { BodyParams, Context, QueryParams } from "@tsed/platform-params";
 import { ContentType, Delete, Get, Put } from "@tsed/schema";
-import { prisma } from "lib/prisma";
-import { CAD_SELECT, IsAuth, setDiscordAuth } from "middlewares/IsAuth";
+import { prisma } from "lib/data/prisma";
+import { CAD_SELECT, IsAuth, setCADFeatures } from "middlewares/is-auth";
 import { BadRequest } from "@tsed/exceptions";
 import { Req, Res, UseBefore } from "@tsed/common";
-import { Socket } from "services/SocketService";
+import { Socket } from "services/socket-service";
 import { nanoid } from "nanoid";
-import { validateSchema } from "lib/validateSchema";
-import { cad, Feature, JailTimeScale, Rank } from "@prisma/client";
+import { validateSchema } from "lib/data/validate-schema";
+import { ApiToken, cad, Feature, JailTimeScale, Prisma, Rank } from "@prisma/client";
 import { getCADVersion } from "@snailycad/utils/version";
-import { getSessionUser } from "lib/auth/getSessionUser";
+import { getSessionUser, userProperties } from "lib/auth/getSessionUser";
 import type * as APITypes from "@snailycad/types/api";
-import { Permissions, UsePermissions } from "middlewares/UsePermissions";
+import { Permissions, UsePermissions } from "middlewares/use-permissions";
+import {
+  AuditLogActionType,
+  createAuditLogEntry,
+  parseAuditLogs,
+} from "@snailycad/audit-logger/server";
+import type { MiscCadSettings } from "@snailycad/types";
+import { createFeaturesObject } from "middlewares/is-enabled";
 
 @Controller("/admin/manage/cad-settings")
 @ContentType("application/json")
-export class ManageCitizensController {
+export class CADSettingsController {
   private socket: Socket;
   constructor(socket: Socket) {
     this.socket = socket;
@@ -45,10 +52,43 @@ export class ManageCitizensController {
       user?.rank === Rank.OWNER ? cad?.registrationCode : !!cad?.registrationCode;
 
     return {
-      ...setDiscordAuth(cad as unknown as cad),
+      ...setCADFeatures(cad),
       registrationCode,
       version,
     } as APITypes.GetCADSettingsData;
+  }
+
+  @Get("/audit-logs")
+  async getAuditLogs(
+    @QueryParams("skip", Number) skip = 0,
+    @QueryParams("query", String) query?: string,
+    @QueryParams("type", String) type?: string,
+  ): Promise<any> {
+    const OR: Prisma.Enumerable<Prisma.AuditLogWhereInput> = [];
+    const _typeWhere =
+      type && Object.hasOwn(AuditLogActionType, type)
+        ? { action: { string_contains: type } }
+        : undefined;
+
+    if (query) {
+      OR.push({ action: { string_contains: query } });
+      OR.push({ executor: { username: { contains: query, mode: "insensitive" } } });
+    }
+
+    const where = { OR: query ? OR : undefined, ..._typeWhere };
+
+    const [totalCount, auditLogs] = await prisma.$transaction([
+      prisma.auditLog.count({ where }),
+      prisma.auditLog.findMany({
+        take: 35,
+        skip,
+        orderBy: { createdAt: "desc" },
+        include: { executor: { select: userProperties } },
+        where,
+      }),
+    ]);
+
+    return { totalCount, logs: parseAuditLogs(auditLogs) as any };
   }
 
   @Put("/")
@@ -58,10 +98,17 @@ export class ManageCitizensController {
     permissions: [Permissions.ManageCADSettings],
   })
   async updateCadSettings(
+    @Context("sessionUserId") sessionUserId: string,
     @Context("cad") cad: cad,
     @BodyParams() body: unknown,
   ): Promise<APITypes.PutCADSettingsData> {
     const data = validateSchema(CAD_SETTINGS_SCHEMA, body);
+
+    // this is fetched to get correct diff results
+    const _cad = await prisma.cad.findUnique({
+      where: { id: cad.id },
+      include: { features: true, miscCadSettings: true, apiToken: true },
+    });
 
     const updated = await prisma.cad.update({
       where: { id: cad.id },
@@ -83,7 +130,17 @@ export class ManageCitizensController {
     this.socket.emitUpdateAop(updated.areaOfPlay);
     this.socket.emitUpdateRoleplayStopped(data.roleplayEnabled);
 
-    return updated;
+    await createAuditLogEntry({
+      action: {
+        type: AuditLogActionType.CadSettingsUpdate,
+        new: setCADFeatures(updated),
+        previous: setCADFeatures(_cad) as any,
+      },
+      prisma,
+      executorId: sessionUserId,
+    });
+
+    return setCADFeatures(updated);
   }
 
   @Put("/features")
@@ -93,7 +150,8 @@ export class ManageCitizensController {
     permissions: [Permissions.ManageCADSettings],
   })
   async updateCadFeatures(
-    @Context("cad") cad: cad,
+    @Context("cad") cad: cad & { features?: Record<Feature, boolean> },
+    @Context("sessionUserId") sessionUserId: string,
     @BodyParams() body: unknown,
   ): Promise<APITypes.PutCADFeaturesData> {
     const data = validateSchema(DISABLED_FEATURES_SCHEMA, body);
@@ -117,7 +175,20 @@ export class ManageCitizensController {
       include: { features: true, miscCadSettings: true, apiToken: true },
     });
 
-    return updated;
+    const previousEnabledFeatures = cad.features;
+    const newEnabledFeatures = createFeaturesObject(updated.features);
+
+    await createAuditLogEntry({
+      action: {
+        type: AuditLogActionType.CADFeaturesUpdate,
+        new: newEnabledFeatures,
+        previous: previousEnabledFeatures!,
+      },
+      prisma,
+      executorId: sessionUserId,
+    });
+
+    return setCADFeatures(updated);
   }
 
   @Put("/misc")
@@ -127,7 +198,8 @@ export class ManageCitizensController {
     permissions: [Permissions.ManageCADSettings],
   })
   async updateMiscSettings(
-    @Context("cad") cad: cad,
+    @Context("sessionUserId") sessionUserId: string,
+    @Context("cad") cad: cad & { miscCadSettings: MiscCadSettings },
     @BodyParams() body: unknown,
   ): Promise<APITypes.PutCADMiscSettingsData> {
     const data = validateSchema(CAD_MISC_SETTINGS_SCHEMA, body);
@@ -146,7 +218,7 @@ export class ManageCitizensController {
         maxDivisionsPerOfficer: data.maxDivisionsPerOfficer,
         pairedUnitTemplate: data.pairedUnitTemplate,
         callsignTemplate: data.callsignTemplate,
-        liveMapURL: data.liveMapURL,
+        caseNumberTemplate: data.caseNumberTemplate,
         authScreenBgImageId: data.authScreenBgImageId,
         authScreenHeaderImageId: data.authScreenHeaderImageId,
         maxOfficersPerUser: data.maxOfficersPerUser,
@@ -156,8 +228,22 @@ export class ManageCitizensController {
         call911InactivityTimeout: data.call911InactivityTimeout || null,
         incidentInactivityTimeout: data.incidentInactivityTimeout || null,
         unitInactivityTimeout: data.unitInactivityTimeout || null,
+        activeDispatchersInactivityTimeout: data.activeDispatchersInactivityTimeout || null,
+        boloInactivityTimeout: data.boloInactivityTimeout || null,
+        activeWarrantsInactivityTimeout: data.activeWarrantsInactivityTimeout || null,
         jailTimeScale: (data.jailTimeScaling || null) as JailTimeScale | null,
       },
+      include: { webhooks: true },
+    });
+
+    await createAuditLogEntry({
+      action: {
+        type: AuditLogActionType.MiscCadSettingsUpdate,
+        new: updated,
+        previous: cad.miscCadSettings,
+      },
+      prisma,
+      executorId: sessionUserId,
     });
 
     return updated;
@@ -172,8 +258,15 @@ export class ManageCitizensController {
   async updateAutoSetProperties(
     @Context("cad") cad: cad,
     @BodyParams() body: unknown,
+    @Context("sessionUserId") sessionUserId: string,
   ): Promise<APITypes.PutCADAutoSetPropertiesData> {
     const data = validateSchema(CAD_AUTO_SET_PROPERTIES, body);
+
+    const previous = cad.autoSetUserPropertiesId
+      ? await prisma.autoSetUserProperties.findUnique({
+          where: { id: cad.autoSetUserPropertiesId },
+        })
+      : null;
 
     const autoSetProperties = await prisma.autoSetUserProperties.upsert({
       where: {
@@ -192,6 +285,16 @@ export class ManageCitizensController {
       },
     });
 
+    await createAuditLogEntry({
+      action: {
+        type: AuditLogActionType.CadAutoSetPropertiesUpdate,
+        previous,
+        new: autoSetProperties,
+      },
+      prisma,
+      executorId: sessionUserId,
+    });
+
     return autoSetProperties;
   }
 
@@ -204,6 +307,7 @@ export class ManageCitizensController {
   async updateApiToken(
     @Context("cad") cad: cad,
     @BodyParams() body: unknown,
+    @Context("sessionUserId") sessionUserId: string,
   ): Promise<APITypes.PutCADApiTokenData> {
     const data = validateSchema(API_TOKEN_SCHEMA, body);
 
@@ -233,6 +337,15 @@ export class ManageCitizensController {
         where: { id: cad.apiTokenId },
       });
 
+      await createAuditLogEntry({
+        translationKey: "cadAPITokenRemoved",
+        action: {
+          type: AuditLogActionType.CadAPITokenRemoved,
+        },
+        prisma,
+        executorId: sessionUserId,
+      });
+
       return null;
     }
 
@@ -244,6 +357,15 @@ export class ManageCitizensController {
       },
     });
 
+    await createAuditLogEntry({
+      translationKey: "cadAPITokenEnabled",
+      action: {
+        type: AuditLogActionType.CadAPITokenEnabled,
+      },
+      prisma,
+      executorId: sessionUserId,
+    });
+
     return apiToken;
   }
 
@@ -253,7 +375,10 @@ export class ManageCitizensController {
     fallback: (u) => u.rank === Rank.OWNER,
     permissions: [Permissions.ManageCADSettings],
   })
-  async regenerateApiToken(@Context("cad") cad: cad) {
+  async regenerateApiToken(
+    @Context("cad") cad: cad & { apiToken: ApiToken },
+    @Context("sessionUserId") sessionUserId: string,
+  ) {
     if (!cad.apiTokenId) {
       throw new BadRequest("noApiTokenId");
     }
@@ -265,6 +390,15 @@ export class ManageCitizensController {
       data: {
         token: nanoid(56),
       },
+    });
+
+    await createAuditLogEntry({
+      translationKey: "cadAPITokenRegenerated",
+      action: {
+        type: AuditLogActionType.CadAPITokenRegenerated,
+      },
+      prisma,
+      executorId: sessionUserId,
     });
 
     return updated;

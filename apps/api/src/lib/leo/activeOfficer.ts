@@ -1,9 +1,9 @@
-import type { User, Prisma } from "@prisma/client";
+import { User, Prisma, Rank } from "@prisma/client";
 import { defaultPermissions, hasPermission } from "@snailycad/permissions";
 import type { Req, Context } from "@tsed/common";
 import { BadRequest, Forbidden } from "@tsed/exceptions";
 import { userProperties } from "lib/auth/getSessionUser";
-import { prisma } from "lib/prisma";
+import { prisma } from "lib/data/prisma";
 import { getInactivityFilter } from "./utils";
 
 export const unitProperties = {
@@ -15,6 +15,7 @@ export const unitProperties = {
   IncidentInvolvedUnit: { where: { incident: { isActive: true } }, select: { id: true } },
   whitelistStatus: { include: { department: { include: { value: true } } } },
   rank: true,
+  activeVehicle: { include: { value: true } },
 };
 
 export const _leoProperties = {
@@ -29,11 +30,18 @@ export const _leoProperties = {
   rank: true,
   callsigns: true,
   activeDivisionCallsign: true,
+  activeVehicle: { include: { value: true } },
 };
 
 export const leoProperties = {
   ..._leoProperties,
   activeIncident: { include: { events: true } },
+};
+
+export const combinedEmsFdUnitProperties = {
+  status: { include: { value: true } },
+  department: { include: { value: true } },
+  deputies: { include: unitProperties },
 };
 
 export const combinedUnitProperties = {
@@ -51,12 +59,22 @@ interface GetActiveOfficerOptions {
 export async function getActiveOfficer(options: GetActiveOfficerOptions) {
   // dispatch is allowed to use officer routes
   let isDispatch = false;
+  const isAdmin = hasPermission({
+    userToCheck: options.user,
+    permissionsToCheck: defaultPermissions.allDefaultAdminPermissions,
+    fallback: (u) => u.rank !== Rank.USER,
+  });
+
   if (options.req?.headers["is-from-dispatch"]?.toString() === "true") {
     const hasDispatchPermissions = hasPermission({
       userToCheck: options.user,
       permissionsToCheck: defaultPermissions.defaultDispatchPermissions,
       fallback: (user) => user.isDispatch,
     });
+
+    if (isAdmin && !hasDispatchPermissions) {
+      isDispatch = true;
+    }
 
     if (!hasDispatchPermissions) {
       throw new Forbidden("Must be dispatch to use this header.");
@@ -69,6 +87,10 @@ export async function getActiveOfficer(options: GetActiveOfficerOptions) {
       permissionsToCheck: defaultPermissions.defaultLeoPermissions,
       fallback: (user) => user.isLeo,
     });
+
+    if (isAdmin && !hasLeoPermissions) {
+      isDispatch = true;
+    }
 
     if (!hasLeoPermissions) {
       throw new Forbidden("Invalid Permissions");

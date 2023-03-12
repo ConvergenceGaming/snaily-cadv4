@@ -2,42 +2,65 @@ import { convertToMap } from "lib/map/utils";
 import * as React from "react";
 import { Marker, Popup, Tooltip, useMap } from "react-leaflet";
 import { defaultPermissions, hasPermission } from "@snailycad/permissions";
-import { Button } from "components/Button";
+import { Button } from "@snailycad/ui";
 import type { MapPlayer, PlayerDataEventPayload } from "types/Map";
 import { icon as leafletIcon } from "leaflet";
 import { useTranslations } from "next-intl";
 import { MapItem, useDispatchMapState } from "state/mapState";
-import { useAuth } from "context/AuthContext";
 import { generateMarkerTypes } from "../RenderMapBlips";
+import { makeUnitName } from "lib/utils";
+import { useGenerateCallsign } from "hooks/useGenerateCallsign";
+import { Rank } from "@snailycad/types";
 
 interface Props {
   player: MapPlayer | PlayerDataEventPayload;
-  handleToggle(playerId: string): void;
+  handleToggle(name: string): void;
 }
 
 const PLAYER_ICON = leafletIcon({
-  iconUrl: "https://unpkg.com/leaflet@1.7.0/dist/images/marker-icon-2x.png",
-  iconSize: [25, 40],
-  popupAnchor: [0, 0],
-  iconAnchor: [9, 8],
+  iconUrl: "/map/ped.png",
+  iconSize: [40, 40],
+  popupAnchor: [0, -20],
+  iconAnchor: [20, 20],
+  tooltipAnchor: [0, -20],
 });
 
 export function PlayerMarker({ player, handleToggle }: Props) {
   const map = useMap();
   const t = useTranslations("Leo");
-  const { user } = useAuth();
   const { hiddenItems } = useDispatchMapState();
   const markerTypes = React.useMemo(generateMarkerTypes, []);
+  const { generateCallsign } = useGenerateCallsign();
 
   const playerIcon = React.useMemo(() => {
-    const playerIcon = markerTypes[parseInt(player.icon, 10)];
+    if (parseInt(player.icon, 10) === 56 && player.hasSirenEnabled) {
+      const blipSize = 35;
 
+      return leafletIcon({
+        iconUrl: "/map/siren.gif",
+        iconSize: [blipSize, blipSize],
+        iconAnchor: [blipSize / 2, blipSize / 2],
+        popupAnchor: [0, 0],
+      });
+    }
+
+    const playerIcon = markerTypes[parseInt(player.icon, 10)];
     if (playerIcon) {
       return leafletIcon(playerIcon);
     }
 
+    // player is on-foot and is a unit
+    if ("unit" in player && player.unit) {
+      return leafletIcon({
+        iconUrl: "/map/unit_ped.png",
+        iconSize: [20, 43],
+        iconAnchor: [20 / 2, 43 / 2],
+        popupAnchor: [0, 0],
+      });
+    }
+
     return PLAYER_ICON;
-  }, [player.icon, markerTypes]);
+  }, [player, markerTypes]);
 
   const pos = React.useMemo(
     () => player.pos?.x && player.pos.y && convertToMap(player.pos.x, player.pos.y, map),
@@ -46,6 +69,14 @@ export function PlayerMarker({ player, handleToggle }: Props) {
   if (!pos) return null;
 
   const isCADUser = "steamId" in player;
+
+  const hasAdminPermissions =
+    isCADUser &&
+    hasPermission({
+      userToCheck: player,
+      permissionsToCheck: defaultPermissions.allDefaultAdminPermissions,
+      fallback: player.rank !== Rank.USER,
+    });
 
   const hasLeoPermissions =
     isCADUser &&
@@ -67,13 +98,17 @@ export function PlayerMarker({ player, handleToggle }: Props) {
   const hasUnit = isCADUser && player.unit != null;
 
   const showUnitsOnly = hiddenItems[MapItem.UNITS_ONLY];
-  const playerSteamId = "convertedSteamId" in player ? player.convertedSteamId : null;
 
   if (showUnitsOnly) {
-    if (!hasUnit || playerSteamId !== user?.steamId) {
+    if (!hasUnit) {
       return null;
     }
   }
+
+  const unitName = hasUnit && player.unit ? makeUnitName(player.unit) : player.name;
+  const unitCallsign = hasUnit && player.unit ? generateCallsign(player.unit) : null;
+  const unitNameAndCallsign = unitName && unitCallsign ? `${unitCallsign} ${unitName}` : unitName;
+  const unitStatus = hasUnit && player.unit ? player.unit.status : null;
 
   return (
     <Marker
@@ -82,7 +117,7 @@ export function PlayerMarker({ player, handleToggle }: Props) {
       key={player.identifier}
       position={pos}
     >
-      <Tooltip direction="top">{player.name}</Tooltip>
+      {unitNameAndCallsign.trim() ? <Tooltip direction="top">{unitNameAndCallsign}</Tooltip> : null}
 
       <Popup minWidth={500}>
         <p style={{ margin: 2 }}>
@@ -100,32 +135,42 @@ export function PlayerMarker({ player, handleToggle }: Props) {
             <p style={{ margin: 2 }}>
               <strong>{t("leo")}: </strong> {String(hasLeoPermissions)}
             </p>
+            <p style={{ margin: 2 }}>
+              <strong>{t("status")}: </strong> {unitStatus?.value.value}
+            </p>
           </>
         ) : null}
 
-        {player.Weapon ? (
+        {player.weapon ? (
           <p style={{ margin: 2 }}>
-            <strong>{t("weapon")}: </strong> {player.Weapon}
+            <strong>{t("weapon")}: </strong> {player.weapon}
           </p>
         ) : null}
         <p style={{ margin: 2 }}>
-          <strong>{t("location")}: </strong> {player.Location}
+          <strong>{t("location")}: </strong> {player.location}
         </p>
         <p style={{ margin: 2 }}>
-          <strong>{t("vehicle")}: </strong> {player.Vehicle || t("onFoot")}
+          <strong>{t("vehicle")}: </strong> {player.vehicle || t("onFoot")}
         </p>
-        {player["License Plate"] ? (
+        {player.licensePlate ? (
           <p style={{ margin: 2 }}>
-            <strong>{t("licensePlate")}: </strong> {player["License Plate"]}
+            <strong>{t("licensePlate")}: </strong> {player.licensePlate}
           </p>
         ) : null}
-        <p style={{ margin: 2 }}>
-          <strong>{t("identifier")}: </strong> {player.identifier}
-        </p>
+        {player.convertedSteamId && hasAdminPermissions ? (
+          <p style={{ margin: 2 }}>
+            <strong>{t("steamId")}: </strong> {player.convertedSteamId}
+          </p>
+        ) : null}
+        {player.discordId && hasAdminPermissions ? (
+          <p style={{ margin: 2 }}>
+            <strong>{t("discordId")}: </strong> {player.discordId}
+          </p>
+        ) : null}
 
         {"id" in player && player.unit?.id ? (
           <div className="mt-3">
-            <Button size="xs" className="!text-base" onClick={() => handleToggle(player.id)}>
+            <Button size="xs" className="!text-base" onPress={() => handleToggle(player.id)}>
               {t("togglePlayer")}
             </Button>
           </div>

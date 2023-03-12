@@ -1,6 +1,6 @@
-import * as React from "react";
+import type * as React from "react";
 import type { TaxiCall, TowCall } from "@snailycad/types";
-import { Button } from "components/Button";
+import { Button } from "@snailycad/ui";
 import { FullDate } from "components/shared/FullDate";
 import { Table, useTableState } from "components/shared/Table";
 import { useTranslations } from "next-intl";
@@ -17,7 +17,7 @@ const AssignToCallModal = dynamic(
   async () => (await import("components/citizen/tow/AssignToTowCall")).AssignToCallModal,
 );
 const ManageCallModal = dynamic(
-  async () => (await import("components/citizen/tow/ManageTowCall")).ManageCallModal,
+  async () => (await import("components/citizen/tow/manage-tow-call")).ManageCallModal,
 );
 
 interface Props {
@@ -95,10 +95,10 @@ export function TowTaxiCallsTable({ type, calls, noCallsText, setCalls }: Props)
             createdAt: <FullDate>{call.createdAt}</FullDate>,
             actions: (
               <>
-                <Button onClick={() => editClick(call)} size="xs" variant="success">
+                <Button onPress={() => editClick(call)} size="xs" variant="success">
                   {common("edit")}
                 </Button>
-                <Button className="ml-2" onClick={() => assignClick(call)} size="xs">
+                <Button className="ml-2" onPress={() => assignClick(call)} size="xs">
                   {t("assignToCall")}
                 </Button>
               </>
@@ -125,6 +125,9 @@ export function TowTaxiCallsTable({ type, calls, noCallsText, setCalls }: Props)
         onClose={() => callState.setTempId(null)}
         onDelete={handleCallEnd}
         onUpdate={updateCalls}
+        onCreate={(call) => {
+          setCalls((p) => [call, ...p]);
+        }}
         call={tempCall}
       />
     </>

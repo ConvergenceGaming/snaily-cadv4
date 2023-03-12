@@ -1,130 +1,159 @@
 import { DiscordRole, Rank, User, WhitelistStatus } from "@snailycad/types";
 import { APIGuildMember, Routes, type RESTGetAPIGuildMemberResult } from "discord-api-types/v10";
 import { GUILD_ID } from "lib/discord/config";
-import { prisma } from "lib/prisma";
-import { manyToManyHelper } from "utils/manyToMany";
+import { prisma } from "lib/data/prisma";
+import { manyToManyHelper } from "lib/data/many-to-many";
 import { performDiscordRequest } from "./performDiscordRequest";
+import { parseDiscordGuildIds } from "./utils";
+
+async function findDiscordMember(discordId: string | null) {
+  if (!GUILD_ID) return null;
+
+  const guildIds = parseDiscordGuildIds(GUILD_ID);
+  const memberRoles: string[] = [];
+  let _member = null;
+
+  for (const guildId of guildIds) {
+    try {
+      const member = await performDiscordRequest<RESTGetAPIGuildMemberResult>({
+        async handler(rest) {
+          if (!discordId) return null;
+          return rest.get(Routes.guildMember(guildId, discordId));
+        },
+      });
+
+      if (member) {
+        memberRoles.push(...member.roles);
+        _member = member;
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  return { ..._member, roles: memberRoles };
+}
 
 /**
  * fetch the roles from the wanting to authenticate user and append the respective permissions to the user
  */
-export async function updateMemberRolesLogin(
-  user: Pick<User, "id" | "rank" | "discordId" | "whitelistStatus" | "permissions" | "roles">,
-  discordRolesId: string | null,
-) {
-  if (!discordRolesId) return;
+export async function updateMemberRolesLogin<
+  TUser extends Pick<
+    User,
+    "id" | "rank" | "discordId" | "whitelistStatus" | "permissions" | "roles"
+  >,
+>(user: TUser, discordRolesId: string | null) {
+  try {
+    if (!discordRolesId) return;
 
-  const discordRoles = await prisma.discordRoles.findUnique({
-    where: { id: String(discordRolesId) },
-    include: {
-      roles: true,
-      leoRoles: true,
-      emsFdRoles: true,
-      dispatchRoles: true,
-      towRoles: true,
-      taxiRoles: true,
-      leoSupervisorRoles: true,
-      courthouseRoles: true,
-    },
-  });
+    const discordRoles = await prisma.discordRoles.findUnique({
+      where: { id: String(discordRolesId) },
+      include: {
+        roles: true,
+        adminRoles: true,
+        leoRoles: true,
+        emsFdRoles: true,
+        dispatchRoles: true,
+        towRoles: true,
+        taxiRoles: true,
+        leoSupervisorRoles: true,
+        courthouseRoles: true,
+      },
+    });
 
-  if (!discordRoles) return;
+    if (!discordRoles) return;
 
-  const cad = await prisma.cad.findFirst();
+    const cad = await prisma.cad.findFirst();
 
-  const discordMember = await performDiscordRequest({
-    async handler(rest) {
-      if (!GUILD_ID || !user.discordId) return null;
+    const discordMember = await findDiscordMember(user.discordId);
+    if (!discordMember?.user?.id || discordMember.pending) return;
 
-      const data = await rest.get(Routes.guildMember(GUILD_ID, user.discordId));
-      return data as RESTGetAPIGuildMemberResult | null;
-    },
-  });
+    const memberObj = {
+      roles: discordMember.roles,
+    };
 
-  if (!discordMember?.user?.id || discordMember.pending) return;
+    const isLeo = doesDiscordMemberHaveRole(discordRoles.leoRoles, memberObj);
+    const isEmsFd = doesDiscordMemberHaveRole(discordRoles.emsFdRoles, memberObj);
+    const isDispatch = doesDiscordMemberHaveRole(discordRoles.dispatchRoles, memberObj);
+    const isTow = doesDiscordMemberHaveRole(discordRoles.towRoles, memberObj);
+    const isTaxi = doesDiscordMemberHaveRole(discordRoles.taxiRoles, memberObj);
+    const isSupervisor = doesDiscordMemberHaveRole(discordRoles.leoSupervisorRoles, memberObj);
+    const isCourthouse = doesDiscordMemberHaveRole(discordRoles.courthouseRoles, memberObj);
+    const isAdmin = doesDiscordMemberHaveRole(discordRoles.adminRoles, memberObj);
+    const hasWhitelistAccess = doesDiscordMemberHaveRole(discordRoles.whitelistedRoleId, memberObj);
 
-  const isLeo = doesDiscordMemberHaveRole(discordRoles.leoRoles, discordMember.roles);
-  const isEmsFd = doesDiscordMemberHaveRole(discordRoles.emsFdRoles, discordMember.roles);
-  const isDispatch = doesDiscordMemberHaveRole(discordRoles.dispatchRoles, discordMember.roles);
-  const isTow = doesDiscordMemberHaveRole(discordRoles.towRoles, discordMember.roles);
-  const isTaxi = doesDiscordMemberHaveRole(discordRoles.taxiRoles, discordMember.roles);
-  const isSupervisor = doesDiscordMemberHaveRole(
-    discordRoles.leoSupervisorRoles,
-    discordMember.roles,
-  );
-  const isCourthouse = doesDiscordMemberHaveRole(discordRoles.courthouseRoles, discordMember.roles);
-  const isAdmin = doesDiscordMemberHaveRole(discordRoles.adminRoleId, discordMember.roles);
-  const hasWhitelistAccess = doesDiscordMemberHaveRole(
-    discordRoles.whitelistedRoleId,
-    discordMember.roles,
-  );
+    const grantablePermissions = {
+      leo: { permissions: discordRoles.leoRolePermissions, value: isLeo },
+      supervisor: { permissions: discordRoles.leoSupervisorRolePermissions, value: isSupervisor },
+      emsFd: { permissions: discordRoles.emsFdRolePermissions, value: isEmsFd },
+      dispatch: { permissions: discordRoles.dispatchRolePermissions, value: isDispatch },
+      tow: { permissions: discordRoles.towRolePermissions, value: isTow },
+      taxi: { permissions: discordRoles.taxiRolePermissions, value: isTaxi },
+      courthouse: { permissions: discordRoles.courthouseRolePermissions, value: isCourthouse },
+      admin: { permissions: discordRoles.adminRolePermissions, value: isAdmin },
+    } as const;
 
-  const grantablePermissions = {
-    leo: { permissions: discordRoles.leoRolePermissions, value: isLeo },
-    supervisor: { permissions: discordRoles.leoSupervisorRolePermissions, value: isSupervisor },
-    emsFd: { permissions: discordRoles.emsFdRolePermissions, value: isEmsFd },
-    dispatch: { permissions: discordRoles.dispatchRolePermissions, value: isDispatch },
-    tow: { permissions: discordRoles.towRolePermissions, value: isTow },
-    taxi: { permissions: discordRoles.taxiRolePermissions, value: isTaxi },
-    courthouse: { permissions: discordRoles.courthouseRolePermissions, value: isCourthouse },
-    admin: { permissions: discordRoles.adminRolePermissions, value: isAdmin },
-  } as const;
+    const permissionsToGive = [];
+    for (const _key in grantablePermissions) {
+      const key = _key as keyof typeof grantablePermissions;
+      const { value, permissions } = grantablePermissions[key];
+      const correctedPermissions = permissions.map((p) => p.replace(/ +/g, ""));
 
-  const permissionsToGive = [];
-  for (const _key in grantablePermissions) {
-    const key = _key as keyof typeof grantablePermissions;
-    const { value, permissions } = grantablePermissions[key];
-    const correctedPermissions = permissions.map((p) => p.replace(/ +/g, ""));
-
-    if (value === true) {
-      correctedPermissions.length && permissionsToGive.push(...correctedPermissions);
-    } else {
-      user.permissions = user.permissions.filter((v) => !correctedPermissions.includes(v));
+      if (value === true) {
+        correctedPermissions.length && permissionsToGive.push(...correctedPermissions);
+      } else {
+        user.permissions = user.permissions.filter((v) => !correctedPermissions.includes(v));
+      }
     }
+
+    const customRoles = await getCustomRoleDiscordRolesByDiscordMember(discordMember);
+    const mergedPermissions = [...new Set([...user.permissions, ...permissionsToGive])];
+
+    const disconnectConnectArray = manyToManyHelper(
+      user.roles?.map((v) => v.id) ?? [],
+      customRoles.map((v) => v.id),
+    );
+
+    await Promise.all(
+      disconnectConnectArray.map((v) =>
+        prisma.user.update({ where: { id: user.id }, data: { roles: v } }),
+      ),
+    );
+
+    const updateData = {
+      permissions: user.rank === Rank.OWNER ? [] : mergedPermissions,
+      whitelistStatus: makeWhitelistStatus(cad?.whitelisted ?? false, hasWhitelistAccess),
+      rank:
+        user.rank !== Rank.OWNER
+          ? doesDiscordMemberHaveRole(discordRoles.adminRoleId, { roles: discordMember.roles })
+            ? Rank.ADMIN
+            : Rank.USER
+          : undefined,
+    };
+
+    const updatedUser = await prisma.user.update({
+      where: { id: user.id },
+      data: updateData,
+    });
+
+    return updatedUser;
+  } catch {
+    return user;
   }
-
-  const customRoles = await getCustomRoleDiscordRolesByDiscordMember(discordMember);
-  const mergedPermissions = [...new Set([...user.permissions, ...permissionsToGive])];
-
-  const disconnectConnectArray = manyToManyHelper(
-    user.roles?.map((v) => v.id) ?? [],
-    customRoles.map((v) => v.id),
-  );
-
-  await Promise.all(
-    disconnectConnectArray.map((v) =>
-      prisma.user.update({ where: { id: user.id }, data: { roles: v } }),
-    ),
-  );
-
-  const updateData = {
-    permissions: user.rank === Rank.OWNER ? [] : mergedPermissions,
-    whitelistStatus: makeWhitelistStatus(cad?.whitelisted ?? false, hasWhitelistAccess),
-    rank:
-      user.rank !== Rank.OWNER
-        ? doesDiscordMemberHaveRole(discordRoles.adminRoleId, discordMember.roles)
-          ? Rank.ADMIN
-          : Rank.USER
-        : undefined,
-  };
-
-  const updatedUser = await prisma.user.update({
-    where: { id: user.id },
-    data: updateData,
-  });
-
-  return updatedUser;
 }
 
-function doesDiscordMemberHaveRole(roles: DiscordRole[] | string | null, roleIds: string[]) {
-  if (!roles) return undefined;
+function doesDiscordMemberHaveRole(
+  cadRoles: DiscordRole[] | string | null,
+  member: { roles: string[] },
+) {
+  if (!cadRoles) return undefined;
 
-  if (Array.isArray(roles)) {
-    if (roles.length <= 0) return undefined;
-    return roles.some((role) => roleIds.includes(role.id));
+  if (Array.isArray(cadRoles)) {
+    if (cadRoles.length <= 0) return undefined;
+    return cadRoles.some((role) => member.roles.includes(role.id));
   }
 
-  return roleIds.includes(roles);
+  return member.roles.includes(cadRoles);
 }
 
 function makeWhitelistStatus(cadWhitelisted: boolean, hasRole: boolean | undefined) {
@@ -135,7 +164,9 @@ function makeWhitelistStatus(cadWhitelisted: boolean, hasRole: boolean | undefin
   return hasRole ? WhitelistStatus.ACCEPTED : WhitelistStatus.PENDING;
 }
 
-async function getCustomRoleDiscordRolesByDiscordMember(discordMember: APIGuildMember) {
+async function getCustomRoleDiscordRolesByDiscordMember(
+  discordMember: Pick<APIGuildMember, "roles">,
+) {
   const orClause = discordMember.roles.map((id) => ({ discordRoleId: id }));
 
   const customRoles = await prisma.customRole.findMany({

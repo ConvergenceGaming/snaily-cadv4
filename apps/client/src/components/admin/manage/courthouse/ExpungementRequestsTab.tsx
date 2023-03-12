@@ -5,7 +5,7 @@ import { Table, useTableState } from "components/shared/Table";
 import { usePermission, Permissions } from "hooks/usePermission";
 import { useTranslations } from "next-intl";
 import { getTitles } from "components/courthouse/expungement-requests/RequestExpungement";
-import { Button } from "components/Button";
+import { Button } from "@snailycad/ui";
 import { FullDate } from "components/shared/FullDate";
 import { Status } from "components/shared/Status";
 import useFetch from "lib/useFetch";
@@ -19,13 +19,12 @@ interface Props {
 }
 
 export function ExpungementRequestsTab({ requests: data }: Props) {
-  const [requests, setRequests] = React.useState(data);
+  const [pendingRequests, setPendingRequests] = React.useState(data);
 
   const t = useTranslations();
   const common = useTranslations("Common");
   const tableState = useTableState();
   const { state, execute } = useFetch();
-  const pendingRequests = requests.filter((v) => v.status === ExpungementRequestStatus.PENDING);
   const { hasPermissions } = usePermission();
   const hasManagePermissions = hasPermissions([Permissions.ManageExpungementRequests], true);
 
@@ -37,7 +36,7 @@ export function ExpungementRequestsTab({ requests: data }: Props) {
     });
 
     if (json) {
-      setRequests((p) => p.filter((v) => v.id !== json.id));
+      setPendingRequests((p) => p.filter((v) => v.id !== json.id));
     }
   }
 
@@ -64,13 +63,13 @@ export function ExpungementRequestsTab({ requests: data }: Props) {
                 .filter((v) => v.type === "TICKET")
                 .map((w) => getTitles(w))
                 .join(", ") || common("none"),
-            status: <Status state={request.status}>{request.status.toLowerCase()}</Status>,
+            status: <Status>{request.status}</Status>,
             createdAt: <FullDate>{request.createdAt}</FullDate>,
             actions: (
               <>
                 <Button
                   disabled={state === "loading"}
-                  onClick={() => handleUpdate(request.id, ExpungementRequestStatus.ACCEPTED)}
+                  onPress={() => handleUpdate(request.id, ExpungementRequestStatus.ACCEPTED)}
                   variant="success"
                   size="xs"
                 >
@@ -79,7 +78,7 @@ export function ExpungementRequestsTab({ requests: data }: Props) {
                 <Button
                   className="ml-2"
                   disabled={state === "loading"}
-                  onClick={() => handleUpdate(request.id, ExpungementRequestStatus.DENIED)}
+                  onPress={() => handleUpdate(request.id, ExpungementRequestStatus.DENIED)}
                   variant="danger"
                   size="xs"
                 >

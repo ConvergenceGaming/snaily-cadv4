@@ -6,7 +6,6 @@ import {
   useReactTable,
   Header,
   getFilteredRowModel,
-  FilterFn,
   Row,
   AccessorKeyColumnDef,
 } from "@tanstack/react-table";
@@ -17,11 +16,10 @@ import { TableHeader } from "./TableHeader";
 import { useAuth } from "context/AuthContext";
 import { TableActionsAlignment } from "@snailycad/types";
 import { orderColumnsByTableActionsAlignment } from "lib/table/orderColumnsByTableActionsAlignment";
-import { rankItem } from "@tanstack/match-sorter-utils";
-import type { useTableState } from "hooks/shared/table/useTableState";
+import type { useTableState } from "hooks/shared/table/use-table-state";
 import { ReactSortable } from "react-sortablejs";
 import { useMounted } from "@casper124578/useful";
-import { createTableDragDropColumn } from "lib/table/dndArrowHook";
+import { createTableDragDropColumn } from "lib/table/create-table-dnd-column";
 import { createTableCheckboxColumn } from "./IndeterminateCheckbox";
 
 export const DRAGGABLE_TABLE_HANDLE = "__TABLE_HANDLE__";
@@ -31,13 +29,13 @@ export type _RowData = RowData & {
 
 interface Props<TData extends _RowData> {
   data: TData[];
-  columns: (AccessorKeyColumnDef<TData> | null)[];
+  columns: (AccessorKeyColumnDef<TData, keyof TData> | null)[];
 
   tableState: ReturnType<typeof useTableState>;
   containerProps?: { style?: React.CSSProperties; className?: string };
 
   features?: {
-    isWithinCard?: boolean;
+    isWithinCardOrModal?: boolean;
     dragAndDrop?: boolean;
     rowSelection?: boolean;
   };
@@ -56,7 +54,7 @@ export function Table<TData extends _RowData>({
   const pageCount = Math.ceil(dataLength / tableState.pagination.pageSize);
 
   const tableActionsAlignment = user?.tableActionsAlignment ?? TableActionsAlignment.LEFT;
-  const stickyBgColor = features?.isWithinCard
+  const stickyBgColor = features?.isWithinCardOrModal
     ? "bg-gray-100 dark:bg-tertiary"
     : "dark:bg-primary bg-white";
 
@@ -81,7 +79,6 @@ export function Table<TData extends _RowData>({
     enableRowSelection: true,
     enableSorting: true,
     manualPagination: true,
-    globalFilterFn: fuzzyFilter,
 
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
@@ -90,13 +87,13 @@ export function Table<TData extends _RowData>({
     onSortingChange: tableState.setSorting,
     onRowSelectionChange: tableState.setRowSelection,
     onPaginationChange: tableState.setPagination,
-    onGlobalFilterChange: tableState.setGlobalFilter,
+    onColumnVisibilityChange: tableState.setColumnVisibility,
 
     state: {
       sorting: tableState.sorting,
       rowSelection: tableState.rowSelection,
       pagination: tableState.pagination,
-      globalFilter: tableState.globalFilter,
+      columnVisibility: tableState.columnVisibility,
     },
   });
 
@@ -124,6 +121,8 @@ export function Table<TData extends _RowData>({
     tableState.dragDrop?.onListChange(originals);
   }
 
+  const tableLeafs = table.getAllLeafColumns().filter((v) => v.id !== "actions");
+
   return (
     <div
       className={classNames(
@@ -138,6 +137,8 @@ export function Table<TData extends _RowData>({
               {headerGroup.headers.map((header) => {
                 return (
                   <TableHeader<TData>
+                    tableId={tableState.tableId}
+                    tableLeafs={tableLeafs}
                     key={header.id}
                     header={header as Header<TData, any>}
                     tableActionsAlignment={tableActionsAlignment}
@@ -168,17 +169,9 @@ export function Table<TData extends _RowData>({
         </ReactSortable>
       </table>
 
-      {dataLength <= visibleTableRows.length ? null : <TablePagination table={table} />}
+      {dataLength <= visibleTableRows.length ? null : (
+        <TablePagination isLoading={tableState.pagination.isLoading} table={table} />
+      )}
     </div>
   );
 }
-
-const fuzzyFilter: FilterFn<any> = (row, columnId, value, addMeta) => {
-  const itemRank = rankItem(row.getValue(columnId), value);
-
-  addMeta({
-    itemRank,
-  });
-
-  return itemRank.passed;
-};

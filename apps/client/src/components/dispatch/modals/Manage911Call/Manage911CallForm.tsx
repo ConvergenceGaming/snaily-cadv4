@@ -1,25 +1,27 @@
 import { useRouter } from "next/router";
 import type { Post911CallsData, Put911CallByIdData } from "@snailycad/types/api";
-import { StatusValueType } from "@snailycad/types";
+import { StatusValueType, ValueType, WhitelistStatus } from "@snailycad/types";
 import { FormRow } from "components/form/FormRow";
 import { handleValidate } from "lib/handleValidate";
 import { CALL_911_SCHEMA } from "@snailycad/schemas";
-import { dataToSlate, Editor } from "components/editor/Editor";
+import { dataToSlate, Editor } from "components/editor/editor";
 import { useValues } from "context/ValuesContext";
 import { toastMessage } from "lib/toastMessage";
 import { ModalIds } from "types/ModalIds";
 import { Form, Formik } from "formik";
-import { Input } from "components/form/inputs/Input";
+import { Button, Input, Loader, TextField } from "@snailycad/ui";
 import { FormField } from "components/form/FormField";
 import useFetch from "lib/useFetch";
-import { Loader } from "components/Loader";
-import type { Full911Call } from "state/dispatch/dispatchState";
+import type { Full911Call } from "state/dispatch/dispatch-state";
 import { Select } from "components/form/Select";
-import { Button } from "components/Button";
 import { useTranslations } from "next-intl";
-import { useCall911State } from "state/dispatch/call911State";
+import { useCall911State } from "state/dispatch/call-911-state";
 import { useModal } from "state/modalState";
 import { AssignedUnitsTable } from "./AssignedUnitsTable";
+import { useFeatureEnabled } from "hooks/useFeatureEnabled";
+import { AddressPostalSelect } from "components/form/select/PostalSelect";
+import { shallow } from "zustand/shallow";
+import { ValueSelectField } from "components/form/inputs/value-select-field";
 
 interface Props {
   call: Full911Call | null;
@@ -34,8 +36,16 @@ export function Manage911CallForm({ call, isDisabled, setShowAlert, handleClose 
   const common = useTranslations("Common");
   const t = useTranslations("Calls");
   const { execute, state } = useFetch();
-  const { setCalls, calls } = useCall911State();
-  const { closeModal } = useModal();
+  const { setCalls, calls, setCurrentlySelectedCall } = useCall911State(
+    (state) => ({
+      setCalls: state.setCalls,
+      calls: state.calls,
+      setCurrentlySelectedCall: state.setCurrentlySelectedCall,
+    }),
+    shallow,
+  );
+  const { closeModal, openModal } = useModal();
+  const { DIVISIONS } = useFeatureEnabled();
 
   const validate = handleValidate(CALL_911_SCHEMA);
   const isCitizen = router.pathname.includes("/citizen");
@@ -74,16 +84,20 @@ export function Manage911CallForm({ call, isDisabled, setShowAlert, handleClose 
       });
 
       if (json.id) {
-        if (isCitizen) {
-          toastMessage({
-            title: common("success"),
-            message: t("911CallCreated"),
-            icon: "success",
-          });
-        }
+        toastMessage({
+          title: common("success"),
+          message: t("911CallCreated"),
+          icon: "success",
+        });
 
         setCalls([json, ...calls]);
-        closeModal(ModalIds.Manage911Call);
+
+        if (values.openCallModalAfterCreation && !isCitizen) {
+          setCurrentlySelectedCall(json);
+          openModal(ModalIds.Manage911Call, json);
+        } else {
+          closeModal(ModalIds.Manage911Call);
+        }
       }
     }
   }
@@ -98,43 +112,45 @@ export function Manage911CallForm({ call, isDisabled, setShowAlert, handleClose 
     divisions: call?.divisions?.map((dep) => ({ value: dep.id, label: dep.value.value })) ?? [],
     situationCode: call?.situationCodeId ?? null,
     type: call?.typeId ?? null,
-    assignedUnits: undefined,
+    notifyAssignedUnits: true,
+    openCallModalAfterCreation: true,
+    status: undefined,
   };
 
   return (
-    <Formik validate={validate} onSubmit={onSubmit} initialValues={INITIAL_VALUES}>
-      {({ handleChange, setFieldValue, values, errors }) => (
+    <Formik
+      enableReinitialize
+      validate={validate}
+      onSubmit={onSubmit}
+      initialValues={INITIAL_VALUES}
+    >
+      {({ handleChange, setFieldValue, handleSubmit, values, errors }) => (
         <Form className="w-full h-full">
-          <FormField errorMessage={errors.name} label={common("name")}>
-            <Input disabled={isDisabled} name="name" value={values.name} onChange={handleChange} />
-          </FormField>
-
-          <FormRow>
-            <FormField errorMessage={errors.location} label={t("location")}>
-              <Input
-                disabled={isDisabled}
-                name="location"
-                value={values.location}
-                onChange={handleChange}
-              />
-            </FormField>
-
-            <FormField errorMessage={errors.postal} label={t("postal")}>
-              <Input
-                disabled={isDisabled}
-                name="postal"
-                value={values.postal}
-                onChange={handleChange}
-              />
-            </FormField>
-          </FormRow>
-
-          {router.pathname.includes("/citizen") ? (
-            <FormField
-              className="max-w-[750px]"
-              errorMessage={errors.description}
-              label={common("description")}
+          {call?.status === WhitelistStatus.PENDING ? (
+            <div
+              role="alert"
+              className="card px-4 py-2 w-full flex items-start justify-between my-3 text-white !bg-amber-900 border !border-amber-700"
             >
+              <div className="w-[70%]">
+                <h3 className="text-xl font-semibold mb-2">{t("pendingApproval")}</h3>
+                <p className="text-base">{t("approvalMessage")}</p>
+              </div>
+            </div>
+          ) : null}
+
+          <TextField
+            label={common("name")}
+            name="name"
+            onChange={(value) => setFieldValue("name", value)}
+            value={values.name}
+            errorMessage={errors.name}
+            isDisabled={isDisabled}
+            autoFocus
+          />
+
+          <AddressPostalSelect isDisabled={isDisabled} addressLabel="location" />
+          {router.pathname.includes("/citizen") ? (
+            <FormField errorMessage={errors.description} label={common("description")}>
               <Editor
                 value={values.descriptionData}
                 onChange={(v) => setFieldValue("descriptionData", v)}
@@ -143,8 +159,12 @@ export function Manage911CallForm({ call, isDisabled, setShowAlert, handleClose 
             </FormField>
           ) : (
             <>
-              <FormRow>
-                <FormField errorMessage={errors.departments as string} label={t("departments")}>
+              <FormRow flexLike={!DIVISIONS}>
+                <FormField
+                  className="w-full"
+                  errorMessage={errors.departments as string}
+                  label={t("departments")}
+                >
                   <Select
                     isMulti
                     name="departments"
@@ -155,69 +175,63 @@ export function Manage911CallForm({ call, isDisabled, setShowAlert, handleClose 
                     }))}
                     onChange={handleChange}
                     disabled={isDisabled}
+                    className="w-full"
                   />
                 </FormField>
 
-                <FormField errorMessage={errors.divisions as string} label={t("divisions")}>
-                  <Select
-                    isMulti
-                    name="divisions"
-                    value={values.divisions}
-                    values={division.values
-                      .filter((div) => {
-                        const isInDepartment = values.departments.some(
-                          (v) => v.value === div.departmentId,
-                        );
+                {DIVISIONS ? (
+                  <FormField
+                    className="w-full"
+                    errorMessage={errors.divisions as string}
+                    label={t("divisions")}
+                  >
+                    <Select
+                      isMulti
+                      name="divisions"
+                      value={values.divisions}
+                      values={division.values
+                        .filter((div) => {
+                          const isInDepartment = values.departments.some(
+                            (v) => v.value === div.departmentId,
+                          );
 
-                        return values.departments.length > 0 ? isInDepartment : true;
-                      })
-                      .map((division) => ({
-                        label: division.value.value,
-                        value: division.id,
-                      }))}
-                    onChange={handleChange}
-                    disabled={isDisabled}
-                  />
-                </FormField>
+                          return values.departments.length > 0 ? isInDepartment : true;
+                        })
+                        .map((division) => ({
+                          label: division.value.value,
+                          value: division.id,
+                        }))}
+                      onChange={handleChange}
+                      disabled={isDisabled}
+                    />
+                  </FormField>
+                ) : null}
               </FormRow>
 
               <FormRow>
-                <FormField errorMessage={errors.situationCode} label={t("situationCode")}>
-                  <Select
-                    isClearable
-                    name="situationCode"
-                    value={values.situationCode}
-                    values={codes10.values
-                      .filter((v) => v.type === StatusValueType.SITUATION_CODE)
-                      .map((division) => ({
-                        label: division.value.value,
-                        value: division.id,
-                      }))}
-                    onChange={handleChange}
-                    disabled={isDisabled}
-                  />
-                </FormField>
+                <ValueSelectField
+                  isOptional
+                  isDisabled={isDisabled}
+                  isClearable
+                  label={t("situationCode")}
+                  fieldName="situationCode"
+                  values={codes10.values}
+                  valueType={ValueType.CODES_10}
+                  filterFn={(value) => value.type === StatusValueType.SITUATION_CODE}
+                />
 
-                <FormField errorMessage={errors.type} label={t("type")}>
-                  <Select
-                    isClearable
-                    name="type"
-                    value={values.type}
-                    values={callType.values.map((callType) => ({
-                      label: callType.value.value,
-                      value: callType.id,
-                    }))}
-                    onChange={handleChange}
-                    disabled={isDisabled}
-                  />
-                </FormField>
+                <ValueSelectField
+                  isOptional
+                  isDisabled={isDisabled}
+                  isClearable
+                  label={t("type")}
+                  fieldName="type"
+                  values={callType.values}
+                  valueType={ValueType.CALL_TYPE}
+                />
               </FormRow>
 
-              <FormField
-                className="max-w-[750px]"
-                errorMessage={errors.description}
-                label={common("description")}
-              >
+              <FormField errorMessage={errors.description} label={common("description")}>
                 <Editor
                   value={values.descriptionData}
                   onChange={(v) => setFieldValue("descriptionData", v)}
@@ -231,16 +245,52 @@ export function Manage911CallForm({ call, isDisabled, setShowAlert, handleClose 
 
           <footer className={`mt-5 flex ${call ? "justify-between" : "justify-end"}`}>
             {call ? (
-              <Button onClick={handleEndClick} type="button" variant="danger" disabled={isDisabled}>
+              <Button onPress={handleEndClick} type="button" variant="danger" disabled={isDisabled}>
                 {t("endCall")}
               </Button>
             ) : null}
 
-            <div className="flex">
-              <Button onClick={handleClose} type="button" variant="cancel">
+            <div className="flex items-center">
+              {call ? (
+                <FormField
+                  className="!mb-0"
+                  labelClassName="min-w-fit"
+                  label="Notify assigned units"
+                  checkbox
+                >
+                  <Input
+                    checked={values.notifyAssignedUnits}
+                    onChange={() =>
+                      setFieldValue("notifyAssignedUnits", !values.notifyAssignedUnits)
+                    }
+                    type="checkbox"
+                  />
+                </FormField>
+              ) : !isCitizen ? (
+                <FormField
+                  className="!mb-0"
+                  labelClassName="min-w-fit"
+                  label="Open Manage 911 call modal after call creation?"
+                  checkbox
+                >
+                  <Input
+                    checked={values.openCallModalAfterCreation}
+                    onChange={() =>
+                      setFieldValue(
+                        "openCallModalAfterCreation",
+                        !values.openCallModalAfterCreation,
+                      )
+                    }
+                    type="checkbox"
+                  />
+                </FormField>
+              ) : null}
+
+              <Button className="ml-2" onPress={handleClose} type="button" variant="cancel">
                 {common("cancel")}
               </Button>
               <Button
+                variant={call?.status === WhitelistStatus.PENDING ? "cancel" : "default"}
                 disabled={isDisabled || state === "loading"}
                 className="flex items-center ml-2"
                 type="submit"
@@ -249,6 +299,22 @@ export function Manage911CallForm({ call, isDisabled, setShowAlert, handleClose 
 
                 {call ? common("save") : common("create")}
               </Button>
+
+              {call?.status === WhitelistStatus.PENDING ? (
+                <Button
+                  disabled={isDisabled || state === "loading"}
+                  className="flex items-center ml-2"
+                  type="button"
+                  onClick={() => {
+                    setFieldValue("status", WhitelistStatus.ACCEPTED);
+                    handleSubmit();
+                  }}
+                >
+                  {state === "loading" ? <Loader className="mr-2 border-red-200" /> : null}
+
+                  {t("saveAndAccept")}
+                </Button>
+              ) : null}
             </div>
           </footer>
         </Form>

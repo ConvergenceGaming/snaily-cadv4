@@ -1,10 +1,10 @@
-import { Feature, cad, CadFeature, User } from "@prisma/client";
+import { Feature, User } from "@prisma/client";
 import { defaultPermissions, hasPermission } from "@snailycad/permissions";
 import { isFeatureEnabled } from "lib/cad";
 
 interface Options {
   user: User;
-  cad: Partial<cad> & { features?: CadFeature[] };
+  cad: { features?: Record<Feature, boolean> };
 }
 
 export function shouldCheckCitizenUserId({ cad, user }: Options) {

@@ -1,13 +1,9 @@
-import * as React from "react";
 import { Form, Formik, FormikHelpers } from "formik";
 import Link from "next/link";
 import { Discord, Steam } from "react-bootstrap-icons";
-import { FormField } from "components/form/FormField";
-import { Input, PasswordInput } from "components/form/inputs/Input";
-import { Loader } from "components/Loader";
-import { Button } from "components/Button";
+import { Button, Loader, TextField } from "@snailycad/ui";
 import { TwoFactorAuthScreen } from "components/auth/TwoFactorAuthScreen";
-import { getAPIUrl } from "lib/fetch/getAPIUrl";
+import { getAPIUrl } from "@snailycad/utils/api-url";
 import { useRouter } from "next/router";
 import useFetch from "lib/useFetch";
 import { useTranslations } from "next-intl";
@@ -108,7 +104,7 @@ export function LoginForm({ onFormSubmitted, isWithinModal }: Props) {
 
   return (
     <Formik validate={validate} onSubmit={onSubmit} initialValues={INITIAL_VALUES}>
-      {({ handleChange, errors, values, isValid }) => (
+      {({ setFieldValue, errors, values, isValid }) => (
         <Form
           className={classNames(
             isWithinModal
@@ -125,32 +121,43 @@ export function LoginForm({ onFormSubmitted, isWithinModal }: Props) {
                 <h1 className="text-3xl font-bold text-gray-800 dark:text-white">{t("login")}</h1>
 
                 {ALLOW_REGULAR_LOGIN && !isWithinModal ? (
-                  <Link href="/auth/register">
-                    <a
-                      href="/auth/register"
-                      className="inline-block mt-2 underline text-neutral-700 dark:text-gray-200"
-                    >
-                      {t("noAccount")}
-                    </a>
+                  <Link
+                    href="/auth/register"
+                    className="inline-block mt-2 underline text-neutral-700 dark:text-gray-200"
+                  >
+                    {t("noAccount")}
                   </Link>
                 ) : null}
               </header>
 
               {errorMessage ? (
-                <p className="bg-red-500/80 text-black w-full py-1.5 px-3 my-3 rounded-md">
+                <div
+                  role="alert"
+                  className="bg-red-500/80 text-black w-full py-1.5 px-3 my-3 rounded-md"
+                >
                   {errorMessage}
-                </p>
+                </div>
               ) : null}
 
               {ALLOW_REGULAR_LOGIN ? (
                 <>
-                  <FormField errorMessage={errors.username} label={t("username")}>
-                    <Input type="text" name="username" onChange={handleChange} />
-                  </FormField>
+                  <TextField
+                    errorMessage={errors.username}
+                    autoFocus
+                    isRequired
+                    label="Username"
+                    value={values.username}
+                    onChange={(value) => setFieldValue("username", value)}
+                  />
 
-                  <FormField errorMessage={errors.password} label={t("password")}>
-                    <PasswordInput name="password" onChange={handleChange} />
-                  </FormField>
+                  <TextField
+                    type="password"
+                    errorMessage={errors.password}
+                    isRequired
+                    label="Password"
+                    value={values.password}
+                    onChange={(value) => setFieldValue("password", value)}
+                  />
 
                   <Button
                     disabled={!isValid || state === "loading"}
@@ -171,15 +178,15 @@ export function LoginForm({ onFormSubmitted, isWithinModal }: Props) {
               ) : null}
 
               {user && !isWithinModal ? (
-                <Button type="button" onClick={handleContinueAs} className="w-full mb-2">
-                  {t.rich("continueAs", { username: user.username })}
+                <Button type="button" onPress={handleContinueAs} className="w-full mb-2">
+                  {t("continueAs", { username: user.username })}
                 </Button>
               ) : null}
 
               {showDiscordOAuth ? (
                 <Button
                   type="button"
-                  onClick={handleDiscordLogin}
+                  onPress={handleDiscordLogin}
                   className="flex items-center justify-center gap-3 w-full"
                 >
                   <Discord />
@@ -190,7 +197,7 @@ export function LoginForm({ onFormSubmitted, isWithinModal }: Props) {
               {showSteamOAuth ? (
                 <Button
                   type="button"
-                  onClick={handleSteamLogin}
+                  onPress={handleSteamLogin}
                   className="flex items-center justify-center gap-3 w-full mt-2"
                 >
                   <Steam />

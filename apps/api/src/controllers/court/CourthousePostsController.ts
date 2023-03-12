@@ -1,18 +1,20 @@
-import { Rank, User } from "@prisma/client";
+import { Feature, Rank, User } from "@prisma/client";
 import { BodyParams, Context, Controller, PathParams, UseBeforeEach } from "@tsed/common";
 import { ContentType, Delete, Get, Post, Put } from "@tsed/schema";
-import { prisma } from "lib/prisma";
-import { validateSchema } from "lib/validateSchema";
-import { IsAuth } from "middlewares/IsAuth";
-import { Permissions, UsePermissions } from "middlewares/UsePermissions";
+import { prisma } from "lib/data/prisma";
+import { validateSchema } from "lib/data/validate-schema";
+import { IsAuth } from "middlewares/is-auth";
+import { Permissions, UsePermissions } from "middlewares/use-permissions";
 import { COURTHOUSE_POST_SCHEMA } from "@snailycad/schemas";
 import { userProperties } from "lib/auth/getSessionUser";
 import { NotFound } from "@tsed/exceptions";
 import type * as APITypes from "@snailycad/types/api";
+import { IsFeatureEnabled } from "middlewares/is-enabled";
 
 @Controller("/courthouse-posts")
 @UseBeforeEach(IsAuth)
 @ContentType("application/json")
+@IsFeatureEnabled({ feature: Feature.COURTHOUSE_POSTS })
 export class CourthousePostsController {
   @Get("/")
   async getPosts(): Promise<APITypes.GetCourthousePostsData> {

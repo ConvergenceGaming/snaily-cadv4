@@ -1,15 +1,23 @@
 import { useListener } from "@casper124578/use-socket.io";
 import { SocketEvents } from "@snailycad/config";
-import { Button } from "components/Button";
+import { Button } from "@snailycad/ui";
 import { useModal } from "state/modalState";
 import { useValues } from "context/ValuesContext";
 import { classNames } from "lib/classNames";
 import useFetch from "lib/useFetch";
 import { useRouter } from "next/router";
-import type { ActiveDeputy } from "state/emsFdState";
-import type { ActiveOfficer } from "state/leoState";
+import type { ActiveDeputy } from "state/ems-fd-state";
+import type { ActiveOfficer } from "state/leo-state";
 import { ModalIds } from "types/ModalIds";
-import { Officer, ShouldDoType, WhatPages, type StatusValue } from "@snailycad/types";
+import {
+  CombinedEmsFdUnit,
+  CombinedLeoUnit,
+  EmsFdDeputy,
+  Officer,
+  ShouldDoType,
+  WhatPages,
+  type StatusValue,
+} from "@snailycad/types";
 import { useAudio } from "react-use";
 import { useAuth } from "context/AuthContext";
 import type { PutDispatchStatusByUnitId } from "@snailycad/types/api";
@@ -39,7 +47,10 @@ export function StatusesArea<T extends ActiveOfficer | ActiveDeputy>({
   const router = useRouter();
   const isEmsFd = router.pathname.includes("/ems-fd");
   const modalId = isEmsFd ? ModalIds.SelectDeputy : ModalIds.SelectOfficer;
-  const socketEvent = isEmsFd ? SocketEvents.UpdateEmsFdStatus : SocketEvents.UpdateOfficerStatus;
+  const updateEmsOrOfficerStatusEventName = isEmsFd
+    ? SocketEvents.UpdateEmsFdStatus
+    : SocketEvents.UpdateOfficerStatus;
+
   const whatPagesType = isEmsFd ? WhatPages.EMS_FD : WhatPages.LEO;
   const activeUnit = isMounted ? _activeUnit : initialData;
 
@@ -62,9 +73,9 @@ export function StatusesArea<T extends ActiveOfficer | ActiveDeputy>({
     onDutyCode && handleStatusUpdate(onDutyCode);
   }
 
-  function handlePlaySoundOnStatusChange(data: Officer[]) {
-    const unit = data.find((v) => v.id === activeUnit?.id);
-
+  function handlePlaySoundOnStatusChange(
+    unit: Officer | EmsFdDeputy | CombinedLeoUnit | CombinedEmsFdUnit | null,
+  ) {
     if (unit && shouldPlayStatusUpdateSound) {
       controls.seek(0);
       controls.play();
@@ -74,20 +85,24 @@ export function StatusesArea<T extends ActiveOfficer | ActiveDeputy>({
   }
 
   useListener(
-    socketEvent,
-    (data: Officer[] | null) => {
-      if (data && Array.isArray(data)) {
+    SocketEvents.UpdateUnitStatus,
+    (data: Officer | EmsFdDeputy | CombinedLeoUnit | CombinedEmsFdUnit | null) => {
+      if (activeUnit?.id === data?.id) {
         handlePlaySoundOnStatusChange(data);
       }
     },
-    [activeUnit, socketEvent],
+    [activeUnit, updateEmsOrOfficerStatusEventName],
   );
 
   async function handleStatusUpdate(status: StatusValue) {
     if (!activeUnit) return;
     if (status.id === activeUnit.statusId) return;
 
-    setActiveUnit({ ...activeUnit, statusId: status.id, status });
+    if (status.shouldDo === ShouldDoType.SET_OFF_DUTY) {
+      setActiveUnit(null);
+    } else {
+      setActiveUnit({ ...activeUnit, statusId: status.id, status });
+    }
 
     if (status.shouldDo === ShouldDoType.SET_OFF_DUTY) {
       setUnits(units.filter((v) => v.id !== activeUnit.id));
@@ -111,7 +126,11 @@ export function StatusesArea<T extends ActiveOfficer | ActiveDeputy>({
     });
 
     if (json.id) {
-      setActiveUnit({ ...activeUnit, ...json });
+      if (!json.status || json.status.shouldDo === ShouldDoType.SET_OFF_DUTY) {
+        setActiveUnit(null);
+      } else {
+        setActiveUnit({ ...activeUnit, ...json });
+      }
     }
   }
 
@@ -136,7 +155,7 @@ export function StatusesArea<T extends ActiveOfficer | ActiveDeputy>({
         <Button
           className={classNames("w-full min-w-[5em] text-base", isOnDutyActive && "font-semibold")}
           variant={isOnDutyActive ? "blue" : "default"}
-          onClick={() => handleOnDuty(onDutyCode)}
+          onPress={() => handleOnDuty(onDutyCode)}
         >
           {onDutyCode?.value.value}
         </Button>
@@ -158,7 +177,7 @@ export function StatusesArea<T extends ActiveOfficer | ActiveDeputy>({
           return (
             <li key={code.id}>
               <Button
-                onClick={() => handleStatusUpdate(code)}
+                onPress={() => handleStatusUpdate(code)}
                 disabled={isUnitOffDuty}
                 variant={variant}
                 className={classNames("text-base w-full min-w-[5em]", isActive && "font-semibold")}

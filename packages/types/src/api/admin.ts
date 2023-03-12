@@ -16,6 +16,12 @@ export interface GetAdminDashboardData {
   vehicles: number;
   impoundedVehicles: number;
   vehiclesInBOLO: number;
+  officerCount: number;
+  onDutyOfficers: number;
+  emsDeputiesCount: number;
+  suspendedOfficers: number;
+  suspendedEmsFDDeputies: number;
+  onDutyEmsDeputies: number;
   imageData: { count: number; totalSize: number };
 }
 
@@ -32,7 +38,7 @@ export type PostImportCitizensData = (Prisma.Citizen & {})[];
 export interface GetImportVehiclesData {
   totalCount: number;
   vehicles: (Prisma.RegisteredVehicle & {
-    citizen: Prisma.Citizen;
+    citizen?: Prisma.Citizen | null;
     flags: Prisma.Value[];
     model: Prisma.VehicleValue & { value: Prisma.Value };
     registrationStatus: Prisma.Value;
@@ -41,6 +47,12 @@ export interface GetImportVehiclesData {
     Business: Prisma.Business[];
   })[];
 }
+
+/**
+ * @method GET
+ * @route /admin/import/vehicles/plates
+ */
+export type GetImportVehiclesPlatesData = { plate: string }[];
 
 /**
  * @method POST
@@ -89,6 +101,18 @@ export type GetManageBusinessesData = (Prisma.Business & {
 })[];
 
 /**
+ * @method GET
+ * @route /admin/manage/businesses/:id
+ */
+export interface GetManageBusinessByIdEmployeesData {
+  totalCount: number;
+  employees: (Prisma.Employee & {
+    citizen: Pick<Types.BaseCitizen, "id" | "name" | "surname">;
+    role: Types.EmployeeValue | null;
+  })[];
+}
+
+/**
  * @method PUT
  * @route /admin/manage/businesses
  */
@@ -107,18 +131,9 @@ export type DeleteManageBusinessesData = boolean;
 export interface GetManageCitizensData {
   totalCount: number;
   citizens: (Prisma.Citizen & {
-    flags: Prisma.Value[];
-    vehicles: Omit<GetImportVehiclesData["vehicles"][number], "citizen">[];
-    weapons: Omit<GetImportWeaponsData["weapons"][number], "citizen">[];
+    gender?: Types.Value | null;
+    ethnicity?: Types.Value | null;
     user: Types.User | null;
-    ethnicity: Prisma.Value;
-    gender: Prisma.Value;
-    weaponLicense: Prisma.Value | null;
-    driversLicense: Prisma.Value | null;
-    pilotLicense: Prisma.Value | null;
-    waterLicense: Prisma.Value | null;
-    dlCategory: (Prisma.DriversLicenseCategoryValue & { value: Prisma.Value })[];
-    Record: (Prisma.Record & {})[];
   })[];
 }
 
@@ -126,21 +141,60 @@ export interface GetManageCitizensData {
  * @method GET
  * @route /admin/manage/citizens/record-logs
  */
-export type GetManageRecordLogsData = (Prisma.RecordLog & {
-  citizen: Prisma.Citizen & {
-    user: Types.User | null;
-    ethnicity: Prisma.Value;
-    gender: Prisma.Value;
-  };
-  warrant: (Prisma.Warrant & {}) | null;
-  records: (Prisma.Record & {}) | null;
-})[];
+export interface GetManageRecordLogsData {
+  totalCount: number;
+  citizens: Prisma.Citizen[];
+}
+
+/**
+ * @method GET
+ * @route /admin/manage/citizens/pending-arrest-reports
+ */
+export interface GetManagePendingArrestReports {
+  totalCount: number;
+  arrestReports: GetManageRecordsLogsCitizenData["recordsLogs"];
+}
+
+/**
+ * @method GET
+ * @route /admin/manage/citizens/record-logs/:citizenId
+ */
+export interface GetManageRecordsLogsCitizenData {
+  totalCount: number;
+  recordsLogs: (Prisma.RecordLog & {
+    business?: Prisma.Business | null;
+    citizen?:
+      | (Prisma.Citizen & {
+          user: Types.User | null;
+          ethnicity?: Prisma.Value | null;
+          gender?: Prisma.Value | null;
+        })
+      | null;
+    warrant: Types.Warrant | null;
+    records: Types.Record | null;
+  })[];
+}
 
 /**
  * @method GET
  * @route /admin/manage/citizens/:id
  */
-export type GetManageCitizenByIdData = GetManageCitizensData["citizens"][number];
+export type GetManageCitizenByIdData =
+  | (Prisma.Citizen & {
+      flags: Prisma.Value[];
+      vehicles: Omit<GetImportVehiclesData["vehicles"][number], "citizen">[];
+      weapons: Omit<GetImportWeaponsData["weapons"][number], "citizen">[];
+      user: Types.User | null;
+      ethnicity?: Prisma.Value | null;
+      gender?: Prisma.Value | null;
+      weaponLicense: Prisma.Value | null;
+      driversLicense: Prisma.Value | null;
+      pilotLicense: Prisma.Value | null;
+      waterLicense: Prisma.Value | null;
+      dlCategory: (Prisma.DriversLicenseCategoryValue & { value: Prisma.Value })[];
+      Record: (Prisma.Record & {})[];
+    })
+  | null;
 
 /**
  * @method POST
@@ -161,7 +215,7 @@ export type PostCitizenRecordLogsData = Prisma.Record & {
  * @method PUT
  * @route /admin/manage/citizens/:id
  */
-export type PutManageCitizenByIdData = GetManageCitizensData["citizens"][number];
+export type PutManageCitizenByIdData = Types.BaseCitizen;
 
 /**
  * @method DELETE
@@ -197,11 +251,10 @@ export type DeleteManageCustomFieldsData = boolean;
  * @method Get
  * @route /admin/manage/units
  */
-export type GetManageUnitsData = (
-  | (Types.Officer & { type: "OFFICER" })
-  | (Types.EmsFdDeputy & { type: "DEPUTY" })
-)[];
-
+export interface GetManageUnitsData {
+  totalCount: number;
+  units: ((Types.Officer & { type: "OFFICER" }) | (Types.EmsFdDeputy & { type: "DEPUTY" }))[];
+}
 /**
  * @method Get
  * @route /admin/manage/units/:id
@@ -269,6 +322,15 @@ export type DeleteManageUnitByIdData = boolean;
 export interface GetManageUsersData {
   totalCount: number;
   pendingCount: number;
+  users: Types.User[];
+}
+
+/**
+ * @method Get
+ * @route /admin/manage/users/prune
+ */
+export interface GetManageUsersInactiveUsers {
+  totalCount: number;
   users: Types.User[];
 }
 
@@ -414,3 +476,42 @@ export interface PostCustomRoleByIdData {
  * @route /admin/manage/users/roles/:id
  */
 export type PutManageUserByIdRolesData = GetManageUserByIdData;
+
+/**
+ * @method GET
+ * @route /admin/manage/cad-settings/audit-logs
+ */
+export interface GetAuditLogsData {
+  totalCount: number;
+  logs: Types.AuditLog[];
+}
+
+/**
+ * @method Get
+ * @route /admin/manage/units/department-time-logs/departments
+ */
+export interface GetDepartmentTimeLogsDepartmentsData {
+  totalCount: number;
+  logs: { hours: number; department: Types.DepartmentValue; departmentId: string }[];
+}
+
+/**
+ * @method Get
+ * @route /admin/manage/units/department-time-logs/units
+ */
+export interface GetDepartmentTimeLogsUnitsData {
+  totalCount: number;
+  logs: {
+    hours: number;
+    unit: Types.Officer | Types.EmsFdDeputy;
+    unitId: string;
+    firstSeen: Date;
+    lastSeen: Date;
+  }[];
+}
+
+/**
+ * @method Get
+ * @route /admin/manage/units/prune
+ */
+export type GetManageUnitsInactiveUnits = (Types.Officer | Types.EmsFdDeputy)[];

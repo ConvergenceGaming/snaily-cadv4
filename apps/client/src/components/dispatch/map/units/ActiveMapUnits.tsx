@@ -1,6 +1,12 @@
 import * as React from "react";
-import type { CombinedLeoUnit, EmsFdDeputy, Officer } from "@snailycad/types";
-import { isUnitCombined } from "@snailycad/utils";
+import {
+  CombinedEmsFdUnit,
+  CombinedLeoUnit,
+  EmsFdDeputy,
+  Officer,
+  ShouldDoType,
+} from "@snailycad/types";
+import { isUnitCombined, isUnitCombinedEmsFd } from "@snailycad/utils";
 import { useActiveDeputies } from "hooks/realtime/useActiveDeputies";
 import { useActiveOfficers } from "hooks/realtime/useActiveOfficers";
 import type { MapPlayer, PlayerDataEventPayload } from "types/Map";
@@ -9,7 +15,8 @@ import { createPortal } from "react-dom";
 import { usePortal } from "@casper124578/useful";
 import { useTranslations } from "next-intl";
 import { UnitItem } from "./UnitItem";
-import { ManageUnitModal } from "components/dispatch/modals/ManageUnit";
+import { ManageUnitModal } from "components/dispatch/modals/manage-unit-modal";
+import { useMapPlayersStore } from "hooks/realtime/use-map-players";
 
 interface Props {
   players: (MapPlayer | PlayerDataEventPayload)[];
@@ -17,8 +24,9 @@ interface Props {
   setOpenItems: React.Dispatch<React.SetStateAction<string[]>>;
 }
 
-export function ActiveMapUnits({ players, openItems, setOpenItems }: Props) {
+export function ActiveMapUnits({ openItems, setOpenItems }: Props) {
   const [tempUnit, setTempUnit] = React.useState<null | Officer | EmsFdDeputy>(null);
+  const { players } = useMapPlayersStore();
 
   const portalRef = usePortal("ActiveMapCalls");
   const t = useTranslations("Leo");
@@ -26,7 +34,7 @@ export function ActiveMapUnits({ players, openItems, setOpenItems }: Props) {
   const { activeOfficers } = useActiveOfficers();
   const { activeDeputies } = useActiveDeputies();
   const units = makeActiveUnits({
-    players,
+    players: Array.from(players.values()),
     activeOfficers,
     activeDeputies,
   });
@@ -43,8 +51,14 @@ export function ActiveMapUnits({ players, openItems, setOpenItems }: Props) {
           <p className="text-base mt-2 text-neutral-700 dark:text-gray-300">{t("noActiveUnits")}</p>
         ) : (
           <AccordionRoot value={openItems} onValueChange={setOpenItems} type="multiple">
-            {units.map((player) => {
-              return <UnitItem setTempUnit={setTempUnit} key={player.identifier} player={player} />;
+            {units.map((player, idx) => {
+              return (
+                <UnitItem
+                  setTempUnit={setTempUnit}
+                  key={`${player.identifier}-${idx}`}
+                  player={player}
+                />
+              );
             })}
           </AccordionRoot>
         )}
@@ -59,7 +73,7 @@ export function ActiveMapUnits({ players, openItems, setOpenItems }: Props) {
 interface ActiveUnitsOptions {
   players: (MapPlayer | PlayerDataEventPayload)[];
   activeOfficers: (Officer | CombinedLeoUnit)[];
-  activeDeputies: EmsFdDeputy[];
+  activeDeputies: (EmsFdDeputy | CombinedEmsFdUnit)[];
 }
 
 function makeActiveUnits({ players, activeOfficers, activeDeputies }: ActiveUnitsOptions) {
@@ -68,18 +82,27 @@ function makeActiveUnits({ players, activeOfficers, activeDeputies }: ActiveUnit
     if (isUnitCombined(officer)) return officer.officers;
     return officer;
   });
+  const _activeDeputies = activeDeputies.flatMap((deputy) => {
+    if (isUnitCombinedEmsFd(deputy)) return deputy.deputies;
+    return deputy;
+  });
 
-  for (const activeUnit of [..._activeOfficers, ...activeDeputies]) {
+  for (const activeUnit of [..._activeOfficers, ..._activeDeputies]) {
+    if (!activeUnit.status || activeUnit.status.shouldDo === ShouldDoType.SET_OFF_DUTY) continue;
+    if (!activeUnit.user) continue;
+
     const steamId = activeUnit.user.steamId;
-    const player = players.find(
-      (v) =>
-        ("steamId" in v && v.steamId === steamId) ||
-        ("convertedSteamId" in v && v.convertedSteamId === steamId),
-    );
+    const discordId = activeUnit.user.discordId;
 
-    if (!player || !("steamId" in player)) continue;
+    const player = players.find((player) => {
+      return player.discordId === discordId || player.convertedSteamId === steamId;
+    });
 
-    const existing = activeUnits.some((v) => v.steamId === player.convertedSteamId);
+    if (!player || !("steamId" in player) || !("discordId" in player)) continue;
+
+    const existing = activeUnits.some((unit) => {
+      return unit.discordId === discordId || unit.convertedSteamId === steamId;
+    });
 
     if (player && !existing) {
       activeUnits.push({ ...player, unit: activeUnit });

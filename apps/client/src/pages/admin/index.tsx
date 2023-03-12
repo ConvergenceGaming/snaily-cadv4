@@ -24,20 +24,23 @@ export default function Admin({ counts }: Props) {
   return (
     <AdminLayout
       permissions={{
-        permissions: defaultPermissions.allDefaultAdminPermissions,
+        permissions: [
+          ...defaultPermissions.allDefaultAdminPermissions,
+          ...defaultPermissions.defaultCourthousePermissions,
+        ],
         fallback: (u) => u.rank !== Rank.USER,
       }}
     >
       <Title>{t("adminDashboard")}</Title>
 
-      <Group name="Users">
-        <Item count={counts.activeUsers} name="active" />
-        <Item count={counts.pendingUsers} name="pending" />
-        <Item count={counts.bannedUsers} name="banned" />
+      <Group name={t("users")}>
+        <Item count={counts.activeUsers} name={t("active")} />
+        <Item count={counts.pendingUsers} name={t("pending")} />
+        <Item count={counts.bannedUsers} name={t("banned")} />
       </Group>
 
-      <Group name="Citizens">
-        <Item count={counts.createdCitizens} name="created" />
+      <Group name={t("citizens")}>
+        <Item count={counts.createdCitizens} name={t("created")} />
         <Item
           count={counts.citizensInBolo}
           name={t("inBolo")}
@@ -45,18 +48,18 @@ export default function Admin({ counts }: Props) {
         />
         <Item
           count={counts.arrestCitizens}
-          name="arrested"
+          name={t("arrested")}
           percentage={(100 / counts.createdCitizens) * counts.arrestCitizens}
         />
         <Item
           count={counts.deadCitizens}
-          name="dead"
+          name={t("dead")}
           percentage={(100 / counts.createdCitizens) * counts.deadCitizens}
         />
       </Group>
 
-      <Group name="Vehicles">
-        <Item count={counts.vehicles} name="registered" />
+      <Group name={t("vehicles")}>
+        <Item count={counts.vehicles} name={t("registered")} />
         <Item
           count={counts.vehiclesInBOLO}
           name={t("inBolo")}
@@ -69,7 +72,35 @@ export default function Admin({ counts }: Props) {
         />
       </Group>
 
-      <Group name="Images">
+      <Group name={t("leo")}>
+        <Item count={counts.officerCount} name="total" />
+        <Item
+          count={counts.onDutyOfficers}
+          name={t("onDuty")}
+          percentage={(100 / counts.officerCount) * counts.onDutyOfficers}
+        />
+        <Item
+          count={counts.suspendedOfficers}
+          name={t("suspended")}
+          percentage={(100 / counts.officerCount) * counts.suspendedOfficers}
+        />
+      </Group>
+
+      <Group name={t("emsFd")}>
+        <Item count={counts.emsDeputiesCount} name="total" />
+        <Item
+          count={counts.onDutyEmsDeputies}
+          name={t("onDuty")}
+          percentage={(100 / counts.emsDeputiesCount) * counts.onDutyEmsDeputies}
+        />
+        <Item
+          count={counts.suspendedEmsFDDeputies}
+          name={t("suspended")}
+          percentage={(100 / counts.emsDeputiesCount) * counts.suspendedEmsFDDeputies}
+        />
+      </Group>
+
+      <Group name={t("images")}>
         <Item count={counts.imageData.count} name="total" />
         <Item count={prettyBytes(counts.imageData.totalSize, { binary: true })} name="" />
       </Group>
@@ -112,9 +143,12 @@ function Item({
   );
 }
 
-export const getServerSideProps: GetServerSideProps<Props> = async ({ locale, req }) => {
+export const getServerSideProps: GetServerSideProps<Props> = async ({ locale, res, req }) => {
   const user = await getSessionUser(req);
   const [data] = await requestAll(req, [["/admin", null]]);
+
+  // https://nextjs.org/docs/going-to-production#caching
+  res.setHeader("Cache-Control", "public, s-maxage=10, stale-while-revalidate=59");
 
   return {
     props: {

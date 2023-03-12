@@ -27,7 +27,7 @@ export function AdminSidebar() {
   }
 
   function isValueActive(type: string) {
-    return router.asPath.endsWith(type.toLowerCase());
+    return router.asPath === `/admin/values/${type.toLowerCase()}`;
   }
 
   function makeType(t: string) {
@@ -56,6 +56,7 @@ export function AdminSidebar() {
             permissions={[
               ...defaultPermissions.defaultManagementPermissions,
               ...defaultPermissions.defaultOwnerPermissions,
+              ...defaultPermissions.defaultCourthousePermissions,
             ]}
             title={man("management")}
           >
@@ -112,7 +113,7 @@ export function AdminSidebar() {
                   key={route.type}
                   isActive={isValueActive(makeType(route.type))}
                   href={`/admin/values/${makeType(route.type).toLowerCase()}`}
-                  text={t(`${route.type.replace("-", "_")}.MANAGE`)}
+                  text={t(`${route.type.replace(/-/g, "_")}.MANAGE`)}
                   onRouteClick={() => setMenuOpen(false)}
                 />
               );
@@ -153,16 +154,16 @@ function SidebarItem({ route, href, text, isActive, onRouteClick }: ItemProps) {
 
   return (
     <li className="px-2">
-      <Link href={href}>
-        <a
-          onClick={onRouteClick}
-          className={classNames(
-            "transition-colors rounded-md block px-4 py-1 dark:text-white hover:bg-gray-200 dark:hover:bg-secondary",
-            isActive && "bg-gray-300 dark:bg-secondary dark:text-white",
-          )}
-        >
-          {text}
-        </a>
+      <Link
+        prefetch={false}
+        onClick={onRouteClick}
+        className={classNames(
+          "transition-colors rounded-md block px-4 py-1 dark:text-white hover:bg-gray-200 dark:hover:bg-secondary",
+          isActive && "bg-gray-300 dark:bg-secondary dark:text-white",
+        )}
+        href={href}
+      >
+        {text}
       </Link>
     </li>
   );

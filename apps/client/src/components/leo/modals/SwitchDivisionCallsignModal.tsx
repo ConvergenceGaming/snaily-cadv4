@@ -1,8 +1,7 @@
 import { SWITCH_CALLSIGN_SCHEMA } from "@snailycad/schemas";
-import { Button } from "components/Button";
+import { Loader, Button } from "@snailycad/ui";
 import { FormField } from "components/form/FormField";
 import { Select } from "components/form/Select";
-import { Loader } from "components/Loader";
 import { Modal } from "components/modal/Modal";
 import { useModal } from "state/modalState";
 import { Form, Formik } from "formik";
@@ -10,13 +9,20 @@ import { handleValidate } from "lib/handleValidate";
 import useFetch from "lib/useFetch";
 import { ModalIds } from "types/ModalIds";
 import { useTranslations } from "use-intl";
-import { useLeoState } from "state/leoState";
+import { useLeoState } from "state/leo-state";
 import { useGenerateCallsign } from "hooks/useGenerateCallsign";
 import { isUnitCombined } from "@snailycad/utils";
 import type { PutLeoCallsignData } from "@snailycad/types/api";
+import { shallow } from "zustand/shallow";
 
 export function SwitchDivisionCallsignModal() {
-  const { activeOfficer, setActiveOfficer } = useLeoState();
+  const { activeOfficer, setActiveOfficer } = useLeoState(
+    (state) => ({
+      activeOfficer: state.activeOfficer,
+      setActiveOfficer: state.setActiveOfficer,
+    }),
+    shallow,
+  );
   const { isOpen, closeModal } = useModal();
   const common = useTranslations("Common");
   const t = useTranslations("Leo");
@@ -87,7 +93,7 @@ export function SwitchDivisionCallsignModal() {
             <footer className="flex justify-end mt-5">
               <Button
                 type="reset"
-                onClick={() => closeModal(ModalIds.SwitchDivisionCallsign)}
+                onPress={() => closeModal(ModalIds.SwitchDivisionCallsign)}
                 variant="cancel"
               >
                 {common("cancel")}

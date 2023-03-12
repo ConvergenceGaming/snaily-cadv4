@@ -2,14 +2,13 @@ import { Controller, UseBeforeEach, Context } from "@tsed/common";
 import { ContentType, Description, Post } from "@tsed/schema";
 import { NotFound } from "@tsed/exceptions";
 import { BodyParams, QueryParams } from "@tsed/platform-params";
-import { prisma } from "lib/prisma";
-import { IsAuth } from "middlewares/IsAuth";
+import { prisma } from "lib/data/prisma";
+import { IsAuth } from "middlewares/is-auth";
 import { leoProperties } from "lib/leo/activeOfficer";
 import { citizenInclude } from "controllers/citizen/CitizenController";
-import { UsePermissions, Permissions } from "middlewares/UsePermissions";
+import { UsePermissions, Permissions } from "middlewares/use-permissions";
 import {
   cad,
-  CadFeature,
   Citizen,
   CustomFieldCategory,
   DepartmentValue,
@@ -18,13 +17,17 @@ import {
   WhitelistStatus,
   User,
 } from "@prisma/client";
-import { validateSchema } from "lib/validateSchema";
+import { validateSchema } from "lib/data/validate-schema";
 import { CUSTOM_FIELD_SEARCH_SCHEMA } from "@snailycad/schemas";
 import { isFeatureEnabled } from "lib/cad";
 import { defaultPermissions, hasPermission } from "@snailycad/permissions";
 import { shouldCheckCitizenUserId } from "lib/citizen/hasCitizenAccess";
 import type * as APITypes from "@snailycad/types/api";
-import { ExtendedBadRequest } from "src/exceptions/ExtendedBadRequest";
+import { ExtendedBadRequest } from "src/exceptions/extended-bad-request";
+import { setEndedSuspendedLicenses } from "lib/citizen/setEndedSuspendedLicenses";
+import { incidentInclude } from "../incidents/IncidentController";
+import { callInclude } from "controllers/dispatch/911-calls/Calls911Controller";
+import { officerOrDeputyToUnit } from "lib/leo/officerOrDeputyToUnit";
 
 export const vehicleSearchInclude = {
   model: { include: { value: true } },
@@ -38,9 +41,33 @@ export const vehicleSearchInclude = {
   notes: true,
 };
 
+const RecordsInclude = (isRecordApprovalEnabled: boolean) => ({
+  where: isRecordApprovalEnabled ? { status: WhitelistStatus.ACCEPTED } : undefined,
+  include: {
+    officer: {
+      include: leoProperties,
+    },
+    seizedItems: true,
+    courtEntry: { include: { dates: true } },
+    vehicle: { include: { model: { include: { value: true } } } },
+    incident: { include: incidentInclude },
+    call911: { include: callInclude },
+    violations: {
+      include: {
+        penalCode: {
+          include: {
+            warningApplicable: true,
+            warningNotApplicable: true,
+          },
+        },
+      },
+    },
+  },
+});
+
 export const citizenSearchIncludeOrSelect = (
   user: User,
-  cad: cad & { features?: CadFeature[] },
+  cad: cad & { features?: Record<Feature, boolean> },
 ) => {
   const isEnabled = isFeatureEnabled({
     feature: Feature.CITIZEN_RECORD_APPROVAL,
@@ -64,30 +91,13 @@ export const citizenSearchIncludeOrSelect = (
         officers: { select: { department: { select: { isConfidential: true } } } },
         ...citizenInclude,
         vehicles: { include: vehicleSearchInclude },
+        addressFlags: true,
         businesses: true,
         medicalRecords: true,
         customFields: { include: { field: true } },
         warrants: { include: { officer: { include: leoProperties } } },
         notes: true,
-        Record: {
-          where: isEnabled ? { status: WhitelistStatus.ACCEPTED } : undefined,
-          include: {
-            officer: {
-              include: leoProperties,
-            },
-            seizedItems: true,
-            violations: {
-              include: {
-                penalCode: {
-                  include: {
-                    warningApplicable: true,
-                    warningNotApplicable: true,
-                  },
-                },
-              },
-            },
-          },
-        },
+        Record: RecordsInclude(isEnabled),
         dlCategory: { include: { value: true } },
       },
     } as any;
@@ -98,6 +108,7 @@ export const citizenSearchIncludeOrSelect = (
       name: true,
       surname: true,
       imageId: true,
+      imageBlurData: true,
       officers: { select: { department: { select: { isConfidential: true } } } },
       id: true,
       socialSecurityNumber: true,
@@ -115,12 +126,12 @@ const weaponsInclude = {
 @Controller("/search")
 @UseBeforeEach(IsAuth)
 @ContentType("application/json")
-export class SearchController {
+export class LeoSearchController {
   @Post("/name")
   @Description("Search citizens by their name, surname or fullname. Returns the first 35 results.")
   async searchName(
     @BodyParams("name") fullName: string,
-    @Context("cad") cad: cad & { features?: CadFeature[] },
+    @Context("cad") cad: cad & { features?: Record<Feature, boolean> },
     @Context("user") user: User,
     @BodyParams("id") citizenId?: string,
     @QueryParams("fromAuthUserOnly", Boolean) fromAuthUserOnly = false,
@@ -160,6 +171,10 @@ export class SearchController {
             name: { contains: surname, mode: "insensitive" },
             surname: { contains: name, mode: "insensitive" },
           },
+          { driversLicenseNumber: { contains: name, mode: "insensitive" } },
+          { weaponLicenseNumber: { contains: name, mode: "insensitive" } },
+          { waterLicenseNumber: { contains: name, mode: "insensitive" } },
+          { pilotLicenseNumber: { contains: name, mode: "insensitive" } },
           { socialSecurityNumber: name },
         ],
       },
@@ -167,9 +182,56 @@ export class SearchController {
       ...citizenSearchIncludeOrSelect(user, cad),
     });
 
-    return appendConfidential(
-      await appendCustomFields(citizens, CustomFieldCategory.CITIZEN),
+    return appendAssignedUnitData(
+      appendConfidential(
+        await appendCustomFields(setEndedSuspendedLicenses(citizens), CustomFieldCategory.CITIZEN),
+      ),
     ) as APITypes.PostLeoSearchCitizenData;
+  }
+
+  @Post("/business")
+  @Description("Search businesses by their name")
+  @UsePermissions({
+    fallback: (u) => u.isLeo || u.isDispatch,
+    permissions: [Permissions.Leo, Permissions.Dispatch],
+  })
+  async searchBusinessByName(
+    @BodyParams("name") name: string,
+    @Context("cad") cad: { features?: Record<Feature, boolean> },
+  ): Promise<APITypes.PostLeoSearchBusinessData> {
+    if (!name || name.length < 3) {
+      return [];
+    }
+
+    const isEnabled = isFeatureEnabled({
+      feature: Feature.CITIZEN_RECORD_APPROVAL,
+      features: cad.features,
+      defaultReturn: false,
+    });
+
+    const businesses = await prisma.business.findMany({
+      where: {
+        name: {
+          contains: name,
+          mode: "insensitive",
+        },
+      },
+      include: {
+        Record: RecordsInclude(isEnabled),
+        citizen: true,
+        vehicles: {
+          include: vehicleSearchInclude,
+        },
+        employees: {
+          include: {
+            citizen: true,
+            role: { include: { value: true } },
+          },
+        },
+      },
+    });
+
+    return businesses;
   }
 
   @Post("/weapon")
@@ -180,12 +242,13 @@ export class SearchController {
   })
   async searchWeapon(
     @BodyParams("serialNumber") serialNumber: string,
+    @QueryParams("includeMany", Boolean) includeMany = false,
   ): Promise<APITypes.PostLeoSearchWeaponData> {
     if (!serialNumber || serialNumber.length < 3) {
       return null;
     }
 
-    const weapon = await prisma.weapon.findFirst({
+    const data = {
       where: {
         serialNumber: {
           startsWith: serialNumber,
@@ -193,7 +256,14 @@ export class SearchController {
         },
       },
       include: weaponsInclude,
-    });
+    } as const;
+
+    if (includeMany) {
+      const weapons = await prisma.weapon.findMany(data);
+      return appendCustomFields(weapons, CustomFieldCategory.WEAPON);
+    }
+
+    const weapon = await prisma.weapon.findFirst(data);
 
     if (!weapon) {
       throw new NotFound("weaponNotFound");
@@ -209,18 +279,20 @@ export class SearchController {
     permissions: [Permissions.Leo, Permissions.Dispatch],
   })
   async searchVehicle(
-    @BodyParams("plateOrVin") plateOrVin: string,
+    @BodyParams("plateOrVin", String) _plateOrVin: string,
     @QueryParams("includeMany", Boolean) includeMany: boolean,
   ): Promise<APITypes.PostLeoSearchVehicleData> {
-    if (!plateOrVin || plateOrVin.length < 3) {
+    const trimmedPlateOrVin = _plateOrVin.trim();
+
+    if (!trimmedPlateOrVin || trimmedPlateOrVin.length < 3) {
       return null;
     }
 
     const data = {
       where: {
         OR: [
-          { plate: { startsWith: plateOrVin.toUpperCase() } },
-          { vinNumber: { startsWith: plateOrVin.toUpperCase() } },
+          { plate: { startsWith: trimmedPlateOrVin.toUpperCase() } },
+          { vinNumber: { startsWith: trimmedPlateOrVin.toUpperCase() } },
         ],
       },
       include: vehicleSearchInclude,
@@ -249,7 +321,7 @@ export class SearchController {
   })
   async customFieldSearch(
     @BodyParams() body: unknown,
-    @Context("cad") cad: cad & { features?: CadFeature[] },
+    @Context("cad") cad: cad & { features?: Record<Feature, boolean> },
     @Context("user") user: User,
   ): Promise<APITypes.PostSearchCustomFieldData<true>> {
     const data = validateSchema(CUSTOM_FIELD_SEARCH_SCHEMA, body);
@@ -325,4 +397,24 @@ export async function appendCustomFields(item: any, category: CustomFieldCategor
   }
 
   return item;
+}
+
+function appendAssignedUnitData(citizens: any[]) {
+  return citizens.map((citizen) => {
+    const _records = citizen?.Record ?? [];
+
+    const newRecords = _records.map((record: any) => {
+      if (record.call911) {
+        return { ...record, call911: officerOrDeputyToUnit(record.call911) };
+      }
+
+      if (record.incident) {
+        return { ...record, incident: officerOrDeputyToUnit(record.incident) };
+      }
+
+      return record;
+    });
+
+    return { ...citizen, Record: newRecords };
+  });
 }

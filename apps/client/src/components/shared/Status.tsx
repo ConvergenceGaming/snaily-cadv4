@@ -1,19 +1,20 @@
 import {
-  DLExamStatus,
+  LicenseExamStatus,
   ExpungementRequestStatus,
   PaymentStatus,
   WhitelistStatus,
 } from "@snailycad/types";
+import { useTranslations } from "use-intl";
 
 interface Props {
-  state:
+  children:
     | WhitelistStatus
     | ExpungementRequestStatus
-    | DLExamStatus
+    | LicenseExamStatus
     | PaymentStatus
     | null
     | undefined;
-  children: string | null | undefined;
+  fallback?: string;
 }
 
 enum Colors {
@@ -22,32 +23,34 @@ enum Colors {
   RED = "#ff7b82",
 }
 
-export function Status({ state, children }: Props) {
+export function Status({ children, fallback }: Props) {
   const colors = {
     [WhitelistStatus.ACCEPTED]: Colors.GREEN,
     [ExpungementRequestStatus.ACCEPTED]: Colors.GREEN,
-    [DLExamStatus.PASSED]: Colors.GREEN,
+    [LicenseExamStatus.PASSED]: Colors.GREEN,
     [PaymentStatus.PAID]: Colors.GREEN,
     [WhitelistStatus.PENDING]: Colors.ORANGE,
     [ExpungementRequestStatus.PENDING]: Colors.ORANGE,
-    [DLExamStatus.IN_PROGRESS]: Colors.ORANGE,
+    [LicenseExamStatus.IN_PROGRESS]: Colors.ORANGE,
     [WhitelistStatus.DECLINED]: Colors.RED,
     [ExpungementRequestStatus.DENIED]: Colors.RED,
-    [DLExamStatus.FAILED]: Colors.RED,
+    [LicenseExamStatus.FAILED]: Colors.RED,
     [PaymentStatus.UNPAID]: Colors.RED,
+    [ExpungementRequestStatus.CANCELED]: Colors.RED,
   };
 
-  const text = !children ? "" : children.toLowerCase().replace(/_/g, " ");
+  const t = useTranslations("Statuses");
+  const backgroundColor = children && colors[children];
 
   return (
     <span className="capitalize">
-      {state ? (
+      {backgroundColor ? (
         <span
-          style={{ background: colors[state] }}
+          style={{ background: colors[children] }}
           className="inline-block w-2.5 h-2.5 mr-2 rounded-full"
         />
       ) : null}
-      {text}
+      {children ? t(children) : fallback ?? ""}
     </span>
   );
 }

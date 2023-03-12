@@ -1,10 +1,15 @@
-import { Button } from "components/Button";
+import { Button } from "@snailycad/ui";
 import { useModal } from "state/modalState";
 import { useAreaOfPlay } from "hooks/global/useAreaOfPlay";
 import { Pencil } from "react-bootstrap-icons";
 import { ModalIds } from "types/ModalIds";
-import { ManageAOPModal } from "./modals/ManageAOPModal";
 import { useTranslations } from "next-intl";
+import dynamic from "next/dynamic";
+
+const ManageAOPModal = dynamic(
+  async () => (await import("./modals/ManageAOPModal")).ManageAOPModal,
+  { ssr: false },
+);
 
 export function DispatchAOP() {
   const { areaOfPlay } = useAreaOfPlay();
@@ -17,7 +22,7 @@ export function DispatchAOP() {
         {" "}
         - AOP: {areaOfPlay}
         <Button
-          onClick={() => openModal(ModalIds.ManageAOP)}
+          onPress={() => openModal(ModalIds.ManageAOP)}
           variant={null}
           className="px-1.5 p-1 ml-2 bg-gray-500 hover:bg-gray-600 dark:border dark:border-quinary dark:bg-tertiary dark:hover:brightness-125 text-white"
           aria-label={t("updateAOP")}

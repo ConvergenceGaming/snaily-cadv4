@@ -7,9 +7,9 @@ import { getSessionUser } from "lib/auth";
 import { getTranslations } from "lib/getTranslation";
 import { useCitizen } from "context/CitizenContext";
 import { requestAll } from "lib/utils";
-import { Title } from "components/shared/Title";
 import { ManageCitizenForm } from "components/citizen/ManageCitizenForm";
 import type { PostCitizenImageByIdData, PutCitizenByIdData } from "@snailycad/types/api";
+import { BreadcrumbItem, Breadcrumbs } from "@snailycad/ui";
 
 export default function EditCitizen() {
   const { state, execute } = useFetch();
@@ -33,12 +33,17 @@ export default function EditCitizen() {
   }) {
     if (!citizen) return;
 
-    const { json } = await execute<PutCitizenByIdData>({
+    const { json, error } = await execute<PutCitizenByIdData>({
       path: `/citizen/${citizen.id}`,
       method: "PUT",
       data,
       helpers,
     });
+
+    const errors = ["dateLargerThanNow", "nameAlreadyTaken", "invalidImageType"];
+    if (errors.includes(error as string)) {
+      helpers.setCurrentStep(0);
+    }
 
     if (formData) {
       await execute<PostCitizenImageByIdData>({
@@ -46,6 +51,9 @@ export default function EditCitizen() {
         method: "POST",
         data: formData,
         helpers,
+        headers: {
+          "content-type": "multipart/form-data",
+        },
       });
     }
 
@@ -56,15 +64,13 @@ export default function EditCitizen() {
 
   return (
     <Layout className="dark:text-white">
-      <header className="mb-3">
-        <Title className="mb-2">{t("editCitizen")}</Title>
-        <h2 className="text-lg">
-          {t.rich("editingCitizen", {
-            span: (children) => <span className="font-semibold">{children}</span>,
-            citizen: `${citizen.name} ${citizen.surname}`,
-          })}
-        </h2>
-      </header>
+      <Breadcrumbs>
+        <BreadcrumbItem href="/citizen">{t("citizen")}</BreadcrumbItem>
+        <BreadcrumbItem href={`/citizen/${citizen.id}`}>
+          {citizen.name} {citizen.surname}
+        </BreadcrumbItem>
+        <BreadcrumbItem>{t("editCitizen")}</BreadcrumbItem>
+      </Breadcrumbs>
 
       <ManageCitizenForm citizen={citizen} onSubmit={onSubmit} state={state} />
     </Layout>

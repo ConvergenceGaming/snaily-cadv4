@@ -1,19 +1,18 @@
-import { Button } from "components/Button";
+import { Input, Loader, Button } from "@snailycad/ui";
 import { FormField } from "components/form/FormField";
-import { Input } from "components/form/inputs/Input";
-import { Loader } from "components/Loader";
 import { Modal } from "components/modal/Modal";
 import { useModal } from "state/modalState";
 import { Form, Formik } from "formik";
 import useFetch from "lib/useFetch";
-import { useBusinessState } from "state/businessState";
+import { useBusinessState } from "state/business-state";
 import { ModalIds } from "types/ModalIds";
 import { useTranslations } from "use-intl";
 import { CREATE_COMPANY_POST_SCHEMA } from "@snailycad/schemas";
 import { handleValidate } from "lib/handleValidate";
 import type { BusinessPost } from "@snailycad/types";
-import { dataToSlate, Editor } from "components/editor/Editor";
+import { dataToSlate, Editor } from "components/editor/editor";
 import type { PostBusinessPostsData, PutBusinessPostsData } from "@snailycad/types/api";
+import { shallow } from "zustand/shallow";
 
 interface Props {
   onCreate(post: BusinessPost): void;
@@ -23,7 +22,13 @@ interface Props {
 }
 
 export function ManageBusinessPostModal({ onClose, onCreate, onUpdate, post }: Props) {
-  const { currentBusiness, currentEmployee } = useBusinessState();
+  const { currentBusiness, currentEmployee } = useBusinessState(
+    (state) => ({
+      currentBusiness: state.currentBusiness,
+      currentEmployee: state.currentEmployee,
+    }),
+    shallow,
+  );
   const { isOpen, closeModal } = useModal();
   const { state, execute } = useFetch();
   const common = useTranslations("Common");
@@ -93,7 +98,7 @@ export function ManageBusinessPostModal({ onClose, onCreate, onUpdate, post }: P
             </FormField>
 
             <footer className="flex justify-end mt-5">
-              <Button type="reset" onClick={handleClose} variant="cancel">
+              <Button type="reset" onPress={handleClose} variant="cancel">
                 {common("cancel")}
               </Button>
               <Button

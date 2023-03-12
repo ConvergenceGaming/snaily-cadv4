@@ -1,4 +1,4 @@
-import type { cad, CadFeature, User } from "@prisma/client";
+import type { cad, Feature, User } from "@prisma/client";
 import { MEDICAL_RECORD_SCHEMA } from "@snailycad/schemas";
 import { UseBeforeEach, Context, BodyParams, PathParams } from "@tsed/common";
 import { Controller } from "@tsed/di";
@@ -6,9 +6,9 @@ import { NotFound } from "@tsed/exceptions";
 import { ContentType, Delete, Description, Post, Put } from "@tsed/schema";
 import { canManageInvariant } from "lib/auth/getSessionUser";
 import { shouldCheckCitizenUserId } from "lib/citizen/hasCitizenAccess";
-import { prisma } from "lib/prisma";
-import { validateSchema } from "lib/validateSchema";
-import { IsAuth } from "middlewares/IsAuth";
+import { prisma } from "lib/data/prisma";
+import { validateSchema } from "lib/data/validate-schema";
+import { IsAuth } from "middlewares/is-auth";
 import type * as APITypes from "@snailycad/types/api";
 
 @Controller("/medical-records")
@@ -19,7 +19,7 @@ export class MedicalRecordsController {
   @Description("Create a medical records for a citizen")
   async createMedicalRecord(
     @Context("user") user: User,
-    @Context("cad") cad: cad & { features?: CadFeature[] },
+    @Context("cad") cad: cad & { features?: Record<Feature, boolean> },
     @BodyParams() body: unknown,
   ): Promise<APITypes.PostCitizenMedicalRecordsData> {
     const data = validateSchema(MEDICAL_RECORD_SCHEMA, body);
@@ -62,7 +62,7 @@ export class MedicalRecordsController {
   @Description("Update a medical record by its id")
   async updateMedicalRecord(
     @Context("user") user: User,
-    @Context("cad") cad: { features?: CadFeature[] },
+    @Context("cad") cad: { features?: Record<Feature, boolean> },
     @PathParams("id") recordId: string,
     @BodyParams() body: unknown,
   ): Promise<APITypes.PutCitizenMedicalRecordsData> {
@@ -107,7 +107,7 @@ export class MedicalRecordsController {
   @Description("Delete a medical record by its id")
   async deleteMedicalRecord(
     @Context("user") user: User,
-    @Context("cad") cad: { features: CadFeature[] },
+    @Context("cad") cad: { features: Record<Feature, boolean> },
     @PathParams("id") recordId: string,
   ): Promise<APITypes.DeleteCitizenMedicalRecordsData> {
     const medicalRecord = await prisma.medicalRecord.findUnique({

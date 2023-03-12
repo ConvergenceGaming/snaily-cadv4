@@ -1,21 +1,22 @@
 import * as React from "react";
-import {
-  type DepartmentValue,
-  type DivisionValue,
-  type DriversLicenseCategoryValue,
-  type EmployeeValue,
-  type PenalCode,
-  type PenalCodeGroup,
-  type StatusValue,
-  type Value,
-  ValueType,
-  type VehicleValue,
+import type {
+  DepartmentValue,
+  DivisionValue,
+  DriversLicenseCategoryValue,
+  EmployeeValue,
+  PenalCode,
+  StatusValue,
+  Value,
+  VehicleValue,
   QualificationValue,
   CallTypeValue,
+  AddressValue,
 } from "@snailycad/types";
+import { ValueType } from "@snailycad/types";
 import type { GetValuesData } from "@snailycad/types/api";
 import { hasValueObj, isBaseValue, isPenalCodeValue } from "@snailycad/utils";
-import { useRouter } from "next/router";
+import type { Router } from "next/router";
+import { normalizeValue } from "lib/values/normalize-value";
 
 interface ContextValue<Custom = Value> {
   type: ValueType;
@@ -36,24 +37,26 @@ export interface ValueContext {
   vehicleFlag: ContextValue;
   citizenFlag: ContextValue;
   penalCode: ContextValue<PenalCode>;
-  penalCodeGroups: PenalCodeGroup[];
   department: ContextValue<DepartmentValue>;
   driverslicenseCategory: ContextValue<DriversLicenseCategoryValue>;
   impoundLot: ContextValue;
   qualification: ContextValue<QualificationValue>;
-  setValues: React.Dispatch<React.SetStateAction<GetValuesData>>;
   callType: ContextValue<CallTypeValue>;
+  address: ContextValue<AddressValue>;
+  addressFlag: ContextValue;
+  vehicleTrimLevel: ContextValue;
+  setValues: React.Dispatch<React.SetStateAction<GetValuesData>>;
 }
 
 const ValuesContext = React.createContext<ValueContext | undefined>(undefined);
 
 interface ProviderProps {
+  router: Router;
   children: React.ReactNode;
   initialData: { values: GetValuesData };
 }
 
-export function ValuesProvider({ initialData, children }: ProviderProps) {
-  const router = useRouter();
+export function ValuesProvider({ initialData, children, router }: ProviderProps) {
   const isAdmin = router.pathname.startsWith("/admin");
   const [values, setValues] = React.useState<ProviderProps["initialData"]["values"]>(
     Array.isArray(initialData.values) ? initialData.values : [],
@@ -78,11 +81,8 @@ export function ValuesProvider({ initialData, children }: ProviderProps) {
       const valuesForType = values.find((v) => v.type === valueType) ?? {
         values: [],
         type: valueType,
+        totalCount: 0,
       };
-
-      if (valuesForType.type === "PENAL_CODE" && valuesForType.groups) {
-        obj.penalCodeGroups = valuesForType.groups;
-      }
 
       return { ...obj, [normalizeValue(valueType)]: removeDisabledValues(valuesForType) };
     }, {} as ValueContext);
@@ -106,24 +106,4 @@ export function useValues() {
   }
 
   return context;
-}
-
-// transform: PENAL_CODES -> penalCodes
-// transform: DEPARTMENT  -> department
-export function normalizeValue(value: ValueType | (string & {})) {
-  let split = value.toLowerCase().split(/_/);
-
-  if (split.length > 1) {
-    split = split.map((valueType, idx) => {
-      if (idx > 0) {
-        const firstLetter = valueType.charAt(0);
-
-        return [firstLetter.toUpperCase(), valueType.substring(1).toLowerCase()].join("");
-      }
-
-      return valueType.toLowerCase();
-    });
-  }
-
-  return split.join("");
 }

@@ -6,7 +6,7 @@ import { AdminLayout } from "components/admin/AdminLayout";
 import { requestAll } from "lib/utils";
 import { Title } from "components/shared/Title";
 import { AdvancedCitizensTab } from "components/admin/manage/citizens/AdvancedCitizensTab";
-import { Button } from "components/Button";
+import { Button } from "@snailycad/ui";
 import { ModalIds } from "types/ModalIds";
 import { useModal } from "state/modalState";
 import { Rank } from "@snailycad/types";
@@ -28,12 +28,12 @@ export default function ImportCitizensPage() {
           <Title className="!mb-0">{t("IMPORT_CITIZENS")}</Title>
 
           <div className="min-w-fit w-fit">
-            <Button onClick={() => openModal(ModalIds.ImportCitizens)}>Import via file</Button>
+            <Button onPress={() => openModal(ModalIds.ImportCitizens)}>Import via file</Button>
           </div>
         </div>
 
         <p className="my-2 text-neutral-700 dark:text-gray-400 max-w-2xl">
-          Here you can mass import citizens that may not be connected to a registered user account.
+          {t("importCitizensDescription")}
         </p>
       </header>
 

@@ -1,55 +1,52 @@
 import * as React from "react";
-import { Button } from "components/Button";
-import { FormField } from "components/form/FormField";
-import { Loader } from "components/Loader";
+import { Button, AsyncListSearchField, Item } from "@snailycad/ui";
 import { Modal } from "components/modal/Modal";
 import { useModal } from "state/modalState";
 import { Form, Formik, useFormikContext } from "formik";
 import useFetch from "lib/useFetch";
 import { ModalIds } from "types/ModalIds";
 import { useTranslations } from "use-intl";
-import { CustomFieldCategory, Citizen, RecordType, BoloType } from "@snailycad/types";
-import { calculateAge, formatCitizenAddress } from "lib/utils";
+import { CustomFieldCategory, Citizen, BoloType } from "@snailycad/types";
 import format from "date-fns/format";
-import { NameSearchTabsContainer } from "./tabs/TabsContainer";
-import { NameSearchResult, useNameSearch } from "state/search/nameSearchState";
-import { normalizeValue } from "context/ValuesContext";
+import { NameSearchTabsContainer } from "./tabs/tabs-container";
+import { NameSearchResult, useNameSearch } from "state/search/name-search-state";
 import { useRouter } from "next/router";
 import { ArrowLeft, PersonFill } from "react-bootstrap-icons";
 import { useImageUrl } from "hooks/useImageUrl";
-import { useAuth } from "context/AuthContext";
 import { useFeatureEnabled } from "hooks/useFeatureEnabled";
-import { InputSuggestions } from "components/form/inputs/InputSuggestions";
 import { Infofield } from "components/shared/Infofield";
-import { CitizenLicenses } from "components/citizen/licenses/LicensesCard";
-import { FullDate } from "components/shared/FullDate";
 import dynamic from "next/dynamic";
 import {
   LicenseInitialValues,
   ManageLicensesModal,
-} from "components/citizen/licenses/ManageLicensesModal";
+} from "components/citizen/licenses/manage-licenses-modal";
 import { ManageCitizenFlagsModal } from "./ManageCitizenFlagsModal";
 import { CitizenImageModal } from "components/citizen/modals/CitizenImageModal";
 import { ManageCustomFieldsModal } from "./ManageCustomFieldsModal";
 import { CustomFieldsArea } from "../CustomFieldsArea";
 import { useBolos } from "hooks/realtime/useBolos";
-import type {
-  PostEmsFdDeclareCitizenById,
-  PostLeoSearchCitizenData,
-  PutSearchActionsLicensesData,
-} from "@snailycad/types/api";
-import Image from "next/future/image";
+import type { PostLeoSearchCitizenData, PutSearchActionsLicensesData } from "@snailycad/types/api";
+import { NameSearchBasicInformation } from "./sections/basic-information";
+import { NameSearchLicensesSection } from "./sections/licenses-section";
+import { NameSearchFooter } from "./sections/footer";
+import { shallow } from "zustand/shallow";
+import { SpeechAlert } from "./speech-alert";
+import { ImageWrapper } from "components/shared/image-wrapper";
 
 const VehicleSearchModal = dynamic(
   async () => (await import("components/leo/modals/VehicleSearchModal")).VehicleSearchModal,
 );
 
 const WeaponSearchModal = dynamic(
-  async () => (await import("components/leo/modals/WeaponSearchModal")).WeaponSearchModal,
+  async () => (await import("components/leo/modals/weapon-search-modal")).WeaponSearchModal,
 );
 
 const CreateCitizenModal = dynamic(
   async () => (await import("./CreateCitizenModal")).CreateCitizenModal,
+);
+
+const ManageCitizenAddressFlagsModal = dynamic(
+  async () => (await import("./manage-citizen-address-flags-modal")).ManageCitizenAddressFlagsModal,
 );
 
 function AutoSubmit() {
@@ -73,17 +70,25 @@ export function NameSearchModal() {
   const cT = useTranslations("Citizen");
   const vT = useTranslations("Vehicles");
   const t = useTranslations("Leo");
-  const ems = useTranslations("Ems");
   const { state, execute } = useFetch();
   const router = useRouter();
   const { makeImageUrl } = useImageUrl();
-  const { cad } = useAuth();
   const { SOCIAL_SECURITY_NUMBERS, CREATE_USER_CITIZEN_LEO } = useFeatureEnabled();
   const { bolos } = useBolos();
 
   const { openModal } = useModal();
   const isLeo = router.pathname === "/officer";
-  const { results, currentResult, setCurrentResult, setResults } = useNameSearch();
+  const isDispatch = router.pathname === "/dispatch";
+
+  const { results, currentResult, setCurrentResult, setResults } = useNameSearch(
+    (state) => ({
+      results: state.results,
+      currentResult: state.currentResult,
+      setCurrentResult: state.setCurrentResult,
+      setResults: state.setResults,
+    }),
+    shallow,
+  );
 
   const payloadCitizen = getPayload<Citizen>(ModalIds.NameSearch);
 
@@ -155,38 +160,11 @@ export function NameSearchModal() {
     }
   }
 
-  async function handleDeclare() {
-    if (!currentResult) return;
-
-    const { json } = await execute<PostEmsFdDeclareCitizenById>({
-      path: `/ems-fd/declare/${currentResult.id}`,
-      method: "POST",
-    });
-
-    if (json.id) {
-      setCurrentResult({ ...currentResult, ...json });
-    }
-  }
-
-  function handleOpenCreateRecord(type: RecordType) {
-    if (!currentResult) return;
-
-    const modalId = {
-      [RecordType.ARREST_REPORT]: ModalIds.CreateArrestReport,
-      [RecordType.TICKET]: ModalIds.CreateTicket,
-      [RecordType.WRITTEN_WARNING]: ModalIds.CreateWrittenWarning,
-    };
-
-    openModal(modalId[type], {
-      citizenName: `${currentResult.name} ${currentResult.surname}`,
-      citizenId: currentResult.id,
-    });
-  }
-
-  const hasWarrants =
-    !currentResult || currentResult.isConfidential ? false : currentResult.warrants.length > 0;
+  const warrants = !currentResult || currentResult.isConfidential ? [] : currentResult.warrants;
+  const hasActiveWarrants = warrants.filter((v) => v.status === "ACTIVE").length > 0;
 
   const INITIAL_VALUES = {
+    searchValue: payloadCitizen?.name ?? "",
     name: payloadCitizen?.name ?? "",
     id: payloadCitizen?.id,
   };
@@ -199,48 +177,71 @@ export function NameSearchModal() {
       className="w-[850px]"
     >
       <Formik initialValues={INITIAL_VALUES} onSubmit={onSubmit}>
-        {({ handleChange, setFieldValue, errors, values, isValid }) => (
+        {({ setValues, errors, values }) => (
           <Form>
-            <FormField errorMessage={errors.name} label={cT("fullName")}>
-              <InputSuggestions<NameSearchResult>
-                onSuggestionClick={(suggestion: NameSearchResult) => {
-                  setFieldValue("name", `${suggestion.name} ${suggestion.surname}`);
-                  setCurrentResult(suggestion);
-                }}
-                Component={({ suggestion }) => (
-                  <div className="flex items-center">
-                    {suggestion.imageId ? (
-                      <Image
-                        alt={`${suggestion.name} ${suggestion.surname}`}
-                        className="rounded-md w-[30px] h-[30px] object-cover mr-2"
-                        draggable={false}
-                        src={makeImageUrl("citizens", suggestion.imageId)!}
-                        loading="lazy"
-                        width={30}
-                        height={30}
-                      />
-                    ) : null}
-                    <p>
-                      {suggestion.name} {suggestion.surname}{" "}
-                      {SOCIAL_SECURITY_NUMBERS && suggestion.socialSecurityNumber ? (
-                        <>(SSN: {suggestion.socialSecurityNumber})</>
+            <AsyncListSearchField<NameSearchResult>
+              autoFocus
+              allowsCustomValue
+              setValues={({ localValue, node }) => {
+                // when the menu closes, it will set the `searchValue` to `""`. We want to keep the value of the search
+                if (typeof node === "undefined" && typeof localValue === "undefined") {
+                  setValues({ ...values, name: values.searchValue });
+                  return;
+                }
+
+                const searchValue =
+                  typeof localValue !== "undefined" ? { searchValue: localValue } : {};
+                let name = node ? { name: node.textValue as string } : {};
+
+                if (typeof node === "undefined" && localValue !== "") {
+                  name = { name: localValue };
+                }
+
+                if (node) {
+                  setCurrentResult(node.value);
+                }
+
+                setValues({ ...values, ...searchValue, ...name });
+              }}
+              localValue={values.searchValue}
+              errorMessage={errors.name}
+              label={cT("fullName")}
+              selectedKey={values.id}
+              fetchOptions={{
+                apiPath: "/search/name?includeMany=true",
+                method: "POST",
+                bodyKey: "name",
+                filterTextRequired: true,
+              }}
+            >
+              {(item) => {
+                const name = `${item.name} ${item.surname}`;
+
+                return (
+                  <Item key={item.id} textValue={name}>
+                    <div className="flex items-center">
+                      {item.imageId ? (
+                        <ImageWrapper
+                          alt={`${item.name} ${item.surname}`}
+                          className="rounded-md w-[30px] h-[30px] object-cover mr-2"
+                          draggable={false}
+                          src={makeImageUrl("citizens", item.imageId)!}
+                          loading="lazy"
+                          width={30}
+                          height={30}
+                        />
                       ) : null}
-                    </p>
-                  </div>
-                )}
-                options={{
-                  apiPath: "/search/name",
-                  method: "POST",
-                  dataKey: "name",
-                  allowUnknown: true,
-                }}
-                inputProps={{
-                  value: values.name,
-                  name: "name",
-                  onChange: handleChange,
-                }}
-              />
-            </FormField>
+                      <p>
+                        {name}{" "}
+                        {SOCIAL_SECURITY_NUMBERS && item.socialSecurityNumber ? (
+                          <>(SSN: {item.socialSecurityNumber})</>
+                        ) : null}
+                      </p>
+                    </div>
+                  </Item>
+                );
+              }}
+            </AsyncListSearchField>
 
             {typeof results === "boolean" ? (
               <div className="mt-5">
@@ -255,7 +256,9 @@ export function NameSearchModal() {
                     <div className="flex items-center">
                       <div className="mr-2 min-w-[50px]">
                         {result.imageId ? (
-                          <Image
+                          <ImageWrapper
+                            placeholder={result.imageBlurData ? "blur" : "empty"}
+                            blurDataURL={result.imageBlurData ?? undefined}
                             className="rounded-md w-[50px] h-[50px] object-cover"
                             draggable={false}
                             src={makeImageUrl("citizens", result.imageId)!}
@@ -276,7 +279,7 @@ export function NameSearchModal() {
                       </p>
                     </div>
 
-                    <Button type="button" onClick={() => setCurrentResult(result)}>
+                    <Button type="button" onPress={() => setCurrentResult(result)}>
                       {common("view")}
                     </Button>
                   </li>
@@ -296,7 +299,7 @@ export function NameSearchModal() {
                       <Button
                         className="flex items-center justify-between gap-2"
                         type="button"
-                        onClick={() => setCurrentResult(null)}
+                        onPress={() => setCurrentResult(null)}
                       >
                         <ArrowLeft />
                         {t("viewAllResults")}
@@ -305,26 +308,47 @@ export function NameSearchModal() {
                   </header>
 
                   {currentResult.dead && currentResult.dateOfDead ? (
-                    <div className="p-2 my-2 font-semibold text-black rounded-md bg-amber-500">
-                      {t("citizenDead", {
-                        date: format(
-                          new Date(currentResult.dateOfDead ?? new Date()),
-                          "MMMM do yyyy",
-                        ),
+                    <SpeechAlert
+                      text={t("citizenDead", {
+                        date: format(new Date(currentResult.dateOfDead), "MMMM do yyyy"),
                       })}
-                    </div>
+                    >
+                      <div className="p-2 my-2 font-semibold text-black rounded-md bg-amber-500">
+                        {t("citizenDead", {
+                          date: format(new Date(currentResult.dateOfDead), "MMMM do yyyy"),
+                        })}
+                      </div>
+                    </SpeechAlert>
+                  ) : null}
+
+                  {currentResult.missing && currentResult.dateOfMissing ? (
+                    <SpeechAlert
+                      text={t("citizenMissing", {
+                        date: format(new Date(currentResult.dateOfMissing), "MMMM do yyyy"),
+                      })}
+                    >
+                      <div className="p-2 my-2 font-semibold text-black rounded-md bg-amber-500">
+                        {t("citizenMissing", {
+                          date: format(new Date(currentResult.dateOfMissing), "MMMM do yyyy"),
+                        })}
+                      </div>
+                    </SpeechAlert>
                   ) : null}
 
                   {bolo ? (
-                    <div className="p-2 my-2 font-semibold text-black rounded-md bg-amber-500">
-                      {t("citizenBoloPlaced")}
-                    </div>
+                    <SpeechAlert text={t("citizenBoloPlaced")}>
+                      <div className="p-2 my-2 font-semibold text-black rounded-md bg-amber-500">
+                        {t("citizenBoloPlaced")}
+                      </div>
+                    </SpeechAlert>
                   ) : null}
 
-                  {hasWarrants ? (
-                    <div className="p-2 my-2 font-semibold bg-red-700 rounded-md">
-                      {t("hasWarrants")}
-                    </div>
+                  {hasActiveWarrants ? (
+                    <SpeechAlert text={t("hasWarrants")}>
+                      <div className="p-2 my-2 font-semibold bg-red-700 rounded-md">
+                        {t("hasWarrants")}
+                      </div>
+                    </SpeechAlert>
                   ) : null}
 
                   <div className="flex flex-col md:flex-row">
@@ -335,7 +359,9 @@ export function NameSearchModal() {
                           onClick={() => openModal(ModalIds.CitizenImage)}
                           className="cursor-pointer"
                         >
-                          <Image
+                          <ImageWrapper
+                            placeholder={currentResult.imageBlurData ? "blur" : "empty"}
+                            blurDataURL={currentResult.imageBlurData ?? undefined}
                             className="rounded-md w-[100px] h-[100px] object-cover"
                             draggable={false}
                             src={makeImageUrl("citizens", currentResult.imageId)!}
@@ -349,77 +375,11 @@ export function NameSearchModal() {
                         <PersonFill className="text-gray-500/60 w-[100px] h-[100px]" />
                       )}
                     </div>
-                    <div className="w-full">
-                      <div className="flex flex-col">
-                        <Infofield label={cT("fullName")}>
-                          {currentResult.name} {currentResult.surname}
-                        </Infofield>
 
-                        {SOCIAL_SECURITY_NUMBERS && currentResult.socialSecurityNumber ? (
-                          <Infofield label={cT("socialSecurityNumber")}>
-                            {currentResult.socialSecurityNumber}
-                          </Infofield>
-                        ) : null}
-
-                        <Infofield label={cT("dateOfBirth")}>
-                          <FullDate isDateOfBirth onlyDate>
-                            {currentResult.dateOfBirth}
-                          </FullDate>{" "}
-                          ({cT("age")}: {calculateAge(currentResult.dateOfBirth)})
-                        </Infofield>
-
-                        <Infofield label={cT("gender")}>{currentResult.gender.value}</Infofield>
-                        <Infofield label={cT("ethnicity")}>
-                          {currentResult.ethnicity.value}
-                        </Infofield>
-                        <Infofield label={cT("hairColor")}>{currentResult.hairColor}</Infofield>
-                        <Infofield label={cT("eyeColor")}>{currentResult.eyeColor}</Infofield>
-                      </div>
-
-                      <div className="flex flex-col">
-                        <Infofield label={cT("weight")}>
-                          {currentResult.weight} {cad?.miscCadSettings?.weightPrefix}
-                        </Infofield>
-
-                        <Infofield label={cT("height")}>
-                          {currentResult.height} {cad?.miscCadSettings?.heightPrefix}
-                        </Infofield>
-
-                        <Infofield label={cT("address")}>
-                          {formatCitizenAddress(currentResult)}
-                        </Infofield>
-
-                        <Infofield label={cT("phoneNumber")}>
-                          {currentResult.phoneNumber || common("none")}
-                        </Infofield>
-
-                        <Infofield className="max-w-[400px]" label={cT("occupation")}>
-                          {currentResult.occupation || common("none")}
-                        </Infofield>
-
-                        <Infofield className="max-w-[400px]" label={cT("additionalInfo")}>
-                          {currentResult.additionalInfo || common("none")}
-                        </Infofield>
-                      </div>
-                    </div>
+                    <NameSearchBasicInformation />
 
                     <div className="w-full">
-                      <div>
-                        <ul className="flex flex-col">
-                          <CitizenLicenses citizen={currentResult} />
-                        </ul>
-
-                        {isLeo ? (
-                          <Button
-                            size="xs"
-                            type="button"
-                            className="mt-2"
-                            onClick={() => openModal(ModalIds.ManageLicenses)}
-                          >
-                            {t("editLicenses")}
-                          </Button>
-                        ) : null}
-                      </div>
+                      <NameSearchLicensesSection isLeo={isLeo} />
 
                       <div className="mt-4">
                         <Infofield label={vT("flags")}>
@@ -431,9 +391,27 @@ export function NameSearchModal() {
                             size="xs"
                             type="button"
                             className="mt-2"
-                            onClick={() => openModal(ModalIds.ManageCitizenFlags)}
+                            onPress={() => openModal(ModalIds.ManageCitizenFlags)}
                           >
                             {t("manageCitizenFlags")}
+                          </Button>
+                        ) : null}
+                      </div>
+
+                      <div className="mt-4">
+                        <Infofield label={cT("addressFlags")}>
+                          {currentResult.addressFlags?.map((v) => v.value).join(", ") ||
+                            common("none")}
+                        </Infofield>
+
+                        {isDispatch ? (
+                          <Button
+                            size="xs"
+                            type="button"
+                            className="mt-2"
+                            onPress={() => openModal(ModalIds.ManageAddressFlags)}
+                          >
+                            {t("manageAddressFlags")}
                           </Button>
                         ) : null}
                       </div>
@@ -449,65 +427,7 @@ export function NameSearchModal() {
               )
             ) : null}
 
-            <footer
-              className={`mt-4 pt-3 flex ${
-                (currentResult || CREATE_USER_CITIZEN_LEO) && isLeo
-                  ? "justify-between"
-                  : "justify-end"
-              }`}
-            >
-              <div>
-                {CREATE_USER_CITIZEN_LEO ? (
-                  <Button type="button" onClick={() => openModal(ModalIds.CreateCitizen)}>
-                    {t("createCitizen")}
-                  </Button>
-                ) : null}
-                {currentResult && !currentResult.isConfidential && isLeo ? (
-                  <>
-                    {Object.values(RecordType).map((type) => (
-                      <Button
-                        key={type}
-                        type="button"
-                        onClick={() => handleOpenCreateRecord(type)}
-                        variant="cancel"
-                        className="px-1.5"
-                      >
-                        {t(normalizeValue(`CREATE_${type}`))}
-                      </Button>
-                    ))}
-
-                    <Button
-                      size="xs"
-                      type="button"
-                      onClick={handleDeclare}
-                      disabled={state === "loading"}
-                      variant="cancel"
-                      className="px-1.5"
-                    >
-                      {currentResult.dead ? ems("declareAlive") : ems("declareDead")}
-                    </Button>
-                  </>
-                ) : null}
-              </div>
-
-              <div className="flex">
-                <Button
-                  type="reset"
-                  onClick={() => closeModal(ModalIds.NameSearch)}
-                  variant="cancel"
-                >
-                  {common("cancel")}
-                </Button>
-                <Button
-                  className="flex items-center"
-                  disabled={!isValid || state === "loading"}
-                  type="submit"
-                >
-                  {state === "loading" ? <Loader className="mr-2" /> : null}
-                  {common("search")}
-                </Button>
-              </div>
-            </footer>
+            <NameSearchFooter isLeo={isLeo} loadingState={state} />
 
             <AutoSubmit />
             <VehicleSearchModal id={ModalIds.VehicleSearchWithinName} />
@@ -516,6 +436,7 @@ export function NameSearchModal() {
             {currentResult && !currentResult.isConfidential ? (
               <>
                 <ManageCitizenFlagsModal />
+                <ManageCitizenAddressFlagsModal />
                 <ManageCustomFieldsModal
                   category={CustomFieldCategory.CITIZEN}
                   url={`/search/actions/custom-fields/citizen/${currentResult.id}`}

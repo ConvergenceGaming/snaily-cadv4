@@ -6,14 +6,13 @@ import type {
   Officer,
 } from "@snailycad/types";
 import { isUnitCombined } from "@snailycad/utils";
-import { Draggable } from "components/shared/dnd/Draggable";
-import { Droppable } from "components/shared/dnd/Droppable";
-import { useActiveDispatchers } from "hooks/realtime/useActiveDispatchers";
+import { Droppable, Draggable } from "@snailycad/ui";
+import { useActiveDispatchers } from "hooks/realtime/use-active-dispatchers";
 import { useGenerateCallsign } from "hooks/useGenerateCallsign";
 import { classNames } from "lib/classNames";
 import { makeUnitName } from "lib/utils";
 import { useTranslations } from "next-intl";
-import { useDispatchState } from "state/dispatch/dispatchState";
+import { useDispatchState } from "state/dispatch/dispatch-state";
 import { DndActions } from "types/DndActions";
 
 interface Props {
@@ -27,7 +26,8 @@ interface Props {
 
 export function InvolvedUnitsColumn({ handleAssignUnassignToIncident, incident }: Props) {
   const common = useTranslations("Common");
-  const dispatchState = useDispatchState();
+  const setDraggingUnit = useDispatchState((state) => state.setDraggingUnit);
+
   const { generateCallsign } = useGenerateCallsign();
   const { hasActiveDispatchers } = useActiveDispatchers();
 
@@ -56,7 +56,7 @@ export function InvolvedUnitsColumn({ handleAssignUnassignToIncident, incident }
               <Draggable
                 canDrag={canDrag}
                 onDrag={(isDragging) => {
-                  dispatchState.setDraggingUnit(isDragging ? "incident" : null);
+                  setDraggingUnit(isDragging ? "incident" : null);
                 }}
                 key={unit.id}
                 item={{ incident, unit }}
@@ -65,7 +65,7 @@ export function InvolvedUnitsColumn({ handleAssignUnassignToIncident, incident }
                 {() => {
                   const comma = idx + 1 === incident.unitsInvolved.length ? "" : ", ";
                   return (
-                    <p
+                    <span
                       className={classNames(
                         "text-base",
                         canDrag ? "!cursor-move" : "cursor-default",
@@ -73,7 +73,7 @@ export function InvolvedUnitsColumn({ handleAssignUnassignToIncident, incident }
                     >
                       {makeAssignedUnit(unit)}
                       {comma}
-                    </p>
+                    </span>
                   );
                 }}
               </Draggable>

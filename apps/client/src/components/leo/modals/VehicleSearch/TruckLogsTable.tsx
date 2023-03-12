@@ -2,7 +2,7 @@ import { Table, useTableState } from "components/shared/Table";
 import { compareDesc } from "date-fns";
 import { useFeatureEnabled } from "hooks/useFeatureEnabled";
 import { useTranslations } from "next-intl";
-import type { VehicleSearchResult } from "state/search/vehicleSearchState";
+import type { VehicleSearchResult } from "state/search/vehicle-search-state";
 
 interface Props {
   result: VehicleSearchResult;
@@ -10,6 +10,7 @@ interface Props {
 
 export function TruckLogsTable({ result }: Props) {
   const t = useTranslations("TruckLogs");
+  const common = useTranslations("Common");
   const { TRUCK_LOGS } = useFeatureEnabled();
   const truckLogs = result.TruckLog;
   const tableState = useTableState();
@@ -24,12 +25,15 @@ export function TruckLogsTable({ result }: Props) {
       <h4 className="text-xl font-semibold">{t("truckLogs")}</h4>
 
       <Table
+        features={{ isWithinCardOrModal: true }}
         tableState={tableState}
         data={truckLogs
           .sort((a, b) => compareDesc(new Date(a.createdAt), new Date(b.createdAt)))
           .map((log) => ({
             id: log.id,
-            driver: `${result.citizen.name} ${result.citizen.surname}`,
+            driver: result.citizen
+              ? `${result.citizen.name} ${result.citizen.surname}`
+              : common("unknown"),
             vehicle: result.model.value?.value,
             startedAt: log.startedAt,
             endedAt: log.endedAt,

@@ -1,4 +1,4 @@
-import { Permissions } from "@snailycad/permissions";
+import { defaultPermissions, Permissions } from "@snailycad/permissions";
 import { Feature, ValueType } from "@snailycad/types";
 
 export interface SidebarRoute {
@@ -28,6 +28,7 @@ export const managementRoutes: SidebarRoute[] = [
       Permissions.ManageUnits,
       Permissions.DeleteUnits,
       Permissions.ManageUnitCallsigns,
+      Permissions.ManageAwardsAndQualifications,
     ],
   },
   {
@@ -41,13 +42,7 @@ export const managementRoutes: SidebarRoute[] = [
   },
   {
     type: "COURTHOUSE",
-    permissions: [
-      Permissions.ViewNameChangeRequests,
-      Permissions.ManageNameChangeRequests,
-      Permissions.ViewExpungementRequests,
-      Permissions.ManageExpungementRequests,
-      Permissions.ManagePendingWarrants,
-    ],
+    permissions: defaultPermissions.defaultCourthousePermissions,
     hidden: ({ COURTHOUSE }) => !COURTHOUSE,
   },
   {
@@ -58,9 +53,21 @@ export const managementRoutes: SidebarRoute[] = [
     type: "CUSTOM_ROLES",
     permissions: [Permissions.ViewCustomRoles, Permissions.ManageCustomRoles],
   },
+  {
+    type: "AUDIT_LOGS",
+    permissions: defaultPermissions.allDefaultAdminPermissions,
+  },
 ];
 
 export const valueRoutes: SidebarRoute[] = [
+  {
+    type: ValueType.ADDRESS,
+    permissions: [Permissions.ManageValueAddress],
+  },
+  {
+    type: ValueType.ADDRESS_FLAG,
+    permissions: [Permissions.ManageValueAddressFlag],
+  },
   {
     type: ValueType.BLOOD_GROUP,
     permissions: [Permissions.ManageValueBloodGroup],
@@ -90,10 +97,15 @@ export const valueRoutes: SidebarRoute[] = [
   {
     type: ValueType.DIVISION,
     permissions: [Permissions.ManageValueDivision],
+    hidden: ({ DIVISIONS }) => !DIVISIONS,
   },
   {
     type: ValueType.DRIVERSLICENSE_CATEGORY,
     permissions: [Permissions.ManageValueDLCategory],
+  },
+  {
+    type: ValueType.EMERGENCY_VEHICLE,
+    permissions: [Permissions.ManageValueEmergencyVehicle],
   },
   {
     type: ValueType.ETHNICITY,
@@ -130,6 +142,10 @@ export const valueRoutes: SidebarRoute[] = [
   {
     type: ValueType.VEHICLE_FLAG,
     permissions: [Permissions.ManageValueVehicleFlag],
+  },
+  {
+    type: ValueType.VEHICLE_TRIM_LEVEL,
+    permissions: [Permissions.ManageValueVehicleTrimLevel],
   },
   {
     type: ValueType.WEAPON,

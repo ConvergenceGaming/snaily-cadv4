@@ -1,7 +1,6 @@
 import * as React from "react";
 import { useRouter } from "next/router";
-import type { cad as CAD, User } from "@snailycad/types";
-import { Loader } from "../components/Loader";
+import { type cad as CAD, type User, WhitelistStatus } from "@snailycad/types";
 import { useIsRouteFeatureEnabled } from "../hooks/auth/useIsRouteFeatureEnabled";
 import { useListener } from "@casper124578/use-socket.io";
 import { SocketEvents } from "@snailycad/config";
@@ -25,12 +24,20 @@ interface ProviderProps {
   };
 }
 
-const NO_LOADING_ROUTES = ["/403", "/404", "/auth/login", "/auth/register"];
+const NO_LOADING_ROUTES = [
+  "/403",
+  "/404",
+  "/auth/login",
+  "/auth/register",
+  "/auth/pending",
+  "/auth/temp-password",
+  "/auth/connections",
+];
 
 export function AuthProvider({ initialData, children }: ProviderProps) {
   const [user, setUser] = React.useState<User | null>(initialData.session ?? null);
   const [cad, setCad] = React.useState<CAD | null>(
-    initialData.session?.cad ?? initialData.cad ?? null,
+    initialData.cad ?? initialData.session?.cad ?? null,
   );
 
   const router = useRouter();
@@ -38,15 +45,38 @@ export function AuthProvider({ initialData, children }: ProviderProps) {
 
   const handleGetUser = React.useCallback(async () => {
     const { getSessionUser } = await import("lib/auth");
+    const { doesUserHaveAllRequiredConnections } = await import(
+      "lib/validation/does-user-have-required-connections"
+    );
+
     const user = await getSessionUser();
+
+    if (
+      user?.whitelistStatus === WhitelistStatus.PENDING &&
+      !NO_LOADING_ROUTES.includes(router.pathname)
+    ) {
+      router.push("/auth/pending");
+
+      setUser(user);
+      return;
+    }
 
     if (!user && !NO_LOADING_ROUTES.includes(router.pathname)) {
       const from = router.asPath;
       router.push(`/auth/login?from=${from}`);
     }
 
+    if (
+      user &&
+      !NO_LOADING_ROUTES.includes(router.pathname) &&
+      !doesUserHaveAllRequiredConnections({ user, features: cad?.features })
+    ) {
+      const from = router.asPath;
+      router.push(`/auth/connections?from=${from}`);
+    }
+
     setUser(user);
-  }, [router]);
+  }, [router, cad]);
 
   React.useEffect(() => {
     const savedDarkTheme = initialData.userSavedIsDarkTheme
@@ -66,7 +96,7 @@ export function AuthProvider({ initialData, children }: ProviderProps) {
       setUser(initialData.session);
     }
 
-    if (initialData.cad ?? initialData.session?.cad) {
+    if (initialData.cad || initialData.session?.cad) {
       setCad(initialData.cad ?? initialData.session?.cad ?? null);
     }
   }, [initialData]);
@@ -94,9 +124,7 @@ export function AuthProvider({ initialData, children }: ProviderProps) {
   if (!NO_LOADING_ROUTES.includes(router.pathname) && !user) {
     return (
       <div id="unauthorized" className="fixed inset-0 grid bg-transparent place-items-center">
-        <span aria-label="loading...">
-          <Loader className="w-14 h-14 border-[3px]" />
-        </span>
+        <span aria-label="loading...">{/* <Loader className="w-14 h-14 border-[3px]" /> */}</span>
       </div>
     );
   }

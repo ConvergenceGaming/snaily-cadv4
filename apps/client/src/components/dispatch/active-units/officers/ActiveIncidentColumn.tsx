@@ -2,10 +2,15 @@ import * as React from "react";
 import type { LeoIncident } from "@snailycad/types";
 import { useTranslations } from "next-intl";
 import { ModalIds } from "types/ModalIds";
-import { ManageIncidentModal } from "components/leo/incidents/ManageIncidentModal";
 import { useModal } from "state/modalState";
-import { Button } from "components/Button";
-import { useActiveDispatchers } from "hooks/realtime/useActiveDispatchers";
+import { Button } from "@snailycad/ui";
+import { useActiveDispatchers } from "hooks/realtime/use-active-dispatchers";
+import dynamic from "next/dynamic";
+
+const ManageIncidentModal = dynamic(
+  async () => (await import("components/leo/incidents/manage-incident-modal")).ManageIncidentModal,
+  { ssr: false },
+);
 
 interface Props {
   incident: LeoIncident | null;
@@ -36,7 +41,7 @@ export function ActiveIncidentColumn({ incident, isDispatch }: Props) {
     <>
       <Button
         disabled={isBtnDisabled}
-        onClick={() =>
+        onPress={() =>
           handleIncidentOpen({
             ...incident,
             isActive: true,

@@ -1,7 +1,5 @@
 import * as React from "react";
-import { TabsContent } from "components/shared/TabList";
 import * as Accordion from "@radix-ui/react-accordion";
-import { Button } from "components/Button";
 import { FormField } from "components/form/FormField";
 import { Toggle } from "components/form/Toggle";
 import { useAuth } from "context/AuthContext";
@@ -10,8 +8,8 @@ import useFetch from "lib/useFetch";
 import { useTranslations } from "use-intl";
 import { StatusViewMode, TableActionsAlignment } from "@snailycad/types";
 import { Select } from "components/form/Select";
-import { Loader } from "components/Loader";
-import nextConfig from "../../../next.config";
+import { Button, Loader, SelectField, TabsContent } from "@snailycad/ui";
+import { i18n } from "../../../i18n.config.mjs";
 import type { Sounds } from "lib/server/getAvailableSounds.server";
 import { soundCamelCaseToKebabCase } from "lib/utils";
 import { CaretDownFill } from "react-bootstrap-icons";
@@ -28,7 +26,7 @@ export function AppearanceTab({ availableSounds }: Props) {
   const t = useTranslations("Account");
   const { execute, state } = useFetch();
   const common = useTranslations("Common");
-  const availableLanguages = nextConfig.i18n?.locales;
+  const availableLanguages = i18n.locales;
   const router = useRouter();
   const [currentSrc, setCurrentSrc] = React.useState("");
 
@@ -48,6 +46,7 @@ export function AppearanceTab({ availableSounds }: Props) {
     [TableActionsAlignment.RIGHT]: common("right"),
   };
 
+  const voices = getSynthesisVoices();
   if (!user) {
     return null;
   }
@@ -56,7 +55,7 @@ export function AppearanceTab({ availableSounds }: Props) {
     isDarkTheme: user.isDarkTheme ?? true,
     statusViewMode: user.statusViewMode ?? StatusViewMode.DOT_COLOR,
     tableActionsAlignment: user.tableActionsAlignment,
-    locale: user?.locale ?? nextConfig.i18n?.defaultLocale,
+    locale: user?.locale ?? i18n.defaultLocale,
     soundSettings: {
       panicButton: user.soundSettings?.panicButton ?? true,
       signal100: user.soundSettings?.signal100 ?? true,
@@ -65,6 +64,7 @@ export function AppearanceTab({ availableSounds }: Props) {
       statusUpdate: user.soundSettings?.statusUpdate ?? false,
       incomingCall: user.soundSettings?.incomingCall ?? false,
       speech: user.soundSettings?.speech ?? true,
+      speechVoice: user.soundSettings?.speechVoice ?? null,
     },
   };
   const sounds = Object.keys(INITIAL_VALUES.soundSettings);
@@ -85,156 +85,184 @@ export function AppearanceTab({ availableSounds }: Props) {
     }
   }
 
-  const availableSoundsArr = sounds.filter((v) => availableSounds[soundCamelCaseToKebabCase(v)]);
+  const availableSoundsArr = sounds.filter(
+    (v) => v !== "speech" && availableSounds[soundCamelCaseToKebabCase(v)],
+  );
   const unAvailableSoundsArr = sounds.filter(
-    (v) => v !== "speech" && !availableSounds[soundCamelCaseToKebabCase(v)],
+    (v) => !["speech", "speechVoice"].includes(v) && !availableSounds[soundCamelCaseToKebabCase(v)],
   );
 
   return (
-    <TabsContent aria-label={t("appearanceSettings")} value="appearanceSettings">
+    <>
       {audio}
+      <TabsContent aria-label={t("appearanceSettings")} value="appearanceSettings">
+        <h1 className="text-2xl font-semibold">{t("appearanceSettings")}</h1>
+        <Formik onSubmit={onSubmit} initialValues={INITIAL_VALUES}>
+          {({ handleChange, setFieldValue, values, errors }) => (
+            <Form className="mt-3">
+              <FormField checkbox errorMessage={errors.isDarkTheme} label={t("darkTheme")}>
+                <Toggle
+                  value={values.isDarkTheme}
+                  onCheckedChange={handleChange}
+                  name="isDarkTheme"
+                />
+              </FormField>
 
-      <h1 className="text-2xl font-semibold">{t("appearanceSettings")}</h1>
-      <Formik onSubmit={onSubmit} initialValues={INITIAL_VALUES}>
-        {({ handleChange, values, errors }) => (
-          <Form className="mt-3">
-            <FormField checkbox errorMessage={errors.isDarkTheme} label={t("darkTheme")}>
-              <Toggle
-                value={values.isDarkTheme}
-                onCheckedChange={handleChange}
-                name="isDarkTheme"
-              />
-            </FormField>
+              <FormField errorMessage={errors.locale} label={t("locale")}>
+                <Select
+                  values={availableLanguages.map((v) => ({ value: v, label: v }))}
+                  value={values.locale}
+                  onChange={handleChange}
+                  name="locale"
+                />
+              </FormField>
 
-            <FormField errorMessage={errors.locale} label={t("locale")}>
-              <Select
-                values={availableLanguages.map((v) => ({ value: v, label: v }))}
-                value={values.locale}
-                onChange={handleChange}
-                name="locale"
-              />
-            </FormField>
-
-            <FormField errorMessage={errors.statusViewMode} label={t("statusView")}>
-              <Select
-                values={Object.values(StatusViewMode).map((v) => ({
+              <SelectField
+                errorMessage={errors.statusViewMode}
+                label={t("statusView")}
+                options={Object.values(StatusViewMode).map((v) => ({
                   value: v,
                   label: STATUS_VIEW_MODE_LABELS[v],
                 }))}
-                value={values.statusViewMode}
-                onChange={handleChange}
+                selectedKey={values.statusViewMode}
+                onSelectionChange={(value) => setFieldValue("statusViewMode", value)}
                 name="statusViewMode"
               />
-            </FormField>
 
-            <FormField errorMessage={errors.tableActionsAlignment} label={t("tableAlignment")}>
-              <Select
-                values={Object.values(TableActionsAlignment).map((v) => ({
+              <SelectField
+                errorMessage={errors.tableActionsAlignment}
+                label={t("tableAlignment")}
+                options={Object.values(TableActionsAlignment).map((v) => ({
                   value: v,
                   label: TABLE_ALIGNMENT_LABELS[v],
                 }))}
-                value={values.tableActionsAlignment}
-                onChange={handleChange}
+                selectedKey={values.tableActionsAlignment}
+                onSelectionChange={(value) => setFieldValue("tableActionsAlignment", value)}
                 name="tableActionsAlignment"
               />
-            </FormField>
 
-            <div className="mb-5">
-              <h2 className="text-2xl font-semibold mb-3">{t("sounds")}</h2>
+              <div className="mb-5">
+                <h2 className="text-2xl font-semibold mb-3">{t("sounds")}</h2>
 
-              <div className="mb-3">
-                <FormField className="!mb-0" label="Speech" checkbox>
-                  <Toggle
-                    value={values.soundSettings.speech}
-                    onCheckedChange={handleChange}
-                    name="soundSettings.speech"
-                  />
-                </FormField>
-              </div>
-
-              {availableSoundsArr.map((_name) => {
-                const fieldName = _name as keyof typeof INITIAL_VALUES.soundSettings;
-                const kebabCase = soundCamelCaseToKebabCase(fieldName);
-                const soundAvailable = !!availableSounds[kebabCase];
-
-                if (!soundAvailable) return null;
-                if (fieldName === "speech") return null;
-
-                return (
-                  <div className="mb-3 flex flex-row gap-5" key={fieldName}>
-                    <FormField className="!mb-0" label={t(fieldName)} checkbox>
+                {voices ? (
+                  <section id="speech" className="mb-5">
+                    <h3 className="text-xl font-semibold mb-3">{t("speech")}</h3>
+                    <FormField label={t("speech")} checkbox>
                       <Toggle
-                        value={values.soundSettings[fieldName]}
+                        value={values.soundSettings.speech}
                         onCheckedChange={handleChange}
-                        name={`soundSettings.${fieldName}`}
-                        disabled={!soundAvailable}
+                        name="soundSettings.speech"
                       />
                     </FormField>
-
-                    <Button
-                      size="xs"
-                      type="button"
-                      onClick={() => {
-                        setCurrentSrc(`/sounds/${kebabCase}.mp3`);
-                        controls.volume(0.1);
-                        controls.play();
-                      }}
-                    >
-                      Test sound (Double Click)
-                    </Button>
-                  </div>
-                );
-              })}
-
-              {unAvailableSoundsArr.length <= 0 ? null : (
-                <Accordion.Root className="mt-4" type="multiple">
-                  <Accordion.Item value="unavailable-sounds">
-                    <Accordion.Trigger
-                      title="Click to expand"
-                      className="accordion-state gap-2 flex items-center justify-between pt-1 text-lg font-semibold text-left"
-                    >
-                      <p>Unavailable Sounds</p>
-
-                      <CaretDownFill
-                        width={16}
-                        height={16}
-                        className="transform w-4 h-4 transition-transform accordion-state-transform"
+                    <FormField label={t("speechVoice")}>
+                      <Select
+                        disabled={!values.soundSettings.speech}
+                        values={voices.map((voice) => ({
+                          label: voice.name,
+                          value: voice.voiceURI,
+                        }))}
+                        value={values.soundSettings.speechVoice}
+                        onChange={handleChange}
+                        name="soundSettings.speechVoice"
                       />
-                    </Accordion.Trigger>
+                    </FormField>
+                  </section>
+                ) : null}
 
-                    <Accordion.Content className="mt-3">
-                      {unAvailableSoundsArr.map((sound) => (
-                        <p key={sound}>{t(sound)}</p>
-                      ))}
+                <section>
+                  <h3 className="text-xl font-semibold mb-3">{t("otherSounds")}</h3>
 
-                      <p className="mt-2">
-                        These sounds are unavailable.
-                        <a
-                          className="ml-1 underline"
-                          rel="noreferrer"
-                          target="_blank"
-                          href="https://cad-docs.caspertheghost.me/docs/guides/how-set-custom-sounds"
+                  {availableSoundsArr.map((_name) => {
+                    const fieldName = _name as keyof typeof INITIAL_VALUES.soundSettings;
+                    const kebabCase = soundCamelCaseToKebabCase(fieldName);
+                    const soundAvailable = !!availableSounds[kebabCase];
+
+                    if (!soundAvailable) return null;
+                    if (["speech", "speechVoice"].includes(fieldName)) return null;
+
+                    return (
+                      <div className="mb-3 flex flex-row gap-5" key={fieldName}>
+                        <FormField className="!mb-0" label={t(fieldName)} checkbox>
+                          <Toggle
+                            value={values.soundSettings[fieldName] as boolean}
+                            onCheckedChange={handleChange}
+                            name={`soundSettings.${fieldName}`}
+                            disabled={!soundAvailable}
+                          />
+                        </FormField>
+
+                        <Button
+                          size="xs"
+                          type="button"
+                          onPress={() => {
+                            setCurrentSrc(`/sounds/${kebabCase}.mp3`);
+                            controls.volume(0.1);
+                            controls.play();
+                          }}
                         >
-                          They must be added by an admin.
-                        </a>
-                      </p>
-                    </Accordion.Content>
-                  </Accordion.Item>
-                </Accordion.Root>
-              )}
-            </div>
+                          Test sound (Double Click)
+                        </Button>
+                      </div>
+                    );
+                  })}
+                </section>
 
-            <Button
-              className="flex items-center gap-2"
-              type="submit"
-              disabled={state === "loading"}
-            >
-              {state === "loading" ? <Loader /> : null}
-              {common("save")}
-            </Button>
-          </Form>
-        )}
-      </Formik>
-    </TabsContent>
+                <section>
+                  {unAvailableSoundsArr.length <= 0 ? null : (
+                    <Accordion.Root className="mt-4" type="multiple">
+                      <Accordion.Item value="unavailable-sounds">
+                        <Accordion.Trigger
+                          title="Click to expand"
+                          className="accordion-state gap-2 flex items-center justify-between pt-1 text-lg font-semibold text-left"
+                        >
+                          <h3 className="text-xl font-semibold mb-3">{t("unavailableSounds")}</h3>
+
+                          <CaretDownFill
+                            width={16}
+                            height={16}
+                            className="transform w-4 h-4 transition-transform accordion-state-transform"
+                          />
+                        </Accordion.Trigger>
+
+                        <Accordion.Content className="mt-3">
+                          {unAvailableSoundsArr.map((sound) => (
+                            <p key={sound}>{t(sound)}</p>
+                          ))}
+
+                          <a
+                            className="mt-2 ml-1 underline"
+                            rel="noreferrer"
+                            target="_blank"
+                            href="https://docs.snailycad.org/docs/guides/how-set-custom-sounds"
+                          >
+                            {t("unavailableSoundsMessage")}
+                          </a>
+                        </Accordion.Content>
+                      </Accordion.Item>
+                    </Accordion.Root>
+                  )}
+                </section>
+              </div>
+
+              <Button
+                className="flex items-center gap-2"
+                type="submit"
+                disabled={state === "loading"}
+              >
+                {state === "loading" ? <Loader /> : null}
+                {common("save")}
+              </Button>
+            </Form>
+          )}
+        </Formik>
+      </TabsContent>
+    </>
   );
+}
+
+export function getSynthesisVoices() {
+  if (typeof window === "undefined") return;
+  if (!("speechSynthesis" in window)) return;
+  if (typeof window.speechSynthesis.getVoices !== "function") return;
+  return window.speechSynthesis.getVoices();
 }

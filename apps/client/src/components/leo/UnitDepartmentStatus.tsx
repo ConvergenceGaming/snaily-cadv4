@@ -1,5 +1,5 @@
 import { EmsFdDeputy, Officer, WhitelistStatus } from "@snailycad/types";
-import { Button } from "components/Button";
+import { Button } from "@snailycad/ui";
 import { HoverCard } from "components/shared/HoverCard";
 import { Status } from "components/shared/Status";
 import { useTranslations } from "next-intl";
@@ -12,11 +12,10 @@ interface Props {
 export function UnitDepartmentStatus({ unit }: Props) {
   const t = useTranslations("Leo");
   const departmentStatus = unit.whitelistStatus?.status ?? null;
-  const departmentStatusFormatted = departmentStatus ? departmentStatus.toLowerCase() : "—";
 
   return (
     <span className="capitalize flex items-center gap-2">
-      <Status state={departmentStatus}>{departmentStatusFormatted}</Status>
+      <Status fallback="—">{departmentStatus}</Status>
 
       {unit.whitelistStatus?.status === WhitelistStatus.PENDING ? (
         <HoverCard
@@ -27,7 +26,7 @@ export function UnitDepartmentStatus({ unit }: Props) {
           }
         >
           <p className="max-w-[400px]">
-            {t.rich(
+            {t(
               unit.department?.isDefaultDepartment
                 ? "pendingAccessDepartment"
                 : "pendingAccessDepartmentNoDefault",

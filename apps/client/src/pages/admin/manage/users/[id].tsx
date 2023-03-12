@@ -8,36 +8,51 @@ import { getTranslations } from "lib/getTranslation";
 import type { GetServerSideProps } from "next";
 import { CustomRole, Rank } from "@snailycad/types";
 import { AdminLayout } from "components/admin/AdminLayout";
-import { FormField } from "components/form/FormField";
-import { Select } from "components/form/Select";
 import { useAuth } from "context/AuthContext";
-import { Button, buttonVariants } from "components/Button";
-import { Loader } from "components/Loader";
+import {
+  Loader,
+  Button,
+  buttonVariants,
+  SelectField,
+  TextField,
+  Breadcrumbs,
+  BreadcrumbItem,
+} from "@snailycad/ui";
 import useFetch from "lib/useFetch";
 import { FormRow } from "components/form/FormRow";
 import { handleValidate } from "lib/handleValidate";
-import { Input } from "components/form/inputs/Input";
 import { requestAll } from "lib/utils";
 import { Title } from "components/shared/Title";
-import { ManagePermissionsModal } from "components/admin/manage/users/ManagePermissionsModal";
 import { ModalIds } from "types/ModalIds";
 import { useModal } from "state/modalState";
 import { usePermission, Permissions } from "hooks/usePermission";
 import dynamic from "next/dynamic";
 import { SettingsFormField } from "components/form/SettingsFormField";
 import { AlertModal } from "components/modal/AlertModal";
-import { ApiTokenArea } from "components/admin/manage/users/ApiTokenArea";
+import { ApiTokenArea } from "components/admin/manage/users/api-token-area";
 import { useFeatureEnabled } from "hooks/useFeatureEnabled";
 import { classNames } from "lib/classNames";
-import { ManageRolesModal } from "components/admin/manage/users/ManageRolesModal";
 import type { GetManageUserByIdData, PutManageUserByIdData } from "@snailycad/types/api";
 
 const DangerZone = dynamic(
-  async () => (await import("components/admin/manage/users/DangerZone")).DangerZone,
+  async () => (await import("components/admin/manage/users/danger-zone")).DangerZone,
 );
 
 const BanArea = dynamic(
-  async () => (await import("components/admin/manage/users/BanArea")).BanArea,
+  async () => (await import("components/admin/manage/users/ban-area")).BanArea,
+);
+
+const ManageRolesModal = dynamic(
+  async () =>
+    (await import("components/admin/manage/users/modals/manage-roles-modal")).ManageRolesModal,
+  { ssr: false },
+);
+
+const ManagePermissionsModal = dynamic(
+  async () =>
+    (await import("components/admin/manage/users/modals/manage-permissions-modal"))
+      .ManagePermissionsModal,
+  { ssr: false },
 );
 
 interface Props {
@@ -68,6 +83,7 @@ export default function ManageCitizens(props: Props) {
   }
 
   const INITIAL_VALUES = {
+    username: user.username,
     rank: user.rank,
     isDispatch: user.isDispatch,
     isLeo: user.isLeo,
@@ -90,41 +106,49 @@ export default function ManageCitizens(props: Props) {
         permissions: [Permissions.BanUsers, Permissions.ManageUsers, Permissions.DeleteUsers],
       }}
     >
-      <header className="mb-3">
-        <Title className="mb-2">{t("editUser")}</Title>
-        <h2 className="text-lg">
-          {t.rich("editing", {
-            span: (children) => <span className="font-semibold">{children}</span>,
-            user: user.username,
-          })}
-        </h2>
-      </header>
+      <Breadcrumbs>
+        <BreadcrumbItem href="/admin/manage/users">{t("MANAGE_USERS")}</BreadcrumbItem>
+        <BreadcrumbItem>{t("editUser")}</BreadcrumbItem>
+        <BreadcrumbItem>{user.username}</BreadcrumbItem>
+      </Breadcrumbs>
+
+      <Title renderLayoutTitle={false} className="mb-2">
+        {t("editUser")}
+      </Title>
 
       <div className="mt-5">
         <Formik validate={validate} onSubmit={onSubmit} initialValues={INITIAL_VALUES}>
-          {({ handleChange, setFieldValue, isValid, values, errors }) => (
+          {({ setFieldValue, isValid, values, errors }) => (
             <Form className="p-4 rounded-md dark:border card">
-              <FormField errorMessage={errors.rank} label="Rank">
-                <Select
-                  name="rank"
-                  onChange={handleChange}
-                  disabled={isRankDisabled}
-                  value={values.rank}
-                  values={
-                    isRankDisabled
-                      ? [{ value: user.rank, label: user.rank }]
-                      : [
-                          { value: "ADMIN", label: "Admin" },
-                          { value: "USER", label: "User" },
-                        ]
-                  }
-                />
+              <TextField
+                label="Username"
+                name="username"
+                onChange={(value) => setFieldValue("username", value)}
+                value={values.username}
+                errorMessage={errors.username}
+              />
 
+              <SelectField
+                isDisabled={isRankDisabled}
+                errorMessage={errors.rank}
+                label="Rank"
+                name="rank"
+                onSelectionChange={(key) => setFieldValue("rank", key)}
+                selectedKey={values.rank}
+                options={
+                  isRankDisabled
+                    ? [{ value: user.rank, label: user.rank }]
+                    : [
+                        { value: "ADMIN", label: "Admin" },
+                        { value: "USER", label: "User" },
+                      ]
+                }
+              >
                 <small className="text-base mt-2 text-neutral-600 dark:text-gray-300 mb-3">
                   The rank does not have any influence on the permissions of the user. It is only
                   used to identify the user in the system.
                 </small>
-              </FormField>
+              </SelectField>
 
               <SettingsFormField
                 description="A detailed permissions system where you can assign many actions to a user."
@@ -133,7 +157,7 @@ export default function ManageCitizens(props: Props) {
                 <Button
                   disabled={user.rank === Rank.OWNER}
                   type="button"
-                  onClick={() => openModal(ModalIds.ManagePermissions)}
+                  onPress={() => openModal(ModalIds.ManagePermissions)}
                 >
                   {t("managePermissions")}
                 </Button>
@@ -143,30 +167,38 @@ export default function ManageCitizens(props: Props) {
                   className="ml-2 text-base"
                   disabled={user.rank === Rank.OWNER}
                   type="button"
-                  onClick={() => openModal(ModalIds.ManageRoles)}
+                  onPress={() => openModal(ModalIds.ManageRoles)}
                 >
                   {t("manageRoles")}
                 </Button>
               </SettingsFormField>
 
               <FormRow>
-                <FormField optional errorMessage={errors.steamId} label="Steam ID">
-                  <Input name="steamId" onChange={handleChange} value={values.steamId} />
-                </FormField>
+                <TextField
+                  isOptional
+                  label="Steam ID"
+                  name="steamId"
+                  onChange={(value) => setFieldValue("steamId", value)}
+                  value={values.steamId}
+                  errorMessage={errors.steamId}
+                />
 
-                <FormField optional errorMessage={errors.discordId} label="Discord ID">
-                  <Input name="discordId" onChange={handleChange} value={values.discordId} />
-                </FormField>
+                <TextField
+                  isOptional
+                  label="Discord ID"
+                  name="discordId"
+                  onChange={(value) => setFieldValue("discordId", value)}
+                  value={values.discordId}
+                  errorMessage={errors.discordId}
+                />
               </FormRow>
 
               <div className="flex justify-end mt-3">
-                <Link href="/admin/manage/users">
-                  <a
-                    href="/admin/manage/users"
-                    className={classNames(buttonVariants.cancel, "p-1 px-4 rounded-md")}
-                  >
-                    {common("goBack")}
-                  </a>
+                <Link
+                  href="/admin/manage/users"
+                  className={classNames(buttonVariants.cancel, "p-1 px-4 rounded-md")}
+                >
+                  {common("goBack")}
                 </Link>
                 <Button
                   className="flex items-center"
@@ -213,8 +245,12 @@ export default function ManageCitizens(props: Props) {
         ) : null}
       </div>
 
-      <ManagePermissionsModal onUpdate={(user) => setUser(user)} user={user} />
-      <ManageRolesModal onUpdate={(user) => setUser(user)} roles={props.roles} user={user} />
+      {user.rank !== Rank.OWNER ? (
+        <>
+          <ManagePermissionsModal onUpdate={(user) => setUser(user)} user={user} />
+          <ManageRolesModal onUpdate={(user) => setUser(user)} roles={props.roles} user={user} />
+        </>
+      ) : null}
     </AdminLayout>
   );
 }

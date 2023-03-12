@@ -1,10 +1,10 @@
-import { Button } from "components/Button";
+import { Button } from "@snailycad/ui";
 import { Infofield } from "components/shared/Infofield";
 import { useModal } from "state/modalState";
 import { useTranslations } from "next-intl";
-import type { NameSearchResult } from "state/search/nameSearchState";
-import type { VehicleSearchResult } from "state/search/vehicleSearchState";
-import type { WeaponSearchResult } from "state/search/weaponSearchState";
+import type { NameSearchResult } from "state/search/name-search-state";
+import type { VehicleSearchResult } from "state/search/vehicle-search-state";
+import type { WeaponSearchResult } from "state/search/weapon-search-state";
 import { ModalIds } from "types/ModalIds";
 
 interface Props {
@@ -46,7 +46,7 @@ export function CustomFieldsArea({ currentResult, isLeo }: Props) {
           size="xs"
           type="button"
           className="mt-2"
-          onClick={() => openModal(ModalIds.ManageCitizenCustomFields)}
+          onPress={() => openModal(ModalIds.ManageCitizenCustomFields)}
         >
           {t("manageCustomFields")}
         </Button>

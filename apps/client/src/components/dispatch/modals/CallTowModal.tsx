@@ -1,11 +1,7 @@
 import { TOW_SCHEMA } from "@snailycad/schemas";
-import { Button } from "components/Button";
+import { Loader, Input, Button, TextField, AsyncListSearchField, Item } from "@snailycad/ui";
 import { FormField } from "components/form/FormField";
-import { FormRow } from "components/form/FormRow";
-import { Input } from "components/form/inputs/Input";
 import { Select } from "components/form/Select";
-import { Textarea } from "components/form/Textarea";
-import { Loader } from "components/Loader";
 import { Modal } from "components/modal/Modal";
 import { useModal } from "state/modalState";
 import { useValues } from "context/ValuesContext";
@@ -14,35 +10,47 @@ import { handleValidate } from "lib/handleValidate";
 import { toastMessage } from "lib/toastMessage";
 import useFetch from "lib/useFetch";
 import { useRouter } from "next/router";
-import type { Full911Call } from "state/dispatch/dispatchState";
-import { useEmsFdState } from "state/emsFdState";
-import { useLeoState } from "state/leoState";
+import type { Full911Call } from "state/dispatch/dispatch-state";
+import { useEmsFdState } from "state/ems-fd-state";
+import { useLeoState } from "state/leo-state";
 import { ModalIds } from "types/ModalIds";
 import { useTranslations } from "use-intl";
-import { InputSuggestions } from "components/form/inputs/InputSuggestions";
-import type { VehicleSearchResult } from "state/search/vehicleSearchState";
+import type { VehicleSearchResult } from "state/search/vehicle-search-state";
 import { Checkbox } from "components/form/inputs/Checkbox";
 import type { PostTowCallsData } from "@snailycad/types/api";
+import { AddressPostalSelect } from "components/form/select/PostalSelect";
+import { useUserOfficers } from "hooks/leo/use-get-user-officers";
+import { useGetUserDeputies } from "hooks/ems-fd/use-get-user-deputies";
+import { isUnitCombined, isUnitCombinedEmsFd } from "@snailycad/utils";
 
 interface Props {
   call: Full911Call | null;
 }
 
 export function DispatchCallTowModal({ call }: Props) {
-  const common = useTranslations("Common");
-  const t = useTranslations();
-  const { isOpen, closeModal, getPayload } = useModal();
-  const { state, execute } = useFetch();
-  const { activeOfficer, userOfficers } = useLeoState();
-  const { activeDeputy, deputies } = useEmsFdState();
   const router = useRouter();
-  const { impoundLot } = useValues();
 
   const isLeo = router.pathname === "/officer";
   const isDispatch = router.pathname === "/dispatch";
-  const citizensFrom = isLeo ? userOfficers : router.pathname === "/ems-fd" ? deputies : [];
+  const isEmsFd = router.pathname === "/ems-fd";
+
+  const common = useTranslations("Common");
+  const t = useTranslations();
+  const { isOpen, closeModal, getPayload } = useModal();
+  const { impoundLot } = useValues();
+  const { state, execute } = useFetch();
+
+  const { userOfficers, isLoading: officersLoading } = useUserOfficers({ enabled: isLeo });
+  const { userDeputies, isLoading: deputiesLoading } = useGetUserDeputies({ enabled: isEmsFd });
+  const isLoading = isLeo ? officersLoading : isEmsFd ? deputiesLoading : false;
+
+  const activeDeputy = useEmsFdState((state) => state.activeDeputy);
+  const activeOfficer = useLeoState((state) => state.activeOfficer);
+
+  const activeUnit = isLeo ? activeOfficer : isEmsFd ? activeDeputy : null;
+
+  const citizensFrom = isLeo ? userOfficers : isEmsFd ? userDeputies : [];
   const citizens = [...citizensFrom].map((v) => v.citizen);
-  const unit = isLeo ? activeOfficer : router.pathname === "/ems-fd" ? activeDeputy : null;
 
   async function onSubmit(values: typeof INITIAL_VALUES) {
     const payload = getPayload<{ call911Id: string }>(ModalIds.ManageTowCall);
@@ -64,15 +72,18 @@ export function DispatchCallTowModal({ call }: Props) {
   }
 
   const validate = handleValidate(TOW_SCHEMA);
+  const isCombined = activeUnit && (isUnitCombined(activeUnit) || isUnitCombinedEmsFd(activeUnit));
+
   const INITIAL_VALUES = {
     location: call?.location ?? "",
     postal: call?.postal ?? "",
-    // @ts-expect-error TS should allow this tbh!
-    creatorId: unit?.citizenId ?? null,
+    creatorId: isCombined ? null : activeUnit?.citizenId ?? null,
     description: call?.description ?? "",
+    descriptionData: call?.descriptionData ?? null,
     callCountyService: false,
     deliveryAddressId: "",
     model: "",
+    plateSearch: "",
     plate: "",
     plateOrVin: "",
   };
@@ -85,11 +96,12 @@ export function DispatchCallTowModal({ call }: Props) {
       className="w-[700px]"
     >
       <Formik validate={validate} initialValues={INITIAL_VALUES} onSubmit={onSubmit}>
-        {({ handleChange, setFieldValue, values, isValid, errors }) => (
+        {({ handleChange, setValues, setFieldValue, values, isValid, errors }) => (
           <Form>
-            {unit ? (
+            {activeUnit ? (
               <FormField errorMessage={errors.creatorId as string} label={t("Calls.citizen")}>
                 <Select
+                  isLoading={isLoading}
                   disabled
                   name="creatorId"
                   onChange={handleChange}
@@ -102,15 +114,7 @@ export function DispatchCallTowModal({ call }: Props) {
               </FormField>
             ) : null}
 
-            <FormRow>
-              <FormField errorMessage={errors.location} label={t("Calls.location")}>
-                <Input name="location" value={values.location} onChange={handleChange} />
-              </FormField>
-
-              <FormField errorMessage={errors.postal} label={t("Calls.postal")}>
-                <Input name="postal" value={values.postal} onChange={handleChange} />
-              </FormField>
-            </FormRow>
+            <AddressPostalSelect addressLabel="location" />
 
             {isLeo || isDispatch ? (
               <>
@@ -131,34 +135,36 @@ export function DispatchCallTowModal({ call }: Props) {
                   />
                 </FormField>
 
-                <FormField optional errorMessage={errors.plate} label={t("Vehicles.plate")}>
-                  <InputSuggestions<VehicleSearchResult>
-                    onSuggestionClick={(suggestion) => {
-                      setFieldValue("plate", suggestion.plate);
-                      setFieldValue("model", suggestion.model.value.value);
-                    }}
-                    Component={({ suggestion }) => (
-                      <div className="flex items-center">
-                        <p>
-                          {suggestion.plate.toUpperCase()} ({suggestion.vinNumber})
-                        </p>
-                      </div>
-                    )}
-                    options={{
-                      apiPath: "/search/vehicle?includeMany=true",
-                      method: "POST",
-                      dataKey: "plateOrVin",
-                    }}
-                    inputProps={{
-                      value: values.plate,
-                      name: "plate",
-                      onChange: (e) => {
-                        handleChange(e);
-                        setFieldValue("plateOrVin", e.target.value);
-                      },
-                    }}
-                  />
-                </FormField>
+                <AsyncListSearchField<VehicleSearchResult>
+                  label={t("Vehicles.plate")}
+                  errorMessage={errors.plate}
+                  isOptional
+                  fetchOptions={{
+                    apiPath: "/search/vehicle?includeMany=true",
+                    method: "POST",
+                    bodyKey: "plateOrVin",
+                    filterTextRequired: true,
+                  }}
+                  allowsCustomValue
+                  localValue={values.plateSearch}
+                  setValues={({ node, localValue }) => {
+                    const vehicle = node
+                      ? { plate: node.value.plate, model: node.value.model.value.value }
+                      : {};
+
+                    setValues({
+                      ...values,
+                      ...vehicle,
+                      plateSearch: localValue ?? node?.value.plate ?? "",
+                    });
+                  }}
+                >
+                  {(item) => (
+                    <Item textValue={item.plate} key={item.plate}>
+                      {item.plate.toUpperCase()} ({item.model.value.value.toUpperCase()})
+                    </Item>
+                  )}
+                </AsyncListSearchField>
 
                 <FormField optional errorMessage={errors.model} label={t("Vehicles.model")}>
                   <Input onChange={handleChange} name="model" value={values.model} />
@@ -179,9 +185,14 @@ export function DispatchCallTowModal({ call }: Props) {
               />
             </FormField>
 
-            <FormField errorMessage={errors.description} label={common("description")}>
-              <Textarea name="description" onChange={handleChange} value={values.description} />
-            </FormField>
+            <TextField
+              isTextarea
+              errorMessage={errors.description}
+              label={common("description")}
+              name="description"
+              onChange={(value) => setFieldValue("description", value)}
+              value={values.description}
+            />
 
             <ImpoundLocationInfo />
 
@@ -189,7 +200,7 @@ export function DispatchCallTowModal({ call }: Props) {
               <div className="flex items-center">
                 <Button
                   type="reset"
-                  onClick={() => closeModal(ModalIds.ManageTowCall)}
+                  onPress={() => closeModal(ModalIds.ManageTowCall)}
                   variant="cancel"
                 >
                   {common("cancel")}

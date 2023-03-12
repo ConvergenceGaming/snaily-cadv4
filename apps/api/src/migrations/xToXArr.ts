@@ -1,4 +1,4 @@
-import { prisma } from "lib/prisma";
+import { prisma } from "lib/data/prisma";
 
 const types = {
   leoRoleId: "leoRoles",
@@ -7,6 +7,7 @@ const types = {
   towRoleId: "towRoles",
   taxiRoleId: "taxiRoles",
   leoSupervisorRoleId: "leoSupervisorRoles",
+  adminRoleId: "adminRoles",
 } as const;
 
 type Type =
@@ -15,14 +16,15 @@ type Type =
   | "dispatchRoleId"
   | "towRoleId"
   | "taxiRoleId"
-  | "leoSupervisorRoleId";
+  | "leoSupervisorRoleId"
+  | "adminRoleId";
 
 async function xToXArr(type: Type) {
   const discordRoles = await prisma.discordRoles.findFirst({
     where: { [type]: { not: null } },
   });
 
-  if (!discordRoles || !discordRoles[type]) return;
+  if (!discordRoles?.[type]) return;
 
   await prisma.discordRoles.update({
     where: {

@@ -1,19 +1,37 @@
 import { useTranslations } from "use-intl";
-import { Button } from "components/Button";
+import { Button } from "@snailycad/ui";
 import useFetch from "lib/useFetch";
 import { useSignal100 } from "hooks/shared/useSignal100";
 import { useFeatureEnabled } from "hooks/useFeatureEnabled";
-import { useAuth } from "context/AuthContext";
-import { useActiveDispatchers } from "hooks/realtime/useActiveDispatchers";
+import { useActiveDispatchers } from "hooks/realtime/use-active-dispatchers";
 import * as modalButtons from "components/modal-buttons/buttons";
 import { ModalButton } from "components/modal-buttons/ModalButton";
 import { ModalIds } from "types/ModalIds";
 import { useModal } from "state/modalState";
-import { TonesModal } from "./modals/TonesModal";
 import type {
   PostDispatchDispatchersStateData,
   PostDispatchSignal100Data,
 } from "@snailycad/types/api";
+
+import dynamic from "next/dynamic";
+import { useCall911State } from "state/dispatch/call-911-state";
+import { shallow } from "zustand/shallow";
+import { ActiveToneType } from "@snailycad/types";
+import { useActiveDispatcherState } from "state/dispatch/active-dispatcher-state";
+
+const EnableSignal100Modal = dynamic(
+  async () => (await import("./modals/EnableSignal100Modal")).EnableSignal100Modal,
+  { ssr: false },
+);
+
+const TonesModal = dynamic(async () => (await import("./modals/tones-modal")).TonesModal, {
+  ssr: false,
+});
+
+const SelectDepartmentModal = dynamic(
+  async () => (await import("./modals/select-department-modal")).SelectDepartmentModal,
+  { ssr: false },
+);
 
 const buttons: modalButtons.ModalButton[] = [
   modalButtons.nameSearchBtn,
@@ -24,6 +42,7 @@ const buttons: modalButtons.ModalButton[] = [
   modalButtons.createBoloBtn,
   modalButtons.create911CallBtn,
   modalButtons.notepadBtn,
+  modalButtons.selectDepartmentBtn,
 ];
 
 export function DispatchModalButtons() {
@@ -31,12 +50,21 @@ export function DispatchModalButtons() {
   const { execute } = useFetch();
   const { enabled: signal100Enabled } = useSignal100();
   const features = useFeatureEnabled();
-  const { activeDispatchers, setActiveDispatchers } = useActiveDispatchers();
-  const { user } = useAuth();
-  const { ACTIVE_DISPATCHERS } = useFeatureEnabled();
-  const { openModal } = useModal();
 
-  const isActive = ACTIVE_DISPATCHERS ? activeDispatchers.some((v) => v.userId === user?.id) : true;
+  const { userActiveDispatcher } = useActiveDispatchers();
+  const setUserActiveDispatcher = useActiveDispatcherState((s) => s.setUserActiveDispatcher);
+
+  const { ACTIVE_DISPATCHERS, TONES } = useFeatureEnabled();
+  const { openModal } = useModal();
+  const { calls, setCalls } = useCall911State(
+    (state) => ({
+      calls: state.calls,
+      setCalls: state.setCalls,
+    }),
+    shallow,
+  );
+
+  const isActive = ACTIVE_DISPATCHERS ? !!userActiveDispatcher : true;
 
   async function handleStateChangeDispatcher() {
     const newState = !isActive;
@@ -47,19 +75,21 @@ export function DispatchModalButtons() {
       data: { value: newState },
     });
 
-    if (json.dispatcher && newState) {
-      setActiveDispatchers([...activeDispatchers, json.dispatcher]);
-    } else {
-      setActiveDispatchers(activeDispatchers.filter((v) => v.userId !== user?.id));
-    }
+    setUserActiveDispatcher(json.dispatcher, json.activeDispatchersCount);
   }
 
   async function handleSignal100() {
-    await execute<PostDispatchSignal100Data>({
-      path: "/dispatch/signal-100",
-      method: "POST",
-      data: { value: !signal100Enabled },
-    });
+    if (signal100Enabled) {
+      await execute<PostDispatchSignal100Data>({
+        path: "/dispatch/signal-100",
+        method: "POST",
+        data: { value: !signal100Enabled },
+      });
+
+      setCalls(calls.map((call) => ({ ...call, isSignal100: false })));
+    } else {
+      openModal(ModalIds.EnableSignal100);
+    }
   }
 
   return (
@@ -68,21 +98,25 @@ export function DispatchModalButtons() {
         <ModalButton disabled={!isActive} key={idx} button={button} />
       ))}
 
-      <Button disabled={!isActive} onClick={handleSignal100} id="signal100">
+      <Button disabled={!isActive} onPress={handleSignal100} id="signal100">
         {signal100Enabled ? t("Leo.disableSignal100") : t("Leo.enableSignal100")}
       </Button>
 
-      <Button disabled={!isActive} onClick={() => openModal(ModalIds.Tones)}>
-        {t("Leo.tones")}
-      </Button>
+      {TONES ? (
+        <Button disabled={!isActive} onPress={() => openModal(ModalIds.Tones)}>
+          {t("Leo.tones")}
+        </Button>
+      ) : null}
 
       {features.ACTIVE_DISPATCHERS ? (
-        <Button onClick={handleStateChangeDispatcher}>
+        <Button onPress={handleStateChangeDispatcher}>
           {isActive ? t("Leo.goOffDuty") : t("Leo.goOnDuty")}
         </Button>
       ) : null}
 
-      <TonesModal types={["leo", "ems-fd"]} />
+      {TONES ? <TonesModal types={[ActiveToneType.LEO, ActiveToneType.EMS_FD]} /> : null}
+      {signal100Enabled ? null : <EnableSignal100Modal />}
+      <SelectDepartmentModal />
     </div>
   );
 }
