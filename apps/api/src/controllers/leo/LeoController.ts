@@ -69,6 +69,7 @@ export class LeoController {
     permissions: [Permissions.Leo, Permissions.Dispatch, Permissions.EmsFd],
   })
   async getActiveOfficers(
+    @Context("user") user: User,
     @Context("cad") cad: { miscCadSettings: MiscCadSettings },
   ): Promise<APITypes.GetActiveOfficersData> {
     const unitsInactivityFilter = getInactivityFilter(
@@ -77,9 +78,15 @@ export class LeoController {
       "lastStatusChangeTimestamp",
     );
 
+    const activeDispatcher = await prisma.activeDispatchers.findFirst({
+      where: { userId: user.id },
+      select: { departmentId: true },
+    });
+
     const [officers, combinedUnits] = await prisma.$transaction([
       prisma.officer.findMany({
         where: {
+          departmentId: activeDispatcher?.departmentId || undefined,
           status: { NOT: { shouldDo: ShouldDoType.SET_OFF_DUTY } },
           ...(unitsInactivityFilter?.filter ?? {}),
         },
@@ -87,7 +94,10 @@ export class LeoController {
       }),
       prisma.combinedLeoUnit.findMany({
         include: combinedUnitProperties,
-        where: unitsInactivityFilter?.filter,
+        where: {
+          ...unitsInactivityFilter?.filter,
+          departmentId: activeDispatcher?.departmentId || undefined,
+        },
       }),
     ]);
 
