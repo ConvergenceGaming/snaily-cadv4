@@ -276,7 +276,6 @@ model User {
   sessions                 UserSession[]
   toAddDefaultPermissions  ToAddDefaultPermissions[]
   lastSeen                 DateTime                  @default(now())
-  fivemLicense             String?
 
   // relational data 
   citizens             Citizen[]
