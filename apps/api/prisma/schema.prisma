@@ -279,7 +279,7 @@ model User {
   lastSeen                 DateTime                  @default(now())
   fivemLicense             String?
 
-  // relational data
+  // relational data 
   citizens             Citizen[]
   cads                 cad[]
   vehicles             RegisteredVehicle[]
